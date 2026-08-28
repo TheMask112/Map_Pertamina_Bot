@@ -101,6 +101,9 @@ class PageInteractor(private val wvManager: WebViewManager) {
             (function() {
                 function simulateHumanTouch(el) {
                     if (!el) return false;
+                    try {
+                        el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
+                    } catch(e) {}
                     var rect = el.getBoundingClientRect();
                     var x = rect.left + rect.width / 2;
                     var y = rect.top + rect.height / 2;
@@ -131,7 +134,7 @@ class PageInteractor(private val wvManager: WebViewManager) {
                 var bestMatch = null;
                 var minLength = 999999;
                 for (var i = 0; i < els.length; i++) {
-                    var txt = (els[i].innerText || els[i].value || '').trim().toLowerCase();
+                    var txt = (els[i].innerText || els[i].value || els[i].textContent || '').trim().toLowerCase();
                     if (txt && (txt === targetText || (targetText.length > 2 && txt.includes(targetText)))) {
                         var rect = els[i].getBoundingClientRect();
                         if (rect.width > 0 && rect.height > 0) {
@@ -139,7 +142,7 @@ class PageInteractor(private val wvManager: WebViewManager) {
                                 minLength = txt.length;
                                 bestMatch = els[i];
                             }
-                            if (els[i].tagName.toLowerCase() === 'button' && txt === targetText) {
+                            if (els[i].tagName.toLowerCase() === 'button' && (txt === targetText || txt.startsWith(targetText))) {
                                 bestMatch = els[i];
                                 break;
                             }
@@ -496,10 +499,16 @@ class PageInteractor(private val wvManager: WebViewManager) {
                         return true;
                     }
 
-                    var inps = document.querySelectorAll("input, .mantine-Select-input, [data-testid*='Select']");
+                    var hint = "$safeHint";
+                    var inps = document.querySelectorAll("input, .mantine-Select-input, [data-testid*='Select'], [data-testid*='select']");
                     for (var i = 0; i < inps.length; i++) {
-                        var ph = (inps[i].placeholder || inps[i].getAttribute('data-testid') || inps[i].name || '').toLowerCase();
-                        if (ph.includes("$safeHint")) {
+                        var ph = (inps[i].placeholder || inps[i].getAttribute('data-testid') || inps[i].name || inps[i].id || '').toLowerCase();
+                        var isMatch = ph.includes(hint);
+                        if (!isMatch && (hint === 'tgl' || hint === 'dayselect') && (ph.includes('tgl') || ph.includes('day') || ph.includes('tanggal') || ph.includes('hari'))) isMatch = true;
+                        if (!isMatch && (hint === 'bln' || hint === 'monthselect') && (ph.includes('bln') || ph.includes('month') || ph.includes('bulan'))) isMatch = true;
+                        if (!isMatch && (hint === 'thn' || hint === 'yearselect') && (ph.includes('thn') || ph.includes('year') || ph.includes('tahun'))) isMatch = true;
+
+                        if (isMatch) {
                             return simulateHumanTouch(inps[i]) ? 'true' : 'false';
                         }
                     }
@@ -545,10 +554,22 @@ class PageInteractor(private val wvManager: WebViewManager) {
                     }
 
                     var target = "$safeVal";
+                    var targetNum = parseInt(target, 10);
                     var items = document.querySelectorAll('.mantine-Select-item, [role="option"], [data-combobox-option="true"], .mantine-Combobox-option, li');
                     for (var m = 0; m < items.length; m++) {
-                        var itTxt = (items[m].innerText || '').trim();
-                        if (itTxt === target || (target.length > 2 && itTxt.toLowerCase().includes(target.toLowerCase()))) {
+                        var itTxt = (items[m].innerText || items[m].textContent || '').trim();
+                        var itNum = parseInt(itTxt, 10);
+                        var isOptionMatch = false;
+
+                        if (itTxt === target) {
+                            isOptionMatch = true;
+                        } else if (!isNaN(targetNum) && !isNaN(itNum) && targetNum === itNum) {
+                            isOptionMatch = true;
+                        } else if (target.length > 2 && itTxt.toLowerCase().includes(target.toLowerCase())) {
+                            isOptionMatch = true;
+                        }
+
+                        if (isOptionMatch) {
                             items[m].scrollIntoView({ block: 'center', inline: 'center' });
                             return simulateHumanTouch(items[m]) ? 'true' : 'false';
                         }
@@ -652,19 +673,30 @@ class PageInteractor(private val wvManager: WebViewManager) {
             }
 
             // 2. Modal "Data Pelanggan belum lengkap"
-            if (bText.contains("data pelanggan belum lengkap") || (bText.contains("update data pelanggan") && isElementVisibleByText("UPDATE DATA PELANGGAN"))) {
+            if (bText.contains("data pelanggan belum lengkap") || bText.contains("lengkapi data dahulu")) {
                 clickButtonByText("UPDATE DATA PELANGGAN")
                 delay(1500)
                 continue
             }
 
             // 3. Form Update Data Pelanggan (Tempat Lahir & Dropdowns)
-            if (bText.contains("tempat lahir") || bText.contains("tanggal lahir") || isElementVisibleByText("Update Data Pelanggan")) {
+            val isFormTtl = bText.contains("lengkapi data pelanggan") || 
+                            bText.contains("tempat lahir") || 
+                            bText.contains("tanggal lahir") || 
+                            isElementVisible("input[placeholder*='tempat lahir' i]") ||
+                            isElementVisible("input[placeholder*='Tempat' i]")
+
+            if (isFormTtl) {
                 fillTempatLahir(tempatLahir)
                 delay(350)
 
-                selectMantineDropdown("tgl", dayStr)
+                val daySelected = selectMantineDropdown("tgl", dayStr)
+                if (!daySelected) selectMantineDropdown("dayselect", dayStrPadded)
+                delay(350)
+
                 selectMantineDropdown("bln", monthName)
+                delay(350)
+
                 selectMantineDropdown("thn", yearStr)
                 delay(500)
 
