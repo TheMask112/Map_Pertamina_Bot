@@ -1,9 +1,9 @@
 {
-  "versionCode": 5,
-  "apkUrl": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.0.5/MAP_Pertamina_Bot_v1.0.5.apk",
-  "latestVersion": "1.0.5",
-  "latestVersionCode": 5,
-  "url": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.0.5/MAP_Pertamina_Bot_v1.0.5.apk",
+  "versionCode": 6,
+  "apkUrl": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.0.6/MAP_Pertamina_Bot_v1.0.6.apk",
+  "latestVersion": "1.0.6",
+  "latestVersionCode": 6,
+  "url": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.0.6/MAP_Pertamina_Bot_v1.0.6.apk",
   "releaseNotes": [
     "Fitur Baru: Auto-Fill Tempat Lahir & Tanggal Lahir (Mantine UI)",
     "Simulasi Sentuhan Manusia Tingkat Lanjut (Pointer/Touch Events)",
