@@ -1,0 +1,13 @@
+{
+  "versionCode": 2,
+  "apkUrl": "https://drive.google.com/file/d/13WFppMMlsSMm278Sjt8HacUkHPuAABd3/view?usp=drive_link",
+  "latestVersion": "1.0.1",
+  "latestVersionCode": 2,
+  "url": "https://drive.google.com/file/d/13WFppMMlsSMm278Sjt8HacUkHPuAABd3/view?usp=drive_link",
+  "releaseNotes": [
+    "Perbaikan Fatal: Kuota sekarang dicek sebelum setiap NIK diproses",
+    "Perbaikan Fatal: NIK sukses kini benar-benar mengurangi kuota",
+    "Sinkronisasi Kuota Real-time Neon PostgreSQL",
+    "Navigasi Instan Bebas Kedipan Layar Harga"
+  ]
+}
