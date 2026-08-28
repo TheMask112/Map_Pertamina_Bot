@@ -1,0 +1,15 @@
+{
+  "versionCode": 5,
+  "apkUrl": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.0.5/MAP_Pertamina_Bot_v1.0.5.apk",
+  "latestVersion": "1.0.5",
+  "latestVersionCode": 5,
+  "url": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.0.5/MAP_Pertamina_Bot_v1.0.5.apk",
+  "releaseNotes": [
+    "Fitur Baru: Auto-Fill Tempat Lahir & Tanggal Lahir (Mantine UI)",
+    "Simulasi Sentuhan Manusia Tingkat Lanjut (Pointer/Touch Events)",
+    "Fitur Layar Penuh (Full Screen Mode) dengan Tombol Melayang",
+    "Penyempurnaan Tombol Jeda & Lanjutkan (Resume Antrean Presisi)",
+    "Pemulihan Otomatis (Auto-Recovery) jika Server Pertamina Error",
+    "Perbaikan Parsing Excel Streaming Anti-Crash"
+  ]
+}
