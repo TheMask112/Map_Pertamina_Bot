@@ -56,7 +56,7 @@ export async function POST(request: Request) {
       // Cabut lisensi (REVOKED)
       await sql`
         UPDATE orders 
-        SET status = 'REVOKED', voucher_code = NULL 
+        SET status = 'REVOKED', voucher_code = NULL, license_key = NULL 
         WHERE id = ${orderId};
       `;
       return NextResponse.json({ success: true, revoked: true });
@@ -65,16 +65,18 @@ export async function POST(request: Request) {
     // Generate kode voucher lisensi unik
     const voucherCode = generateVoucherCode();
 
-    // Update status order menjadi PAID dan masukkan kode voucher (hanya jika sebelumnya PENDING)
+    // Update status order menjadi PAID dan masukkan kode voucher (untuk PENDING atau EXPIRED)
     const updateResult = await sql`
       UPDATE orders 
-      SET status = 'PAID', voucher_code = ${voucherCode} 
-      WHERE id = ${orderId} AND status = 'PENDING'
-      RETURNING id;
+      SET status = 'PAID', 
+          paid_at = CURRENT_TIMESTAMP,
+          voucher_code = ${voucherCode} 
+      WHERE id = ${orderId} AND (status = 'PENDING' OR status = 'EXPIRED' OR status = 'REVOKED')
+      RETURNING id, paket, whatsapp, amount;
     `;
 
     if (updateResult.length === 0) {
-      return NextResponse.json({ error: 'Order tidak dapat ditandai lunas (mungkin status bukan PENDING lagi).' }, { status: 400 });
+      return NextResponse.json({ error: 'Order tidak ditemukan atau tidak dapat diperbarui.' }, { status: 400 });
     }
 
     return NextResponse.json({ success: true, voucherCode });

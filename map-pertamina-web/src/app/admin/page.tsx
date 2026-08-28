@@ -282,7 +282,7 @@ export default function AdminPortal() {
 
         {/* Status Filters */}
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {['ALL', 'PENDING', 'PAID', 'EXPIRED', 'REVOKED'].map(f => (
+          {['ALL', 'PENDING', 'PAID', 'REDEEMED', 'EXPIRED', 'REVOKED'].map(f => (
             <button
               key={f}
               className={`btn ${statusFilter === f ? 'btn-primary' : 'btn-secondary'}`}
@@ -373,10 +373,12 @@ export default function AdminPortal() {
                       fontWeight: 700,
                       background: 
                         o.status === 'PAID' ? 'hsla(var(--success), 0.15)' :
+                        o.status === 'REDEEMED' ? 'hsla(180, 70%, 50%, 0.15)' :
                         o.status === 'PENDING' ? 'hsla(var(--warning), 0.15)' :
                         o.status === 'REVOKED' ? 'hsla(var(--danger), 0.2)' : 'hsla(var(--danger), 0.05)',
                       color:
                         o.status === 'PAID' ? 'hsl(var(--success))' :
+                        o.status === 'REDEEMED' ? '#00f2fe' :
                         o.status === 'PENDING' ? 'hsl(var(--warning))' :
                         o.status === 'REVOKED' ? 'hsl(var(--danger))' : 'hsl(var(--text-muted))'
                     }}>
@@ -387,15 +389,16 @@ export default function AdminPortal() {
                     {o.voucher_code || '-'}
                   </td>
                   <td style={{ padding: '18px 24px', textAlign: 'center' }}>
-                    {o.status === 'PENDING' ? (
+                    {o.status === 'PENDING' || o.status === 'EXPIRED' ? (
                       <button 
                         className="btn btn-success" 
                         onClick={() => handleMarkAsPaid(o.id)}
-                        style={{ padding: '6px 12px', fontSize: '0.8rem', borderRadius: '6px' }}
+                        style={{ padding: '6px 14px', fontSize: '0.8rem', borderRadius: '6px', cursor: 'pointer' }}
+                        title="Approve transaksi & generate voucher lisensi"
                       >
-                        Tandai Lunas
+                        ✓ Tandai Lunas
                       </button>
-                    ) : o.status === 'PAID' ? (
+                    ) : o.status === 'PAID' || o.status === 'REDEEMED' ? (
                       <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                         <button 
                           className="btn btn-secondary" 
@@ -403,23 +406,27 @@ export default function AdminPortal() {
                             navigator.clipboard.writeText(o.voucher_code || '');
                             alert('Kode voucher disalin!');
                           }}
-                          style={{ padding: '6px 12px', fontSize: '0.8rem', borderRadius: '6px' }}
+                          style={{ padding: '6px 12px', fontSize: '0.8rem', borderRadius: '6px', cursor: 'pointer' }}
                         >
                           Salin
                         </button>
                         <button 
                           className="btn btn-danger" 
                           onClick={() => handleRevoke(o.id)}
-                          style={{ padding: '6px 12px', fontSize: '0.8rem', borderRadius: '6px', background: 'hsl(var(--danger))', color: 'white' }}
+                          style={{ padding: '6px 12px', fontSize: '0.8rem', borderRadius: '6px', background: 'hsl(var(--danger))', color: 'white', cursor: 'pointer' }}
                         >
                           Cabut
                         </button>
                       </div>
                     ) : o.status === 'REVOKED' ? (
-                      <span style={{ color: 'hsl(var(--danger))', fontSize: '0.85rem', fontWeight: 'bold' }}>Dicabut</span>
-                    ) : (
-                      <span style={{ color: 'hsl(var(--text-muted))', fontSize: '0.85rem' }}>Kadaluarsa</span>
-                    )}
+                      <button 
+                        className="btn btn-primary" 
+                        onClick={() => handleMarkAsPaid(o.id)}
+                        style={{ padding: '6px 12px', fontSize: '0.8rem', borderRadius: '6px', cursor: 'pointer' }}
+                      >
+                        Aktifkan Ulang
+                      </button>
+                    ) : null}
                   </td>
                 </tr>
               ))
