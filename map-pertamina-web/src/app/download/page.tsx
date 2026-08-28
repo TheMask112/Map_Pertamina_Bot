@@ -48,9 +48,9 @@ export default function DownloadPage() {
           </p>
 
           <a href={androidDownloadUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary pulse" style={{...styles.downloadBtn, background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)'}}>
-            💾 Unduh APK Android
+            💾 Unduh APK Android (GitHub)
           </a>
-          <span style={styles.safetyBadge}>🛡️ Cloud Storage Aman (Google Drive)</span>
+          <span style={styles.safetyBadge}>🛡️ Unduhan Resmi & Cepat (GitHub Releases)</span>
         </div>
 
         {/* SYSTEM REQUIREMENTS CARD */}
@@ -59,19 +59,19 @@ export default function DownloadPage() {
           <div style={styles.requirements}>
             <div style={styles.reqItem}>
               <strong>Sistem Operasi</strong>
-              <span>Windows 10 atau Windows 11 (64-bit saja)</span>
+              <span>Windows 10 atau Windows 11 (64-bit) / Android 8.0+</span>
             </div>
             <div style={styles.reqItem}>
               <strong>RAM / Memori</strong>
-              <span>Minimal 4 GB (Direkomendasikan 8 GB untuk multi-batch)</span>
+              <span>Minimal 3 GB RAM (Android / Laptop)</span>
             </div>
             <div style={styles.reqItem}>
               <strong>Penyimpanan</strong>
-              <span>Sisa ruang minimal 500 MB untuk browser cache</span>
+              <span>Sisa ruang minimal 200 MB</span>
             </div>
             <div style={styles.reqItem}>
               <strong>Koneksi Internet</strong>
-              <span>Koneksi stabil (dibutuhkan untuk bypass captcha & Pertamina API)</span>
+              <span>Koneksi internet stabil untuk portal Subsidi Tepat</span>
             </div>
           </div>
         </div>
@@ -92,7 +92,7 @@ export default function DownloadPage() {
             </h3>
             <ol style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '0.9rem', color: '#e2e8f0', lineHeight: '1.5' }}>
               <li>
-                <strong>Unduh File ZIP:</strong> Klik tombol <em>Unduh Installer (.zip)</em> di atas untuk masuk ke Google Drive, lalu unduh filenya.
+                <strong>Unduh File ZIP:</strong> Klik tombol <em>Unduh Installer (.zip)</em> di atas untuk mengunduh paket aplikasi.
               </li>
               <li>
                 <strong>Ekstrak File:</strong> Klik kanan pada file <code>Bot_MAP_Pertamina_Installer.zip</code> yang sudah diunduh, lalu pilih <strong>Extract All... (Ekstrak Semua)</strong>.
@@ -113,10 +113,10 @@ export default function DownloadPage() {
             </h3>
             <ol style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '0.9rem', color: '#e2e8f0', lineHeight: '1.5' }}>
               <li>
-                <strong>Unduh File APK:</strong> Klik tombol <em>Unduh APK Android</em> di atas untuk masuk ke Google Drive, lalu download file <code>MAP_Pertamina_Bot_v1.0.1.apk</code>.
+                <strong>Unduh File APK:</strong> Klik tombol <em>Unduh APK Android (GitHub)</em> di atas untuk langsung mengunduh file APK resmi versi terbaru dari GitHub Releases.
               </li>
               <li>
-                <strong>Pasang di HP:</strong> Buka file APK yang sudah selesai diunduh, lalu tekan <strong>Install / Pasang</strong>.
+                <strong>Pasang di HP:</strong> Buka file APK yang sudah selesai diunduh di HP Anda, lalu tekan <strong>Install / Pasang</strong>.
               </li>
               <li>
                 <strong>Izin Keamanan:</strong> Jika muncul jendela <em>"Aplikasi dari sumber tidak dikenal"</em>, pilih <strong>Izinkan / Tetap Pasang (Install Anyway)</strong>.
