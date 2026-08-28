@@ -129,23 +129,33 @@ class PageInteractor(private val wvManager: WebViewManager) {
                     return true;
                 }
 
-                var els = document.querySelectorAll('button, [role="button"], a, div, span, input[type="submit"], input[type="button"]');
                 var targetText = "$safeText";
+
+                // 1. Cek tombol utama (button, role=button, input submit)
+                var buttons = document.querySelectorAll('button, [role="button"], input[type="submit"], input[type="button"], a');
+                for (var i = 0; i < buttons.length; i++) {
+                    var btn = buttons[i];
+                    var txt = (btn.innerText || btn.value || btn.textContent || '').trim().toLowerCase();
+                    if (txt && (txt === targetText || (targetText.length > 2 && txt.includes(targetText)))) {
+                        var rect = btn.getBoundingClientRect();
+                        if (rect.width > 0 && rect.height > 0) {
+                            return simulateHumanTouch(btn) ? 'true' : 'false';
+                        }
+                    }
+                }
+
+                // 2. Fallback jika ada elemen teks yang dapat diklik
+                var els = document.querySelectorAll('div, span, p');
                 var bestMatch = null;
                 var minLength = 999999;
-                for (var i = 0; i < els.length; i++) {
-                    var txt = (els[i].innerText || els[i].value || els[i].textContent || '').trim().toLowerCase();
-                    if (txt && (txt === targetText || (targetText.length > 2 && txt.includes(targetText)))) {
-                        var rect = els[i].getBoundingClientRect();
-                        if (rect.width > 0 && rect.height > 0) {
-                            if (txt.length < minLength) {
-                                minLength = txt.length;
-                                bestMatch = els[i];
-                            }
-                            if (els[i].tagName.toLowerCase() === 'button' && (txt === targetText || txt.startsWith(targetText))) {
-                                bestMatch = els[i];
-                                break;
-                            }
+                for (var j = 0; j < els.length; j++) {
+                    var el = els[j];
+                    var elTxt = (el.innerText || el.textContent || '').trim().toLowerCase();
+                    if (elTxt && (elTxt === targetText || (targetText.length > 2 && elTxt.includes(targetText)))) {
+                        var elRect = el.getBoundingClientRect();
+                        if (elRect.width > 0 && elRect.height > 0 && elTxt.length < minLength) {
+                            minLength = elTxt.length;
+                            bestMatch = el;
                         }
                     }
                 }
@@ -631,6 +641,18 @@ class PageInteractor(private val wvManager: WebViewManager) {
         }
     }
 
+    suspend fun dismissKeyboard() {
+        wvManager.executeJs("""
+            (function() {
+                try {
+                    if (document.activeElement && typeof document.activeElement.blur === 'function') {
+                        document.activeElement.blur();
+                    }
+                } catch(e) {}
+            })()
+        """)
+    }
+
     suspend fun handleBirthDetails(nik: String, tempatLahirCustom: String = ""): Boolean {
         val cleanNik = nik.filter { it.isDigit() }
         if (cleanNik.length != 16) return false
@@ -665,21 +687,56 @@ class PageInteractor(private val wvManager: WebViewManager) {
 
             val bText = getBodyText().lowercase()
 
-            // 1. Pernyataan Persetujuan
-            if (bText.contains("pernyataan persetujuan") || bText.contains("syarat dan ketentuan")) {
-                clickCheckboxesAndNext()
+            // 1. Modal Sukses "Data Pelanggan berhasil diperbarui" (Prioritas Utama)
+            if (bText.contains("berhasil diperbarui") || isElementVisibleByText("LANJUTKAN KE TRANSAKSI")) {
+                dismissKeyboard()
+                clickButtonByText("LANJUTKAN KE TRANSAKSI")
                 delay(1500)
                 continue
             }
 
-            // 2. Modal "Data Pelanggan belum lengkap"
+            // 2. Modal Konfirmasi "Pastikan semua data sudah benar" (Prioritas Kedua)
+            val isKonfirmasi = bText.contains("pastikan semua data") || 
+                               bText.contains("ya, perbarui") || 
+                               isElementVisibleByText("YA, PERBARUI DATA PELANGGAN") ||
+                               isElementVisibleByText("PERBARUI DATA PELANGGAN")
+
+            if (isKonfirmasi) {
+                dismissKeyboard()
+                val clicked = clickButtonByText("YA, PERBARUI DATA PELANGGAN") || 
+                              clickButtonByText("PERBARUI DATA PELANGGAN") ||
+                              clickButtonByText("YA, PERBARUI")
+                delay(2500)
+                continue
+            }
+
+            // 3. Modal "Data Pelanggan belum lengkap"
             if (bText.contains("data pelanggan belum lengkap") || bText.contains("lengkapi data dahulu")) {
+                dismissKeyboard()
                 clickButtonByText("UPDATE DATA PELANGGAN")
                 delay(1500)
                 continue
             }
 
-            // 3. Form Update Data Pelanggan (Tempat Lahir & Dropdowns)
+            // 4. Pernyataan Persetujuan
+            if (bText.contains("pernyataan persetujuan") || bText.contains("syarat dan ketentuan")) {
+                dismissKeyboard()
+                clickCheckboxesAndNext()
+                delay(1500)
+                continue
+            }
+
+            // 5. Choice Popup (Rumah Tangga)
+            if (bText.contains("pilihan jenis") || bText.contains("pelanggan terdaftar")) {
+                dismissKeyboard()
+                clickButtonByText("Rumah Tangga")
+                delay(400)
+                clickButtonByText("LANJUTKAN")
+                delay(1000)
+                continue
+            }
+
+            // 6. Form Update Data Pelanggan (Hanya jika tidak ada modal overlay)
             val isFormTtl = bText.contains("lengkapi data pelanggan") || 
                             bText.contains("tempat lahir") || 
                             bText.contains("tanggal lahir") || 
@@ -700,31 +757,9 @@ class PageInteractor(private val wvManager: WebViewManager) {
                 selectMantineDropdown("thn", yearStr)
                 delay(500)
 
+                dismissKeyboard()
                 clickButtonByText("SELANJUTNYA")
-                delay(1800)
-                continue
-            }
-
-            // 4. Modal Konfirmasi "Pastikan semua data sudah benar"
-            if (bText.contains("pastikan semua data") || bText.contains("ya, perbarui") || isElementVisibleByText("YA, PERBARUI DATA PELANGGAN")) {
-                clickButtonByText("YA, PERBARUI DATA PELANGGAN")
-                delay(2500)
-                continue
-            }
-
-            // 5. Modal Sukses "Data Pelanggan berhasil diperbarui"
-            if (bText.contains("berhasil diperbarui") || isElementVisibleByText("LANJUTKAN KE TRANSAKSI")) {
-                clickButtonByText("LANJUTKAN KE TRANSAKSI")
-                delay(1500)
-                continue
-            }
-
-            // 6. Choice Popup (Rumah Tangga)
-            if (bText.contains("pilihan jenis") || bText.contains("pelanggan terdaftar")) {
-                clickButtonByText("Rumah Tangga")
-                delay(400)
-                clickButtonByText("LANJUTKAN")
-                delay(1000)
+                delay(2000)
                 continue
             }
 
