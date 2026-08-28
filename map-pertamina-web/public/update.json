@@ -1,0 +1,15 @@
+{
+  "versionCode": 5,
+  "apkUrl": "https://drive.google.com/drive/folders/1YbkWYl-fxjz1BBK06X2f2reWi0JXFY-G?usp=sharing",
+  "latestVersion": "1.0.5",
+  "latestVersionCode": 5,
+  "url": "https://drive.google.com/drive/folders/1YbkWYl-fxjz1BBK06X2f2reWi0JXFY-G?usp=sharing",
+  "releaseNotes": [
+    "Fitur Baru: Auto-Fill Tempat Lahir & Tanggal Lahir (Mantine UI)",
+    "Simulasi Sentuhan Manusia Tingkat Lanjut (Pointer/Touch Events)",
+    "Fitur Layar Penuh (Full Screen Mode) dengan Tombol Melayang",
+    "Penyempurnaan Tombol Jeda & Lanjutkan (Resume Antrean Presisi)",
+    "Pemulihan Otomatis (Auto-Recovery) jika Server Pertamina Error",
+    "Perbaikan Parsing Excel Streaming Anti-Crash"
+  ]
+}

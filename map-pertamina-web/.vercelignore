@@ -1,0 +1,4 @@
+# Ignore large installer zip since Vercel has upload size limits
+public/Bot_MAP_Pertamina_Installer.zip
+
+public/*.apk

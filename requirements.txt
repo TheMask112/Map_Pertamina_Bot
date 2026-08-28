@@ -1,0 +1,7 @@
+playwright
+playwright-stealth
+opencv-python
+pandas
+openpyxl
+customtkinter
+cryptography

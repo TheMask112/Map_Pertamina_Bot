@@ -1,0 +1,243 @@
+/* globals.css */
+/* Premium Vanilla CSS Design System with Dark Mode, Glassmorphism & Micro-animations */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  /* Harmony Palette HSL */
+  --bg-dark: 224 25% 6%;
+  --bg-card: 223 20% 10%;
+  --border-color: 222 15% 15%;
+  
+  --primary: 217 91% 60%;      /* Electric Blue */
+  --primary-glow: 217 91% 60% / 15%;
+  --secondary: 194 96% 52%;    /* Electric Cyan */
+  --accent: 270 91% 65%;       /* Cyber Purple */
+  --success: 142 76% 45%;      /* Neon Green */
+  --warning: 38 92% 50%;       /* Neon Gold */
+  --danger: 346 84% 50%;       /* Neon Red */
+  
+  --text-primary: 210 40% 98%;
+  --text-secondary: 215 20% 65%;
+  --text-muted: 215 12% 40%;
+  
+  --font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-fast: all 0.15s ease;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  background-color: hsl(var(--bg-dark));
+  color: hsl(var(--text-primary));
+  font-family: var(--font-family);
+  min-height: 100vh;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Background Space Mesh Effect */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    radial-gradient(circle at 10% 20%, hsla(var(--primary), 0.08) 0%, transparent 40%),
+    radial-gradient(circle at 90% 80%, hsla(var(--accent), 0.08) 0%, transparent 40%),
+    linear-gradient(hsla(var(--bg-dark), 0.3) 1px, transparent 1px),
+    linear-gradient(90deg, hsla(var(--bg-dark), 0.3) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+  pointer-events: none;
+  z-index: -1;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* --- TYPOGRAPHY & GRADIENTS --- */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-purple {
+  background: linear-gradient(135deg, hsl(var(--accent)) 0%, hsl(var(--secondary)) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* --- GLASSMORPHISM CLASS --- */
+.glass-card {
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  transition: var(--transition-smooth);
+}
+
+.glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* --- BUTTONS --- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-family);
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 12px 24px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+  border: none;
+  gap: 8px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 20px hsla(var(--primary), 0.3);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px hsla(var(--primary), 0.5);
+  filter: brightness(1.1);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  color: hsl(var(--text-primary));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.btn-success {
+  background: linear-gradient(135deg, hsl(var(--success)) 0%, hsl(200, 76%, 45%) 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 20px hsla(var(--success), 0.3);
+}
+
+.btn-success:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px hsla(var(--success), 0.5);
+  filter: brightness(1.1);
+}
+
+/* --- SHINY GLOW EFFECT --- */
+.glow-spot {
+  position: absolute;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background: radial-gradient(circle, hsla(var(--primary), 0.2) 0%, transparent 70%);
+  filter: blur(20px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* --- CUSTOM INPUTS --- */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+  width: 100%;
+}
+
+.form-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: hsl(var(--text-secondary));
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.form-input {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  color: hsl(var(--text-primary));
+  font-family: var(--font-family);
+  font-size: 1rem;
+  padding: 14px 16px;
+  transition: var(--transition-smooth);
+  width: 100%;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 3px hsla(var(--primary), 0.15);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* --- SCROLLBAR --- */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(var(--bg-dark));
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* --- UTILITY ANIMATIONS --- */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-glow {
+  0% { box-shadow: 0 0 0 0 hsla(var(--primary), 0.4); }
+  70% { box-shadow: 0 0 0 10px hsla(var(--primary), 0); }
+  100% { box-shadow: 0 0 0 0 hsla(var(--primary), 0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.pulse {
+  animation: pulse-glow 2s infinite;
+}
