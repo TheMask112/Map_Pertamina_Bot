@@ -147,10 +147,73 @@ def get_hwid() -> str:
     return hashlib.sha256(fallback_raw.encode()).hexdigest()[:32].upper()
 
 
+def get_all_possible_hwids() -> set[str]:
+    """Mengumpulkan semua representasi HWID yang sah di mesin ini untuk menjamin kompatibilitas lisensi."""
+    hwids = set()
+    
+    # 1. PowerShell CIM UUID
+    if os.name == 'nt':
+        try:
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            cmd = 'powershell -NoProfile -NonInteractive -Command "(Get-CimInstance -Class Win32_ComputerSystemProduct).UUID"'
+            output = subprocess.check_output(
+                cmd, shell=True, stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                startupinfo=startupinfo, creationflags=0x08000000
+            ).decode().strip()
+            uuid_val = output.split('\n')[-1].strip().upper()
+            if uuid_val and len(uuid_val) > 8 and "error" not in uuid_val.lower():
+                hwids.add(uuid_val)
+                hwids.add(uuid_val.replace("-", ""))
+        except Exception:
+            pass
+
+    # 2. Windows Registry MachineGuid
+    if os.name == 'nt':
+        for flag in [winreg.KEY_READ | winreg.KEY_WOW64_64KEY, winreg.KEY_READ]:
+            try:
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Cryptography", 0, flag) as k:
+                    guid, _ = winreg.QueryValueEx(k, "MachineGuid")
+                    if guid and len(guid) > 8:
+                        g = str(guid).strip().upper()
+                        hwids.add(g)
+                        hwids.add(g.replace("-", ""))
+            except Exception:
+                pass
+
+    # 3. WMIC Legacy
+    if os.name == 'nt':
+        try:
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            output = subprocess.check_output(
+                'wmic csproduct get uuid', shell=True, stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                startupinfo=startupinfo, creationflags=0x08000000
+            ).decode().strip()
+            wmic_val = output.split('\n')[-1].strip().upper()
+            if wmic_val and len(wmic_val) > 8 and "error" not in wmic_val.lower():
+                hwids.add(wmic_val)
+                hwids.add(wmic_val.replace("-", ""))
+        except Exception:
+            pass
+
+    # 4. Hostname/Platform Hash
+    import platform
+    import socket
+    fallback_raw = f"{platform.node()}_{platform.machine()}_{socket.gethostname()}"
+    h = hashlib.sha256(fallback_raw.encode()).hexdigest()[:32].upper()
+    hwids.add(h)
+    hwids.add(h.replace("-", ""))
+    
+    return hwids
+
+
 def _get_fernet(hwid: str) -> Fernet:
     """Derive symmetric key dari client HWID untuk local state encryption."""
     salt = "MAP_PERTAMINA_LOCAL_FERNET_SALT_2026"
-    key_bytes = hashlib.sha256((hwid + salt).encode()).digest()
+    # Normalisasi HWID tanpa tanda minus agar Fernet key selalu identik
+    clean_hwid = str(hwid).replace("-", "").upper()
+    key_bytes = hashlib.sha256((clean_hwid + salt).encode()).digest()
     fernet_key = base64.urlsafe_b64encode(key_bytes)
     return Fernet(fernet_key)
 
@@ -201,19 +264,18 @@ def _set_appdata_quota(hwid: str, count: int, license_key: str = ""):
     try:
         key_hash = hashlib.sha256(license_key.encode()).hexdigest()[:8]
         filename = f"crypto_cache_{key_hash}.bin"
-        path = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Microsoft', 'Credentials')
-        os.makedirs(path, exist_ok=True)
-        file_path = os.path.join(path, filename)
-        
+        cred_dir = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Microsoft', 'Credentials')
+        os.makedirs(cred_dir, exist_ok=True)
+        path = os.path.join(cred_dir, filename)
         xor_key = hwid.encode()
         data = str(count).encode()
         enc = bytes([b ^ xor_key[i % len(xor_key)] for i, b in enumerate(data)])
-        with open(file_path, "wb") as f:
+        with open(path, "wb") as f:
             f.write(enc)
             
         if os.name == 'nt':
             import ctypes
-            ctypes.windll.kernel32.SetFileAttributesW(file_path, 2)  # 2 = FILE_ATTRIBUTE_HIDDEN
+            ctypes.windll.kernel32.SetFileAttributesW(path, 2)  # 2 = FILE_ATTRIBUTE_HIDDEN
     except Exception:
         pass
 
@@ -223,25 +285,26 @@ def _set_appdata_quota(hwid: str, count: int, license_key: str = ""):
 
 def safe_b64url_decode(s: str) -> bytes:
     """Decode base64url string safely with automatic padding handling."""
-    s = s.strip()
-    pad = 4 - (len(s) % 4)
-    if pad and pad != 4:
-        s += "=" * pad
-    return base64.urlsafe_b64decode(s.encode())
+    s_clean = s.strip()
+    rem = len(s_clean) % 4
+    if rem > 0:
+        s_clean += "=" * (4 - rem)
+    return base64.urlsafe_b64decode(s_clean.encode())
 
 
 def clean_license_key_string(key: str) -> str:
-    """Membersihkan format key dari markdown backticks, quotes, dan whitespace."""
+    """Membersihkan format key dari markdown backticks, quotes, label, dan whitespace."""
     if not key:
         return ""
     k = str(key).strip().replace("`", "").replace('"', '').replace("'", "")
-    for token in k.split():
-        if "." in token and len(token) > 50:
-            return token.strip()
+    for token in k.replace("\r", " ").replace("\n", " ").split():
+        token_clean = token.strip()
+        if "." in token_clean and len(token_clean) > 50:
+            return token_clean
     return k.strip()
 
 
-def verify_license_key_signature(license_key: str, hwid: str) -> tuple[bool, dict | None]:
+def verify_license_key_signature(license_key: str, hwid: str = "") -> tuple[bool, dict | None]:
     """Verifikasi RSA Signature dari License Key (kompatibel dengan Telegram & Web generator)."""
     try:
         clean_key = clean_license_key_string(license_key)
@@ -263,12 +326,20 @@ def verify_license_key_signature(license_key: str, hwid: str) -> tuple[bool, dic
         )
         
         payload = json.loads(json_bytes.decode())
-        payload_hwid = str(payload.get("hwid")).strip().replace("-", "").upper()
-        client_hwid = str(hwid).strip().replace("-", "").upper()
-        if payload_hwid != client_hwid:
-            return False, None
+        payload_hwid = str(payload.get("hwid", "")).strip().replace("-", "").upper()
+        
+        if hwid:
+            client_hwid = str(hwid).strip().replace("-", "").upper()
+            if payload_hwid == client_hwid:
+                return True, payload
+                
+        # Jika client_hwid tidak langsung cocok, cek seluruh representasi HWID sah mesin ini
+        possible_hwids = get_all_possible_hwids()
+        clean_possible = {h.replace("-", "").upper() for h in possible_hwids}
+        if payload_hwid in clean_possible:
+            return True, payload
             
-        return True, payload
+        return False, None
     except Exception as e:
         return False, None
 
@@ -282,10 +353,29 @@ def load_license(hwid: str) -> dict | None:
         with open(LICENSE_FILE, "r") as f:
             raw_data = f.read().strip()
             
-        f_obj = _get_fernet(hwid)
-        decrypted = f_obj.decrypt(base64.urlsafe_b64decode(raw_data.encode())).decode()
-        state = json.loads(decrypted)
-        
+        state = None
+        # 1. Coba decrypt sebagai Fernet encrypted state
+        try:
+            f_obj = _get_fernet(hwid)
+            decrypted = f_obj.decrypt(base64.urlsafe_b64decode(raw_data.encode())).decode()
+            state = json.loads(decrypted)
+        except Exception:
+            # 2. Jika bukan Fernet token, periksa apakah raw_data adalah raw license key (payload.signature)
+            cleaned_key = clean_license_key_string(raw_data)
+            valid_sig, signed_payload = verify_license_key_signature(cleaned_key, hwid)
+            if valid_sig and signed_payload:
+                reg_terpakai = _get_registry_quota(hwid, cleaned_key)
+                appdata_terpakai = _get_appdata_quota(hwid, cleaned_key)
+                actual_terpakai = max(0, reg_terpakai, appdata_terpakai)
+                state = {
+                    "license_key": cleaned_key,
+                    "kuota_terpakai": actual_terpakai
+                }
+                save_license_payload(state, hwid)
+
+        if not state:
+            return None
+
         license_key = state.get("license_key")
         file_terpakai = state.get("kuota_terpakai", 0)
         
@@ -328,7 +418,7 @@ def save_license_key(key: str):
     hwid = get_hwid()
     valid_sig, signed_payload = verify_license_key_signature(cleaned_key, hwid)
     if not valid_sig or signed_payload is None:
-        # Simpan raw untuk validasi di verify_license
+        # Simpan raw untuk dicoba kembali oleh load_license / verify_license
         with open(LICENSE_FILE, "w") as f:
             f.write(cleaned_key)
         return
@@ -356,25 +446,6 @@ def save_license_payload(state: dict, hwid: str):
 
 def verify_license(hwid: str, required_quota: int = 1) -> tuple[bool, str, dict | None]:
     """Verifikasi status lisensi secara menyeluruh."""
-    # Bungkus/migrasikan jika ada raw license key (dari activation key)
-    if os.path.exists(LICENSE_FILE):
-        try:
-            with open(LICENSE_FILE, "r") as f:
-                content = f.read().strip()
-            if "." in content and not content.endswith("="):
-                valid_sig, _ = verify_license_key_signature(content, hwid)
-                if valid_sig:
-                    reg_terpakai = _get_registry_quota(hwid, content)
-                    appdata_terpakai = _get_appdata_quota(hwid, content)
-                    actual_terpakai = max(0, reg_terpakai, appdata_terpakai)
-                    state = {
-                        "license_key": content,
-                        "kuota_terpakai": actual_terpakai
-                    }
-                    save_license_payload(state, hwid)
-        except Exception:
-            pass
-
     payload = load_license(hwid)
     if not payload:
         return False, "License tidak ditemukan atau tidak valid.", None
