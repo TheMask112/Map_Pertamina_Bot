@@ -1,0 +1,855 @@
+package com.mapbot.pertamina.engine
+
+import com.mapbot.pertamina.util.Constants
+import kotlinx.coroutines.delay
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
+import kotlin.random.Random
+
+class PageInteractor(private val wvManager: WebViewManager) {
+
+    suspend fun isLoginPage(): Boolean = suspendCoroutine { cont ->
+        wvManager.executeJs("""
+            (function() {
+                var url = window.location.href.toLowerCase();
+                if (url.includes('/login') || url.includes('/auth') || url.includes('/sign')) return 'true';
+                var pwdInput = document.querySelector("input[type='password']");
+                return pwdInput ? 'true' : 'false';
+            })()
+        """) { result ->
+            cont.resume(result.replace("\"", "") == "true")
+        }
+    }
+
+    suspend fun pageContainsText(text: String): Boolean = suspendCoroutine { cont ->
+        wvManager.executeJs("""
+            (function() {
+                return document.body.innerText.toLowerCase().includes('${text.lowercase()}') ? 'true' : 'false';
+            })()
+        """) { result ->
+            cont.resume(result.replace("\"", "") == "true")
+        }
+    }
+
+    suspend fun doLogin(phone: String, pass: String) {
+        for (i in 1..10) {
+            val success = suspendCoroutine<Boolean> { cont ->
+                wvManager.executeJs("""
+                    (function() {
+                        function simulateHumanTouch(el) {
+                            if (!el) return false;
+                            var rect = el.getBoundingClientRect();
+                            var x = rect.left + rect.width / 2;
+                            var y = rect.top + rect.height / 2;
+                            el.focus();
+                            try {
+                                el.dispatchEvent(new PointerEvent('pointerdown', { clientX: x, clientY: y, pointerId: 1, pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true }));
+                            } catch(e) {}
+                            try {
+                                var touch = new Touch({ identifier: Date.now(), target: el, clientX: x, clientY: y, screenX: x, screenY: y, pageX: x, pageY: y });
+                                el.dispatchEvent(new TouchEvent('touchstart', { touches: [touch], targetTouches: [touch], changedTouches: [touch], bubbles: true, cancelable: true }));
+                            } catch(e) {}
+                            el.dispatchEvent(new MouseEvent('mousedown', { clientX: x, clientY: y, buttons: 1, bubbles: true, cancelable: true }));
+                            try {
+                                el.dispatchEvent(new PointerEvent('pointerup', { clientX: x, clientY: y, pointerId: 1, pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true }));
+                            } catch(e) {}
+                            try {
+                                var touchEnd = new Touch({ identifier: Date.now(), target: el, clientX: x, clientY: y, screenX: x, screenY: y, pageX: x, pageY: y });
+                                el.dispatchEvent(new TouchEvent('touchend', { touches: [], targetTouches: [], changedTouches: [touchEnd], bubbles: true, cancelable: true }));
+                            } catch(e) {}
+                            el.dispatchEvent(new MouseEvent('mouseup', { clientX: x, clientY: y, buttons: 0, bubbles: true, cancelable: true }));
+                            el.dispatchEvent(new MouseEvent('click', { clientX: x, clientY: y, bubbles: true, cancelable: true }));
+                            if (typeof el.click === 'function') { el.click(); }
+                            return true;
+                        }
+
+                        var phoneInput = document.querySelector("input[placeholder*='Nomor Ponsel'], input[placeholder*='Ponsel'], input[type='tel']");
+                        var passInput = document.querySelector("input[type='password']");
+                        var btn = document.querySelector("button[type='submit']");
+                        
+                        if (phoneInput && passInput && btn) {
+                            var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                            
+                            nativeInputValueSetter.call(phoneInput, '$phone');
+                            phoneInput.dispatchEvent(new Event('input', { bubbles: true }));
+                            phoneInput.dispatchEvent(new Event('change', { bubbles: true }));
+                            
+                            nativeInputValueSetter.call(passInput, '$pass');
+                            passInput.dispatchEvent(new Event('input', { bubbles: true }));
+                            passInput.dispatchEvent(new Event('change', { bubbles: true }));
+                            
+                            simulateHumanTouch(btn);
+                            return 'true';
+                        }
+                        return 'false';
+                    })()
+                """) { result ->
+                    cont.resume(result.replace("\"", "") == "true")
+                }
+            }
+            if (success) {
+                delay(2000)
+                return
+            }
+            delay(1000)
+        }
+    }
+
+    suspend fun clickButtonByText(buttonText: String): Boolean = suspendCoroutine { cont ->
+        val safeText = buttonText.replace("\"", "\\\"").lowercase()
+        wvManager.executeJs("""
+            (function() {
+                function simulateHumanTouch(el) {
+                    if (!el) return false;
+                    var rect = el.getBoundingClientRect();
+                    var x = rect.left + rect.width / 2;
+                    var y = rect.top + rect.height / 2;
+                    el.focus();
+                    try {
+                        el.dispatchEvent(new PointerEvent('pointerdown', { clientX: x, clientY: y, pointerId: 1, pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true }));
+                    } catch(e) {}
+                    try {
+                        var touch = new Touch({ identifier: Date.now(), target: el, clientX: x, clientY: y, screenX: x, screenY: y, pageX: x, pageY: y });
+                        el.dispatchEvent(new TouchEvent('touchstart', { touches: [touch], targetTouches: [touch], changedTouches: [touch], bubbles: true, cancelable: true }));
+                    } catch(e) {}
+                    el.dispatchEvent(new MouseEvent('mousedown', { clientX: x, clientY: y, buttons: 1, bubbles: true, cancelable: true }));
+                    try {
+                        el.dispatchEvent(new PointerEvent('pointerup', { clientX: x, clientY: y, pointerId: 1, pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true }));
+                    } catch(e) {}
+                    try {
+                        var touchEnd = new Touch({ identifier: Date.now(), target: el, clientX: x, clientY: y, screenX: x, screenY: y, pageX: x, pageY: y });
+                        el.dispatchEvent(new TouchEvent('touchend', { touches: [], targetTouches: [], changedTouches: [touchEnd], bubbles: true, cancelable: true }));
+                    } catch(e) {}
+                    el.dispatchEvent(new MouseEvent('mouseup', { clientX: x, clientY: y, buttons: 0, bubbles: true, cancelable: true }));
+                    el.dispatchEvent(new MouseEvent('click', { clientX: x, clientY: y, bubbles: true, cancelable: true }));
+                    if (typeof el.click === 'function') { el.click(); }
+                    return true;
+                }
+
+                var els = document.querySelectorAll('button, [role="button"], a, div, span, input[type="submit"], input[type="button"]');
+                var targetText = "$safeText";
+                var bestMatch = null;
+                var minLength = 999999;
+                for (var i = 0; i < els.length; i++) {
+                    var txt = (els[i].innerText || els[i].value || '').trim().toLowerCase();
+                    if (txt && (txt === targetText || (targetText.length > 2 && txt.includes(targetText)))) {
+                        var rect = els[i].getBoundingClientRect();
+                        if (rect.width > 0 && rect.height > 0) {
+                            if (txt.length < minLength) {
+                                minLength = txt.length;
+                                bestMatch = els[i];
+                            }
+                            if (els[i].tagName.toLowerCase() === 'button' && txt === targetText) {
+                                bestMatch = els[i];
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (bestMatch) {
+                    return simulateHumanTouch(bestMatch) ? 'true' : 'false';
+                }
+                return 'false';
+            })()
+        """) { result ->
+            cont.resume(result.replace("\"", "") == "true")
+        }
+    }
+
+    suspend fun fillNik(nik: String): Boolean = suspendCoroutine { cont ->
+        wvManager.executeJs("""
+            (function() {
+                var selectors = [
+                    "input[placeholder*='16 digit']",
+                    "input[placeholder*='NIK']",
+                    "input[data-testid='nikInput']",
+                    "input[name*='nik']",
+                    "input[type='search']",
+                    "input[placeholder*='Masukkan']"
+                ];
+                var inp = null;
+                for (var i = 0; i < selectors.length; i++) {
+                    var el = document.querySelector(selectors[i]);
+                    if (el && el.offsetParent !== null) {
+                        inp = el;
+                        break;
+                    }
+                }
+                if (!inp) {
+                    var all = document.querySelectorAll("input");
+                    for (var j = 0; j < all.length; j++) {
+                        var ph = (all[j].placeholder || all[j].name || '').toLowerCase();
+                        if (ph.includes('nik') || ph.includes('16') || ph.includes('masukkan')) {
+                            inp = all[j];
+                            break;
+                        }
+                    }
+                }
+                if (!inp) return 'false';
+                
+                inp.focus();
+                var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                nativeSetter.call(inp, '');
+                inp.dispatchEvent(new Event('input', { bubbles: true }));
+                
+                nativeSetter.call(inp, '$nik');
+                inp.dispatchEvent(new Event('input', { bubbles: true }));
+                inp.dispatchEvent(new Event('change', { bubbles: true }));
+                inp.dispatchEvent(new Event('blur', { bubbles: true }));
+                return 'true';
+            })()
+        """) { result ->
+            cont.resume(result.replace("\"", "") == "true")
+        }
+    }
+
+    suspend fun clickLanjutkan(): Boolean = suspendCoroutine { cont ->
+        wvManager.executeJs("""
+            (function() {
+                function simulateHumanTouch(el) {
+                    if (!el) return false;
+                    var rect = el.getBoundingClientRect();
+                    var x = rect.left + rect.width / 2;
+                    var y = rect.top + rect.height / 2;
+                    el.focus();
+                    try {
+                        el.dispatchEvent(new PointerEvent('pointerdown', { clientX: x, clientY: y, pointerId: 1, pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true }));
+                    } catch(e) {}
+                    try {
+                        var touch = new Touch({ identifier: Date.now(), target: el, clientX: x, clientY: y, screenX: x, screenY: y, pageX: x, pageY: y });
+                        el.dispatchEvent(new TouchEvent('touchstart', { touches: [touch], targetTouches: [touch], changedTouches: [touch], bubbles: true, cancelable: true }));
+                    } catch(e) {}
+                    el.dispatchEvent(new MouseEvent('mousedown', { clientX: x, clientY: y, buttons: 1, bubbles: true, cancelable: true }));
+                    try {
+                        el.dispatchEvent(new PointerEvent('pointerup', { clientX: x, clientY: y, pointerId: 1, pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true }));
+                    } catch(e) {}
+                    try {
+                        var touchEnd = new Touch({ identifier: Date.now(), target: el, clientX: x, clientY: y, screenX: x, screenY: y, pageX: x, pageY: y });
+                        el.dispatchEvent(new TouchEvent('touchend', { touches: [], targetTouches: [], changedTouches: [touchEnd], bubbles: true, cancelable: true }));
+                    } catch(e) {}
+                    el.dispatchEvent(new MouseEvent('mouseup', { clientX: x, clientY: y, buttons: 0, bubbles: true, cancelable: true }));
+                    el.dispatchEvent(new MouseEvent('click', { clientX: x, clientY: y, bubbles: true, cancelable: true }));
+                    if (typeof el.click === 'function') { el.click(); }
+                    return true;
+                }
+
+                var btns = document.querySelectorAll('button, [role="button"]');
+                for (var i = 0; i < btns.length; i++) {
+                    var txt = btns[i].innerText ? btns[i].innerText.trim().toLowerCase() : '';
+                    if (txt.includes('lanjutkan penjualan') || txt === 'lanjutkan' || txt.includes('lanjut')) {
+                        if (btns[i].offsetParent !== null && !btns[i].disabled) {
+                            return simulateHumanTouch(btns[i]) ? 'true' : 'false';
+                        }
+                    }
+                }
+                return 'false';
+            })()
+        """) { result ->
+            cont.resume(result.replace("\"", "") == "true")
+        }
+    }
+
+    suspend fun waitForLoadingToDisappear(maxSec: Int = 8) {
+        for (i in 1..maxSec * 2) {
+            val isLoading = suspendCoroutine<Boolean> { cont ->
+                wvManager.executeJs("""
+                    (function() {
+                        var loaders = document.querySelectorAll('.mantine-Loader-root, [data-loading="true"], .loading, .spinner, [aria-busy="true"]');
+                        for (var i = 0; i < loaders.length; i++) {
+                            if (loaders[i] && loaders[i].offsetParent !== null) return 'true';
+                        }
+                        var disabledBtns = document.querySelectorAll('button[data-loading="true"]');
+                        return disabledBtns.length > 0 ? 'true' : 'false';
+                    })()
+                """) { result ->
+                    cont.resume(result.replace("\"", "") == "true")
+                }
+            }
+            if (!isLoading) break
+            delay(500)
+        }
+    }
+
+    suspend fun getBodyText(): String = suspendCoroutine { cont ->
+        wvManager.executeJs("document.body.innerText") { result ->
+            cont.resume(result.replace("\"", ""))
+        }
+    }
+
+    suspend fun isElementVisible(selector: String): Boolean = suspendCoroutine { cont ->
+        val safeSelector = selector.replace("\"", "\\\"")
+        wvManager.executeJs("""
+            (function() {
+                try {
+                    var el = document.querySelector("$safeSelector");
+                    if (!el) return 'false';
+                    var rect = el.getBoundingClientRect();
+                    return (rect.width > 0 && rect.height > 0) ? 'true' : 'false';
+                } catch(e) { return 'false'; }
+            })()
+        """) { result ->
+            cont.resume(result.replace("\"", "") == "true")
+        }
+    }
+
+    suspend fun isElementVisibleByText(text: String): Boolean = suspendCoroutine { cont ->
+        val safeText = text.replace("\"", "\\\"").lowercase()
+        wvManager.executeJs("""
+            (function() {
+                var els = document.querySelectorAll('button, [role="button"], a, span, div, h1, h2, h3, p');
+                var targetText = "$safeText";
+                for (var i = 0; i < els.length; i++) {
+                    if (els[i].innerText && els[i].innerText.trim().toLowerCase().includes(targetText)) {
+                        var rect = els[i].getBoundingClientRect();
+                        if (rect.width > 0 && rect.height > 0) return 'true';
+                    }
+                }
+                return 'false';
+            })()
+        """) { result ->
+            cont.resume(result.replace("\"", "") == "true")
+        }
+    }
+
+    suspend fun addTabung(count: Int) {
+        val selectors = listOf(
+            "[data-testid='actionIcon2']",
+            ".styles_controlerAdd__z7cTN",
+            "button:has(svg.icon-tabler-plus)"
+        )
+        for (i in 0 until count - 1) {
+            for (sel in selectors) {
+                val clicked = suspendCoroutine<Boolean> { cont ->
+                    wvManager.executeJs("""
+                        (function() {
+                            function simulateHumanTouch(el) {
+                                if (!el) return false;
+                                var rect = el.getBoundingClientRect();
+                                var x = rect.left + rect.width / 2;
+                                var y = rect.top + rect.height / 2;
+                                el.focus();
+                                try {
+                                    el.dispatchEvent(new PointerEvent('pointerdown', { clientX: x, clientY: y, pointerId: 1, pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true }));
+                                } catch(e) {}
+                                try {
+                                    var touch = new Touch({ identifier: Date.now(), target: el, clientX: x, clientY: y, screenX: x, screenY: y, pageX: x, pageY: y });
+                                    el.dispatchEvent(new TouchEvent('touchstart', { touches: [touch], targetTouches: [touch], changedTouches: [touch], bubbles: true, cancelable: true }));
+                                } catch(e) {}
+                                el.dispatchEvent(new MouseEvent('mousedown', { clientX: x, clientY: y, buttons: 1, bubbles: true, cancelable: true }));
+                                try {
+                                    el.dispatchEvent(new PointerEvent('pointerup', { clientX: x, clientY: y, pointerId: 1, pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true }));
+                                } catch(e) {}
+                                try {
+                                    var touchEnd = new Touch({ identifier: Date.now(), target: el, clientX: x, clientY: y, screenX: x, screenY: y, pageX: x, pageY: y });
+                                    el.dispatchEvent(new TouchEvent('touchend', { touches: [], targetTouches: [], changedTouches: [touchEnd], bubbles: true, cancelable: true }));
+                                } catch(e) {}
+                                el.dispatchEvent(new MouseEvent('mouseup', { clientX: x, clientY: y, buttons: 0, bubbles: true, cancelable: true }));
+                                el.dispatchEvent(new MouseEvent('click', { clientX: x, clientY: y, bubbles: true, cancelable: true }));
+                                if (typeof el.click === 'function') { el.click(); }
+                                return true;
+                            }
+
+                            var btn = document.querySelector("$sel");
+                            if (btn) {
+                                return simulateHumanTouch(btn) ? 'true' : 'false';
+                            }
+                            return 'false';
+                        })()
+                    """) { result ->
+                        cont.resume(result.replace("\"", "") == "true")
+                    }
+                }
+                if (clicked) break
+            }
+            delay(400)
+        }
+    }
+    
+    suspend fun clickElementBySelector(selector: String): Boolean = suspendCoroutine { cont ->
+        val safeSelector = selector.replace("\"", "\\\"")
+        wvManager.executeJs("""
+            (function() {
+                function simulateHumanTouch(el) {
+                    if (!el) return false;
+                    var rect = el.getBoundingClientRect();
+                    var x = rect.left + rect.width / 2;
+                    var y = rect.top + rect.height / 2;
+                    el.focus();
+                    try {
+                        el.dispatchEvent(new PointerEvent('pointerdown', { clientX: x, clientY: y, pointerId: 1, pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true }));
+                    } catch(e) {}
+                    try {
+                        var touch = new Touch({ identifier: Date.now(), target: el, clientX: x, clientY: y, screenX: x, screenY: y, pageX: x, pageY: y });
+                        el.dispatchEvent(new TouchEvent('touchstart', { touches: [touch], targetTouches: [touch], changedTouches: [touch], bubbles: true, cancelable: true }));
+                    } catch(e) {}
+                    el.dispatchEvent(new MouseEvent('mousedown', { clientX: x, clientY: y, buttons: 1, bubbles: true, cancelable: true }));
+                    try {
+                        el.dispatchEvent(new PointerEvent('pointerup', { clientX: x, clientY: y, pointerId: 1, pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true }));
+                    } catch(e) {}
+                    try {
+                        var touchEnd = new Touch({ identifier: Date.now(), target: el, clientX: x, clientY: y, screenX: x, screenY: y, pageX: x, pageY: y });
+                        el.dispatchEvent(new TouchEvent('touchend', { touches: [], targetTouches: [], changedTouches: [touchEnd], bubbles: true, cancelable: true }));
+                    } catch(e) {}
+                    el.dispatchEvent(new MouseEvent('mouseup', { clientX: x, clientY: y, buttons: 0, bubbles: true, cancelable: true }));
+                    el.dispatchEvent(new MouseEvent('click', { clientX: x, clientY: y, bubbles: true, cancelable: true }));
+                    if (typeof el.click === 'function') { el.click(); }
+                    return true;
+                }
+
+                var el = document.querySelector("$safeSelector");
+                if (el) { return simulateHumanTouch(el) ? 'true' : 'false'; }
+                return 'false';
+            })()
+        """) { result ->
+            cont.resume(result.replace("\"", "") == "true")
+        }
+    }
+
+    suspend fun getInputValue(selector: String): String = suspendCoroutine { cont ->
+        val safeSelector = selector.replace("\"", "\\\"")
+        wvManager.executeJs("""
+            (function() {
+                var el = document.querySelector("$safeSelector");
+                return el ? el.value : '';
+            })()
+        """) { result ->
+            cont.resume(result.replace("\"", ""))
+        }
+    }
+
+    suspend fun scrollToElement(selector: String) {
+        val safeSelector = selector.replace("\"", "\\\"")
+        wvManager.executeJs("""
+            (function() {
+                var el = document.querySelector("$safeSelector");
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            })()
+        """)
+    }
+
+    suspend fun getCurrentUrl(): String = suspendCoroutine { cont ->
+        wvManager.executeJs("window.location.href") { result ->
+            cont.resume(result.replace("\"", ""))
+        }
+    }
+
+    suspend fun isPageLoaded(): Boolean = suspendCoroutine { cont ->
+        wvManager.executeJs("document.readyState") { result ->
+            cont.resume(result.replace("\"", "") == "complete")
+        }
+    }
+
+    suspend fun fillTempatLahir(tempat: String): Boolean = suspendCoroutine { cont ->
+        val safeTempat = tempat.replace("\"", "\\\"").uppercase()
+        wvManager.executeJs("""
+            (function() {
+                var allInputs = document.querySelectorAll("input");
+                for (var i = 0; i < allInputs.length; i++) {
+                    var ph = (allInputs[i].placeholder || allInputs[i].name || allInputs[i].id || '').toLowerCase();
+                    if (ph.includes('tempat') || ph.includes('lahir') || ph.includes('ketik')) {
+                        allInputs[i].focus();
+                        var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                        nativeSetter.call(allInputs[i], "$safeTempat");
+                        allInputs[i].dispatchEvent(new Event('input', { bubbles: true }));
+                        allInputs[i].dispatchEvent(new Event('change', { bubbles: true }));
+                        allInputs[i].dispatchEvent(new Event('blur', { bubbles: true }));
+                        return 'true';
+                    }
+                }
+                return 'false';
+            })()
+        """) { res ->
+            cont.resume(res.replace("\"", "") == "true")
+        }
+    }
+
+    suspend fun selectMantineDropdown(fieldHint: String, targetVal: String): Boolean {
+        // 1. Focus dan klik input select untuk memunculkan dropdown popup
+        val opened = suspendCoroutine<Boolean> { cont ->
+            val safeHint = fieldHint.replace("\"", "\\\"").lowercase()
+            wvManager.executeJs("""
+                (function() {
+                    function simulateHumanTouch(el) {
+                        if (!el) return false;
+                        var rect = el.getBoundingClientRect();
+                        var x = rect.left + rect.width / 2;
+                        var y = rect.top + rect.height / 2;
+                        el.focus();
+                        try {
+                            el.dispatchEvent(new PointerEvent('pointerdown', { clientX: x, clientY: y, pointerId: 1, pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true }));
+                        } catch(e) {}
+                        try {
+                            var touch = new Touch({ identifier: Date.now(), target: el, clientX: x, clientY: y, screenX: x, screenY: y, pageX: x, pageY: y });
+                            el.dispatchEvent(new TouchEvent('touchstart', { touches: [touch], targetTouches: [touch], changedTouches: [touch], bubbles: true, cancelable: true }));
+                        } catch(e) {}
+                        el.dispatchEvent(new MouseEvent('mousedown', { clientX: x, clientY: y, buttons: 1, bubbles: true, cancelable: true }));
+                        try {
+                            el.dispatchEvent(new PointerEvent('pointerup', { clientX: x, clientY: y, pointerId: 1, pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true }));
+                        } catch(e) {}
+                        try {
+                            var touchEnd = new Touch({ identifier: Date.now(), target: el, clientX: x, clientY: y, screenX: x, screenY: y, pageX: x, pageY: y });
+                            el.dispatchEvent(new TouchEvent('touchend', { touches: [], targetTouches: [], changedTouches: [touchEnd], bubbles: true, cancelable: true }));
+                        } catch(e) {}
+                        el.dispatchEvent(new MouseEvent('mouseup', { clientX: x, clientY: y, buttons: 0, bubbles: true, cancelable: true }));
+                        el.dispatchEvent(new MouseEvent('click', { clientX: x, clientY: y, bubbles: true, cancelable: true }));
+                        if (typeof el.click === 'function') { el.click(); }
+                        return true;
+                    }
+
+                    var inps = document.querySelectorAll("input, .mantine-Select-input, [data-testid*='Select']");
+                    for (var i = 0; i < inps.length; i++) {
+                        var ph = (inps[i].placeholder || inps[i].getAttribute('data-testid') || inps[i].name || '').toLowerCase();
+                        if (ph.includes("$safeHint")) {
+                            return simulateHumanTouch(inps[i]) ? 'true' : 'false';
+                        }
+                    }
+                    return 'false';
+                })()
+            """) { res ->
+                cont.resume(res.replace("\"", "") == "true")
+            }
+        }
+        if (!opened) return false
+        delay(400)
+
+        // 2. Cari dan klik item target dari list dropdown
+        val selected = suspendCoroutine<Boolean> { cont ->
+            val safeVal = targetVal.replace("\"", "\\\"").trim()
+            wvManager.executeJs("""
+                (function() {
+                    function simulateHumanTouch(el) {
+                        if (!el) return false;
+                        var rect = el.getBoundingClientRect();
+                        var x = rect.left + rect.width / 2;
+                        var y = rect.top + rect.height / 2;
+                        el.focus();
+                        try {
+                            el.dispatchEvent(new PointerEvent('pointerdown', { clientX: x, clientY: y, pointerId: 1, pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true }));
+                        } catch(e) {}
+                        try {
+                            var touch = new Touch({ identifier: Date.now(), target: el, clientX: x, clientY: y, screenX: x, screenY: y, pageX: x, pageY: y });
+                            el.dispatchEvent(new TouchEvent('touchstart', { touches: [touch], targetTouches: [touch], changedTouches: [touch], bubbles: true, cancelable: true }));
+                        } catch(e) {}
+                        el.dispatchEvent(new MouseEvent('mousedown', { clientX: x, clientY: y, buttons: 1, bubbles: true, cancelable: true }));
+                        try {
+                            el.dispatchEvent(new PointerEvent('pointerup', { clientX: x, clientY: y, pointerId: 1, pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true }));
+                        } catch(e) {}
+                        try {
+                            var touchEnd = new Touch({ identifier: Date.now(), target: el, clientX: x, clientY: y, screenX: x, screenY: y, pageX: x, pageY: y });
+                            el.dispatchEvent(new TouchEvent('touchend', { touches: [], targetTouches: [], changedTouches: [touchEnd], bubbles: true, cancelable: true }));
+                        } catch(e) {}
+                        el.dispatchEvent(new MouseEvent('mouseup', { clientX: x, clientY: y, buttons: 0, bubbles: true, cancelable: true }));
+                        el.dispatchEvent(new MouseEvent('click', { clientX: x, clientY: y, bubbles: true, cancelable: true }));
+                        if (typeof el.click === 'function') { el.click(); }
+                        return true;
+                    }
+
+                    var target = "$safeVal";
+                    var items = document.querySelectorAll('.mantine-Select-item, [role="option"], [data-combobox-option="true"], .mantine-Combobox-option, li');
+                    for (var m = 0; m < items.length; m++) {
+                        var itTxt = (items[m].innerText || '').trim();
+                        if (itTxt === target || (target.length > 2 && itTxt.toLowerCase().includes(target.toLowerCase()))) {
+                            items[m].scrollIntoView({ block: 'center', inline: 'center' });
+                            return simulateHumanTouch(items[m]) ? 'true' : 'false';
+                        }
+                    }
+                    return 'false';
+                })()
+            """) { res ->
+                cont.resume(res.replace("\"", "") == "true")
+            }
+        }
+        delay(350)
+        return selected
+    }
+
+    suspend fun clickCheckboxesAndNext(): Boolean = suspendCoroutine { cont ->
+        wvManager.executeJs("""
+            (function() {
+                function simulateHumanTouch(el) {
+                    if (!el) return false;
+                    var rect = el.getBoundingClientRect();
+                    var x = rect.left + rect.width / 2;
+                    var y = rect.top + rect.height / 2;
+                    el.focus();
+                    try {
+                        el.dispatchEvent(new PointerEvent('pointerdown', { clientX: x, clientY: y, pointerId: 1, pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true }));
+                    } catch(e) {}
+                    try {
+                        var touch = new Touch({ identifier: Date.now(), target: el, clientX: x, clientY: y, screenX: x, screenY: y, pageX: x, pageY: y });
+                        el.dispatchEvent(new TouchEvent('touchstart', { touches: [touch], targetTouches: [touch], changedTouches: [touch], bubbles: true, cancelable: true }));
+                    } catch(e) {}
+                    el.dispatchEvent(new MouseEvent('mousedown', { clientX: x, clientY: y, buttons: 1, bubbles: true, cancelable: true }));
+                    try {
+                        el.dispatchEvent(new PointerEvent('pointerup', { clientX: x, clientY: y, pointerId: 1, pointerType: 'touch', isPrimary: true, bubbles: true, cancelable: true }));
+                    } catch(e) {}
+                    try {
+                        var touchEnd = new Touch({ identifier: Date.now(), target: el, clientX: x, clientY: y, screenX: x, screenY: y, pageX: x, pageY: y });
+                        el.dispatchEvent(new TouchEvent('touchend', { touches: [], targetTouches: [], changedTouches: [touchEnd], bubbles: true, cancelable: true }));
+                    } catch(e) {}
+                    el.dispatchEvent(new MouseEvent('mouseup', { clientX: x, clientY: y, buttons: 0, bubbles: true, cancelable: true }));
+                    el.dispatchEvent(new MouseEvent('click', { clientX: x, clientY: y, bubbles: true, cancelable: true }));
+                    if (typeof el.click === 'function') { el.click(); }
+                    return true;
+                }
+
+                var cbs = document.querySelectorAll("input[type='checkbox']");
+                for (var c = 0; c < cbs.length; c++) {
+                    if (!cbs[c].checked) { simulateHumanTouch(cbs[c]); }
+                }
+                var btns = document.querySelectorAll('button');
+                for (var b = 0; b < btns.length; b++) {
+                    if ((btns[b].innerText || '').toLowerCase().includes('selanjutnya')) {
+                        return simulateHumanTouch(btns[b]) ? 'true' : 'false';
+                    }
+                }
+                return 'false';
+            })()
+        """) { res ->
+            cont.resume(res.replace("\"", "") == "true")
+        }
+    }
+
+    suspend fun handleBirthDetails(nik: String, tempatLahirCustom: String = ""): Boolean {
+        val cleanNik = nik.filter { it.isDigit() }
+        if (cleanNik.length != 16) return false
+
+        val rawDay = cleanNik.substring(6, 8).toIntOrNull() ?: 1
+        val day = if (rawDay > 40) rawDay - 40 else rawDay
+        val dayStr = day.toString()
+        val dayStrPadded = String.format(java.util.Locale.US, "%02d", day)
+
+        val month = (cleanNik.substring(8, 10).toIntOrNull() ?: 1).coerceIn(1, 12)
+        val monthNames = listOf("", "Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember")
+        val monthName = if (month < monthNames.size) monthNames[month] else "Januari"
+
+        val rawYear = cleanNik.substring(10, 12).toIntOrNull() ?: 90
+        val currentYear2d = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) % 100
+        val year = if (rawYear > currentYear2d) 1900 + rawYear else 2000 + rawYear
+        val yearStr = year.toString()
+
+        val tempatLahir = if (tempatLahirCustom.isNotEmpty()) {
+            tempatLahirCustom.uppercase()
+        } else {
+            val kode4 = cleanNik.substring(0, 4)
+            getCityNameFromKode(kode4)
+        }
+
+        // Loop polling multi-step hingga 15 detik
+        for (attempt in 1..15) {
+            // 0. Cek apakah sudah tiba di layar penjualan / cek pesanan
+            if (isElementVisibleByText("CEK PESANAN") || isElementVisibleByText("PROSES PENJUALAN")) {
+                return true
+            }
+
+            val bText = getBodyText().lowercase()
+
+            // 1. Pernyataan Persetujuan
+            if (bText.contains("pernyataan persetujuan") || bText.contains("syarat dan ketentuan")) {
+                clickCheckboxesAndNext()
+                delay(1500)
+                continue
+            }
+
+            // 2. Modal "Data Pelanggan belum lengkap"
+            if (bText.contains("data pelanggan belum lengkap") || (bText.contains("update data pelanggan") && isElementVisibleByText("UPDATE DATA PELANGGAN"))) {
+                clickButtonByText("UPDATE DATA PELANGGAN")
+                delay(1500)
+                continue
+            }
+
+            // 3. Form Update Data Pelanggan (Tempat Lahir & Dropdowns)
+            if (bText.contains("tempat lahir") || bText.contains("tanggal lahir") || isElementVisibleByText("Update Data Pelanggan")) {
+                fillTempatLahir(tempatLahir)
+                delay(350)
+
+                selectMantineDropdown("tgl", dayStr)
+                selectMantineDropdown("bln", monthName)
+                selectMantineDropdown("thn", yearStr)
+                delay(500)
+
+                clickButtonByText("SELANJUTNYA")
+                delay(1800)
+                continue
+            }
+
+            // 4. Modal Konfirmasi "Pastikan semua data sudah benar"
+            if (bText.contains("pastikan semua data") || bText.contains("ya, perbarui") || isElementVisibleByText("YA, PERBARUI DATA PELANGGAN")) {
+                clickButtonByText("YA, PERBARUI DATA PELANGGAN")
+                delay(2500)
+                continue
+            }
+
+            // 5. Modal Sukses "Data Pelanggan berhasil diperbarui"
+            if (bText.contains("berhasil diperbarui") || isElementVisibleByText("LANJUTKAN KE TRANSAKSI")) {
+                clickButtonByText("LANJUTKAN KE TRANSAKSI")
+                delay(1500)
+                continue
+            }
+
+            // 6. Choice Popup (Rumah Tangga)
+            if (bText.contains("pilihan jenis") || bText.contains("pelanggan terdaftar")) {
+                clickButtonByText("Rumah Tangga")
+                delay(400)
+                clickButtonByText("LANJUTKAN")
+                delay(1000)
+                continue
+            }
+
+            delay(600)
+        }
+
+        return true
+    }
+
+    private fun getCityNameFromKode(kode4: String): String {
+        val mapping = mapOf(
+            // Aceh
+            "1101" to "ACEH SELATAN", "1102" to "ACEH TENGGARA", "1103" to "ACEH TIMUR", "1104" to "ACEH TENGAH",
+            "1105" to "ACEH BARAT", "1106" to "ACEH BESAR", "1107" to "PIDIE", "1108" to "BIREUEN",
+            "1109" to "ACEH UTARA", "1110" to "ACEH BARAT DAYA", "1111" to "GAYO LUES", "1112" to "ACEH TAMIANG",
+            "1113" to "NAGAN RAYA", "1114" to "ACEH JAYA", "1115" to "BENER MERIAH", "1116" to "PIDIE JAYA",
+            "1171" to "KOTA BANDA ACEH", "1172" to "KOTA SABANG", "1173" to "KOTA LHOKSEUMAWE", "1174" to "KOTA LANGSA", "1175" to "KOTA SUBULUSSALAM",
+            // Sumatera Utara
+            "1201" to "TAPANULI TENGAH", "1202" to "TAPANULI UTARA", "1203" to "TAPANULI SELATAN", "1204" to "NIAS",
+            "1205" to "LANGKAT", "1206" to "KARO", "1207" to "DELI SERDANG", "1208" to "SIMALUNGUN",
+            "1209" to "ASAHAN", "1210" to "LABUHANBATU", "1211" to "DAIRI", "1212" to "TOBA",
+            "1213" to "MANDAILING NATAL", "1214" to "NIAS SELATAN", "1215" to "PAKPAK BHARAT", "1216" to "HUMBANG HASUNDUTAN",
+            "1217" to "SAMOSIR", "1218" to "SERDANG BEDAGAI", "1219" to "BATU BARA", "1220" to "PADANG LAWAS UTARA",
+            "1221" to "PADANG LAWAS", "1222" to "LABUHANBATU SELATAN", "1223" to "LABUHANBATU UTARA", "1224" to "NIAS UTARA", "1225" to "NIAS BARAT",
+            "1271" to "KOTA MEDAN", "1272" to "KOTA PEMATANGSIANTAR", "1273" to "KOTA SIBOLGA", "1274" to "KOTA TANJUNGBALAI",
+            "1275" to "KOTA BINJAI", "1276" to "KOTA TEBING TINGGI", "1277" to "KOTA PADANGSIDIMPUAN", "1278" to "KOTA GUNUNGSITOLI",
+            // Sumatera Barat
+            "1301" to "KEPULAUAN MENTAWAI", "1302" to "PESISIR SELATAN", "1303" to "SOLOK", "1304" to "SIJUNJUNG",
+            "1305" to "TANAH DATAR", "1306" to "PADANG PARIAMAN", "1307" to "AGAM", "1308" to "LIMA PULUH KOTA",
+            "1309" to "PASAMAN", "1310" to "SOLOK SELATAN", "1311" to "DHARMASRAYA", "1312" to "PASAMAN BARAT",
+            "1371" to "KOTA PADANG", "1372" to "KOTA SOLOK", "1373" to "KOTA SAWAHLUNTO", "1374" to "KOTA PADANG PANJANG",
+            "1375" to "KOTA BUKITTINGGI", "1376" to "KOTA PAYAKUMBUH", "1377" to "KOTA PARIAMAN",
+            // Riau & Kepri
+            "1401" to "KUANTAN SINGINGI", "1402" to "INDRAGIRI HULU", "1403" to "INDRAGIRI HILIR", "1404" to "PELALAWAN",
+            "1405" to "SIAK", "1406" to "KAMPAR", "1407" to "ROKAN HULU", "1408" to "BENGKALIS",
+            "1409" to "ROKAN HILIR", "1410" to "KEPULAUAN MERANTI", "1471" to "KOTA PEKANBARU", "1472" to "KOTA DUMAI",
+            "2101" to "KARIMUN", "2102" to "BINTAN", "2103" to "NATUNA", "2104" to "LINGGA",
+            "2105" to "KEPULAUAN ANAMBAS", "2171" to "KOTA BATAM", "2172" to "KOTA TANJUNGPINANG",
+            // Jambi & Sumsel & Bengkulu & Lampung & Babel
+            "1501" to "KERINCI", "1502" to "MERANGIN", "1503" to "SAROLANGUN", "1504" to "BATANGHARI",
+            "1505" to "MUARO JAMBI", "1506" to "TANJUNG JABUNG BARAT", "1507" to "TANJUNG JABUNG TIMUR", "1508" to "TEBO",
+            "1509" to "BUNGO", "1571" to "KOTA JAMBI", "1572" to "KOTA SUNGAI PENUH",
+            "1601" to "OGAN KOMERING ULU", "1602" to "OGAN KOMERING ILIR", "1603" to "MUARA ENIM", "1604" to "LAHAT",
+            "1605" to "MUSI RAWAS", "1606" to "MUSI BANYUASIN", "1607" to "BANYUASIN", "1608" to "OGAN KOMERING ULU SELATAN",
+            "1609" to "OGAN KOMERING ULU TIMUR", "1610" to "OGAN ILIR", "1611" to "EMPAT LAWANG", "1612" to "PENUKAL ABAB LEMATANG ILIR",
+            "1613" to "MUSI RAWAS UTARA", "1671" to "KOTA PALEMBANG", "1672" to "KOTA PAGAR ALAM", "1673" to "KOTA LUBUKLINGGAU", "1674" to "KOTA PRABUMULIH",
+            "1701" to "BENGKULU SELATAN", "1702" to "REJANG LEBONG", "1703" to "BENGKULU UTARA", "1704" to "KAUR",
+            "1705" to "SELUMA", "1706" to "MUKOMUKO", "1707" to "LEBONG", "1708" to "KEPAHIANG", "1709" to "BENGKULU TENGAH", "1771" to "KOTA BENGKULU",
+            "1801" to "LAMPUNG BARAT", "1802" to "TANGGAMUS", "1803" to "LAMPUNG SELATAN", "1804" to "LAMPUNG TIMUR",
+            "1805" to "LAMPUNG TENGAH", "1806" to "LAMPUNG UTARA", "1807" to "WAY KANAN", "1808" to "TULANG BAWANG",
+            "1809" to "PESAWARAN", "1810" to "PRINGSEWU", "1811" to "MESUJI", "1812" to "TULANG BAWANG BARAT",
+            "1813" to "PESISIR BARAT", "1871" to "KOTA BANDAR LAMPUNG", "1872" to "KOTA METRO",
+            "1901" to "BANGKA", "1902" to "BELITUNG", "1903" to "BANGKA BARAT", "1904" to "BANGKA TENGAH",
+            "1905" to "BANGKA SELATAN", "1906" to "BELITUNG TIMUR", "1971" to "KOTA PANGKALPINANG",
+            // DKI Jakarta & Jawa Barat & Banten
+            "3101" to "KEPULAUAN SERIBU", "3171" to "JAKARTA SELATAN", "3172" to "JAKARTA TIMUR",
+            "3173" to "JAKARTA PUSAT", "3174" to "JAKARTA BARAT", "3175" to "JAKARTA UTARA",
+            "3201" to "BOGOR", "3202" to "SUKABUMI", "3203" to "CIANJUR", "3204" to "BANDUNG",
+            "3205" to "GARUT", "3206" to "TASIKMALAYA", "3207" to "CIAMIS", "3208" to "KUNINGAN",
+            "3209" to "CIREBON", "3210" to "MAJALENGKA", "3211" to "SUMEDANG", "3212" to "INDRAMAYU",
+            "3213" to "SUBANG", "3214" to "PURWAKARTA", "3215" to "KARAWANG", "3216" to "BEKASI",
+            "3217" to "BANDUNG BARAT", "3218" to "PANGANDARAN", "3271" to "KOTA BOGOR",
+            "3272" to "KOTA SUKABUMI", "3273" to "KOTA BANDUNG", "3274" to "KOTA CIREBON",
+            "3275" to "KOTA BEKASI", "3276" to "KOTA DEPOK", "3277" to "KOTA CIMAHI",
+            "3278" to "KOTA TASIKMALAYA", "3279" to "KOTA BANJAR",
+            "3601" to "PANDEGLANG", "3602" to "LEBAK", "3603" to "TANGERANG", "3604" to "SERANG",
+            "3671" to "KOTA TANGERANG", "3672" to "KOTA CILEGON", "3673" to "KOTA SERANG", "3674" to "KOTA TANGERANG SELATAN",
+            // Jawa Tengah & DI Yogyakarta
+            "3301" to "CILACAP", "3302" to "BANYUMAS", "3303" to "PURBALINGGA", "3304" to "BANJARNEGARA",
+            "3305" to "KEBUMEN", "3306" to "PURWOREJO", "3307" to "WONOSOBO", "3308" to "MAGELANG",
+            "3309" to "BOYOLALI", "3310" to "KLATEN", "3311" to "SUKOHARJO", "3312" to "WONOGIRI",
+            "3313" to "KARANGANYAR", "3314" to "SRAGEN", "3315" to "GROBOGAN", "3316" to "BLORA",
+            "3317" to "REMBANG", "3318" to "PATI", "3319" to "KUDUS", "3320" to "JEPARA",
+            "3321" to "DEMAK", "3322" to "SEMARANG", "3323" to "TEMANGGUNG", "3324" to "KENDAL",
+            "3325" to "BATANG", "3326" to "PEKALONGAN", "3327" to "PEMALANG", "3328" to "TEGAL",
+            "3329" to "BREBES", "3371" to "KOTA MAGELANG", "3372" to "KOTA SURAKARTA", "3373" to "KOTA SALATIGA",
+            "3374" to "KOTA SEMARANG", "3375" to "KOTA PEKALONGAN", "3376" to "KOTA TEGAL",
+            "3401" to "KULON PROGO", "3402" to "BANTUL", "3403" to "GUNUNGKIDUL", "3404" to "SLEMAN", "3471" to "KOTA YOGYAKARTA",
+            // Jawa Timur
+            "3501" to "PACITAN", "3502" to "PONOROGO", "3503" to "TRENGGALEK", "3504" to "TULUNGAGUNG",
+            "3505" to "BLITAR", "3506" to "KEDIRI", "3507" to "MALANG", "3508" to "LUMAJANG",
+            "3509" to "JEMBER", "3510" to "BANYUWANGI", "3511" to "BONDOWOSO", "3512" to "SITUBONDO",
+            "3513" to "PROBOLINGGO", "3514" to "PASURUAN", "3515" to "SIDOARJO", "3516" to "MOJOKERTO",
+            "3517" to "JOMBANG", "3518" to "NGANJUK", "3519" to "MADIUN", "3520" to "MAGETAN",
+            "3521" to "NGAWI", "3522" to "BOJONEGORO", "3523" to "TUBAN", "3524" to "LAMONGAN",
+            "3525" to "GRESIK", "3526" to "BANGKALAN", "3527" to "SAMPANG", "3528" to "PAMEKASAN",
+            "3529" to "SUMENEP", "3571" to "KOTA KEDIRI", "3572" to "KOTA BLITAR", "3573" to "KOTA MALANG",
+            "3574" to "KOTA PROBOLINGGO", "3575" to "KOTA PASURUAN", "3576" to "KOTA MOJOKERTO",
+            "3577" to "KOTA MADIUN", "3578" to "KOTA SURABAYA", "3579" to "KOTA BATU",
+            // Bali, NTB, NTT
+            "5101" to "JEMBRANA", "5102" to "TABANAN", "5103" to "BADUNG", "5104" to "GIANYAR",
+            "5105" to "KLUNGKUNG", "5106" to "BANGLI", "5107" to "KARANGASEM", "5108" to "BULELENG", "5171" to "KOTA DENPASAR",
+            "5201" to "LOMBOK BARAT", "5202" to "LOMBOK TENGAH", "5203" to "LOMBOK TIMUR", "5204" to "SUMBAWA",
+            "5205" to "DOMPU", "5206" to "BIMA", "5207" to "SUMBAWA BARAT", "5208" to "LOMBOK UTARA",
+            "5271" to "KOTA MATARAM", "5272" to "KOTA BIMA",
+            "5301" to "SUMBA BARAT", "5302" to "SUMBA TIMUR", "5303" to "KUPANG", "5304" to "TIMOR TENGAH SELATAN",
+            "5305" to "TIMOR TENGAH UTARA", "5306" to "BELU", "5307" to "ALOR", "5308" to "LEMBATA",
+            "5309" to "FLORES TIMUR", "5310" to "SIKKA", "5311" to "ENDE", "5312" to "NGADA",
+            "5313" to "MANGGARAI", "5314" to "ROTE NDAO", "5315" to "MANGGARAI BARAT", "5316" to "SUMBA TENGAH",
+            "5317" to "SUMBA BARAT DAYA", "5318" to "NAGEKEO", "5319" to "MANGGARAI TIMUR", "5320" to "SABU RAIJUA",
+            "5321" to "MALAKA", "5371" to "KOTA KUPANG",
+            // Kalimantan
+            "6101" to "SAMBAS", "6102" to "BENGKAYANG", "6103" to "LANDAK", "6104" to "MEMPAWAH",
+            "6105" to "SANGGAU", "6106" to "KETAPANG", "6107" to "SINTANG", "6108" to "KAPUAS HULU",
+            "6109" to "SEKADAU", "6110" to "MELAWI", "6111" to "KAYONG UTARA", "6112" to "KUBU RAYA",
+            "6171" to "KOTA PONTIANAK", "6172" to "KOTA SINGKAWANG",
+            "6201" to "KOTAWARINGIN BARAT", "6202" to "KOTAWARINGIN TIMUR", "6203" to "KAPUAS", "6204" to "BARITO SELATAN",
+            "6205" to "BARITO UTARA", "6206" to "SUKAMARA", "6207" to "LAMANDAU", "6208" to "SERUYAN",
+            "6209" to "KATINGAN", "6210" to "PULANG PISAU", "6211" to "GUNUNG MAS", "6212" to "BARITO TIMUR",
+            "6213" to "MURUNG RAYA", "6271" to "KOTA PALANGKA RAYA",
+            "6301" to "TANAH LAUT", "6302" to "KOTABARU", "6303" to "BANJAR", "6304" to "BARITO KUALA",
+            "6305" to "TAPIN", "6306" to "HULU SUNGAI SELATAN", "6307" to "HULU SUNGAI TENGAH", "6308" to "HULU SUNGAI UTARA",
+            "6309" to "TABALONG", "6310" to "TANAH BUMBU", "6311" to "BALANGAN", "6371" to "KOTA BANJARMASIN", "6372" to "KOTA BANJARBARU",
+            "6401" to "PASER", "6402" to "KUTAI BARAT", "6403" to "KUTAI KARTANEGARA", "6404" to "KUTAI TIMUR",
+            "6405" to "BERAU", "6409" to "PENAJAM PASER UTARA", "6411" to "MAHAKAM ULU", "6471" to "KOTA BALIKPAPAN",
+            "6472" to "KOTA SAMARINDA", "6474" to "KOTA BONTANG",
+            "6501" to "MALINAU", "6502" to "BULUNGAN", "6503" to "TANA TIDUNG", "6504" to "NUNUKAN", "6571" to "KOTA TARAKAN",
+            // Sulawesi
+            "7101" to "BOLAANG MONGONDOW", "7102" to "MINAHASA", "7103" to "KEPULAUAN SANGIHE", "7104" to "KEPULAUAN TALAUD",
+            "7105" to "MINAHASA SELATAN", "7106" to "MINAHASA UTARA", "7107" to "BOLAANG MONGONDOW UTARA", "7108" to "SIAU TAGULANDANG BIARO",
+            "7109" to "MINAHASA TENGGARA", "7110" to "BOLAANG MONGONDOW SELATAN", "7111" to "BOLAANG MONGONDOW TIMUR",
+            "7171" to "KOTA MANADO", "7172" to "KOTA BITUNG", "7173" to "KOTA TOMOHON", "7174" to "KOTA KOTAMOBAGU",
+            "7201" to "BANGGAI KEPULAUAN", "7202" to "BANGGAI", "7203" to "MOROWALI", "7204" to "POSO",
+            "7205" to "DONGGALA", "7206" to "TOLITOLI", "7207" to "BUOL", "7208" to "PARIGI MOUTONG",
+            "7209" to "TOJO UNA-UNA", "7210" to "SIGI", "7211" to "BANGGAI LAUT", "7212" to "MOROWALI UTARA", "7271" to "KOTA PALU",
+            "7301" to "KEPULAUAN SELAYAR", "7302" to "BULUKUMBA", "7303" to "BANTAENG", "7304" to "JENEPONTO",
+            "7305" to "TAKALAR", "7306" to "GOWA", "7307" to "SINJAI", "7308" to "MAROS",
+            "7309" to "PANGKAJENE DAN KEPULAUAN", "7310" to "BARRU", "7311" to "BONE", "7312" to "SOPPENG",
+            "7313" to "WAJO", "7314" to "SIDENRENG RAPPANG", "7315" to "PINRANG", "7316" to "ENREKANG",
+            "7317" to "LUWU", "7318" to "TANA TORAJA", "7322" to "LUWU UTARA", "7324" to "LUWU TIMUR",
+            "7326" to "TORAJA UTARA", "7371" to "KOTA MAKASSAR", "7372" to "KOTA PAREPARE", "7373" to "KOTA PALOPO",
+            "7401" to "BUTON", "7402" to "MUNA", "7403" to "KONAWE", "7404" to "KOLAKA",
+            "7405" to "KONAWE SELATAN", "7406" to "BOMBANA", "7407" to "WAKATOBI", "7408" to "KOLAKA UTARA",
+            "7409" to "BUTON UTARA", "7410" to "KONAWE UTARA", "7411" to "KOLAKA TIMUR", "7412" to "KONAWE KEPULAUAN",
+            "7413" to "MUNA BARAT", "7414" to "BUTON TENGAH", "7415" to "BUTON SELATAN", "7471" to "KOTA KENDARI", "7472" to "KOTA BAUBAU",
+            "7501" to "BOALEMO", "7502" to "GORONTALO", "7503" to "POHUWATO", "7504" to "BONE BOLANGO",
+            "7505" to "GORONTALO UTARA", "7571" to "KOTA GORONTALO",
+            "7601" to "PASANGKAYU", "7602" to "MAMUJU", "7603" to "MAMASA", "7604" to "POLEWALI MANDAR",
+            "7605" to "MAJENE", "7606" to "MAMUJU TENGAH",
+            // Maluku & Papua
+            "8101" to "KEPULAUAN TANIMBAR", "8102" to "MALUKU TENGGARA", "8103" to "MALUKU TENGAH", "8104" to "BURU",
+            "8105" to "KEPULAUAN ARU", "8106" to "SERAM BAGIAN BARAT", "8107" to "SERAM BAGIAN TIMUR", "8108" to "MALUKU BARAT DAYA",
+            "8109" to "BURU SELATAN", "8171" to "KOTA AMBON", "8172" to "KOTA TUAL",
+            "8201" to "HALMAHERA BARAT", "8202" to "HALMAHERA TENGAH", "8203" to "KEPULAUAN SULA", "8204" to "HALMAHERA SELATAN",
+            "8205" to "HALMAHERA UTARA", "8206" to "HALMAHERA TIMUR", "8207" to "PULAU MOROTAI", "8208" to "PULAU TALIABU",
+            "8271" to "KOTA TERNATE", "8272" to "KOTA TIDORE KEPULAUAN",
+            "9101" to "MERAUKE", "9102" to "JAYAWIJAYA", "9103" to "JAYAPURA", "9104" to "NABIRE",
+            "9105" to "KEPULAUAN YAPEN", "9106" to "BIAK NUMFOR", "9107" to "PANIAI", "9108" to "PUNCAK JAYA",
+            "9109" to "MIMIKA", "9110" to "BOVEN DIGOEL", "9111" to "MAPPI", "9112" to "ASMAT",
+            "9113" to "YAHUKIMO", "9114" to "PEGUNUNGAN BINTANG", "9115" to "TOLIKARA", "9116" to "SARMI",
+            "9117" to "KEEROM", "9118" to "WAROPEN", "9119" to "SUPIORI", "9120" to "MAMBERAMO RAYA",
+            "9121" to "NDUGA", "9122" to "LANNY JAYA", "9123" to "MAMBERAMO TENGAH", "9124" to "YALIMO",
+            "9125" to "PUNCAK", "9126" to "DOGIYAI", "9127" to "INTAN JAYA", "9128" to "DEIYAI", "9171" to "KOTA JAYAPURA",
+            "9201" to "SORONG", "9202" to "MANOKWARI", "9203" to "FAKFAK", "9204" to "SORONG SELATAN",
+            "9205" to "RAJA AMPAT", "9206" to "TELUK BINTUNI", "9207" to "TELUK WONDAMA", "9208" to "KAIMANA",
+            "9209" to "TAMBRAUW", "9210" to "MAYBRAT", "9211" to "MANOKWARI SELATAN", "9212" to "PEGUNUNGAN ARFAK", "9271" to "KOTA SORONG"
+        )
+        return mapping[kode4] ?: "INDONESIA"
+    }
+}
