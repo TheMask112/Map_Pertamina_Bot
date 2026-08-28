@@ -229,15 +229,22 @@ class BotEngine(
 
             // Step 4b: Klik CEK PESANAN
             pageInteractor.clickButtonByText(Constants.BTN_CEK)
+            delay(1000)
             
-            // Tunggu maksimal 10 detik agar tombol PROSES muncul
+            // Tunggu maksimal 12 detik agar tombol PROSES muncul, retry CEK jika belum muncul
             var prosesMuncul = false
-            for (w in 1..10) {
-                delay(1000)
-                if (pageInteractor.isElementVisibleByText(Constants.BTN_PROSES) || pageInteractor.isElementVisibleByText("PROSES PENJUALAN")) {
+            for (w in 1..12) {
+                if (pageInteractor.isElementVisibleByText(Constants.BTN_PROSES) || 
+                    pageInteractor.isElementVisibleByText("PROSES PENJUALAN") ||
+                    pageInteractor.isElementVisibleByText("PROSES PESANAN") ||
+                    pageInteractor.isElementVisibleByText("PROSES")) {
                     prosesMuncul = true
                     break
                 }
+                if (w == 4 || w == 8) {
+                    pageInteractor.clickButtonByText(Constants.BTN_CEK)
+                }
+                delay(1000)
             }
 
             // Cek lagi apakah ada error setelah CEK PESANAN
@@ -254,7 +261,14 @@ class BotEngine(
             }
 
             // Step 5: Klik PROSES PENJUALAN
-            if (prosesMuncul && (pageInteractor.clickButtonByText(Constants.BTN_PROSES) || pageInteractor.clickButtonByText("PROSES PENJUALAN"))) {
+            val clickedProses = prosesMuncul && (
+                pageInteractor.clickButtonByText(Constants.BTN_PROSES) || 
+                pageInteractor.clickButtonByText("PROSES PENJUALAN") ||
+                pageInteractor.clickButtonByText("PROSES PESANAN") ||
+                pageInteractor.clickButtonByText("PROSES")
+            )
+
+            if (clickedProses) {
                 log("Menekan tombol PROSES PENJUALAN...")
 
                 // Potong kuota lokal & sinkronisasi
