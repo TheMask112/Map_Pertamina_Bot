@@ -4,7 +4,7 @@
 export default function DownloadPage() {
   // Gunakan variabel lingkungan NEXT_PUBLIC_DOWNLOAD_URL untuk tautan Google Drive / cloud storage eksternal
   const downloadUrl = process.env.NEXT_PUBLIC_DOWNLOAD_URL || 'https://drive.google.com/drive/folders/1Y2aWbsPPDtrsdfMdY1DTX_1sp_XZk-Ou?usp=sharing';
-  const androidDownloadUrl = process.env.NEXT_PUBLIC_ANDROID_DOWNLOAD_URL || 'https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.0.6/MAP_Pertamina_Bot_v1.0.6.apk';
+  const androidDownloadUrl = process.env.NEXT_PUBLIC_ANDROID_DOWNLOAD_URL || 'https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.0.7/MAP_Pertamina_Bot_v1.0.7.apk';
 
   return (
     <div style={styles.container} className="animate-fade-in">
