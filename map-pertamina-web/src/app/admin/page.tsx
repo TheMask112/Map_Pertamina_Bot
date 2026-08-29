@@ -77,7 +77,7 @@ export default function AdminPortal() {
     setError('');
     try {
       const res = await fetch('/api/admin/orders', {
-        headers: { 'Authorization': codeToTest }
+        headers: { 'Authorization': codeToTest.trim() }
       });
       if (res.ok) {
         const data = await res.json();
@@ -85,9 +85,10 @@ export default function AdminPortal() {
         setAffiliates(data.affiliates || []);
         setPayouts(data.payouts || []);
         setIsAuthorized(true);
-        localStorage.setItem('gorillaz_admin_passcode', codeToTest);
+        localStorage.setItem('gorillaz_admin_passcode', codeToTest.trim());
       } else {
-        setError('Passcode salah atau tidak sah.');
+        const errData = await res.json().catch(() => ({}));
+        setError(errData.error === 'Unauthorized' ? 'Passcode kunci keamanan salah.' : (errData.error || 'Gagal memuat data admin.'));
         setIsAuthorized(false);
       }
     } catch (err) {

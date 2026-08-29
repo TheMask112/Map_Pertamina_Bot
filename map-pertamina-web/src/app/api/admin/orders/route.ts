@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
+import { sql, ensureAffiliateTables } from '@/lib/db';
 import { CONFIG } from '@/lib/config';
 import { generateVoucherCode } from '@/lib/voucher';
 import { generateLicenseKey } from '@/lib/keygen';
@@ -28,6 +28,8 @@ export async function GET(request: Request) {
       console.warn('[Admin API] Unauthorized GET request attempt.');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    await ensureAffiliateTables();
 
     // Auto-expire old pending orders
     await sql`
@@ -80,6 +82,8 @@ export async function POST(request: Request) {
       console.warn('[Admin API] Unauthorized POST request attempt.');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    await ensureAffiliateTables();
 
     const body = await request.json().catch(() => ({}));
     const { orderId, payoutId, action, notes } = body;
