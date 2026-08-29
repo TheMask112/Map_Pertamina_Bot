@@ -34,6 +34,7 @@ import kotlinx.coroutines.withContext
 import com.mapbot.pertamina.security.CredentialStore
 import com.mapbot.pertamina.ui.components.PangkalanSelectorDialog
 import com.mapbot.pertamina.ui.components.BatchQueuePangkalanDialog
+import com.mapbot.pertamina.ui.components.AddEditPangkalanDialog
 
 @Composable
 fun HomeScreen(onNavigateToBot: () -> Unit, onNavigateToSettings: () -> Unit) {
@@ -42,6 +43,7 @@ fun HomeScreen(onNavigateToBot: () -> Unit, onNavigateToSettings: () -> Unit) {
     val credStore = remember { CredentialStore(context) }
     var activeProfile by remember { mutableStateOf(credStore.getActiveProfile()) }
     var showPangkalanDialog by remember { mutableStateOf(false) }
+    var showFirstTimeAddDialog by remember { mutableStateOf(credStore.getProfiles().isEmpty()) }
 
     var isReadingFile by remember { mutableStateOf(false) }
     var fileSummary by remember { mutableStateOf(
@@ -56,6 +58,8 @@ fun HomeScreen(onNavigateToBot: () -> Unit, onNavigateToSettings: () -> Unit) {
         if (activeProfile != null) {
             SessionData.phone = activeProfile!!.phone
             SessionData.pass = activeProfile!!.pass
+        } else if (credStore.getProfiles().isEmpty()) {
+            showFirstTimeAddDialog = true
         }
         coroutineScope.launch {
             val synced = LicenseManager.syncLicenseStatusOnline(context)
@@ -66,6 +70,22 @@ fun HomeScreen(onNavigateToBot: () -> Unit, onNavigateToSettings: () -> Unit) {
     }
 
     var showBatchQueueDialog by remember { mutableStateOf(false) }
+
+    if (showFirstTimeAddDialog) {
+        AddEditPangkalanDialog(
+            profile = null,
+            onDismiss = { showFirstTimeAddDialog = false },
+            onSave = { savedProfile ->
+                credStore.saveProfile(savedProfile)
+                activeProfile = credStore.getActiveProfile()
+                if (activeProfile != null) {
+                    SessionData.phone = activeProfile!!.phone
+                    SessionData.pass = activeProfile!!.pass
+                }
+                showFirstTimeAddDialog = false
+            }
+        )
+    }
 
     if (showPangkalanDialog) {
         PangkalanSelectorDialog(

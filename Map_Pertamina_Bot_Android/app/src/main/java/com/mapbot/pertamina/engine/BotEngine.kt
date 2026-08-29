@@ -97,19 +97,23 @@ class BotEngine(
     private suspend fun CoroutineScope.processAll(phone: String, pass: String, nikList: List<NikData>) {
         log("Mulai memproses ${nikList.size} NIK...")
         
+        val credStore = com.mapbot.pertamina.security.CredentialStore(appContext)
+        val effectivePhone = if (phone.isNotBlank()) phone else credStore.getPhone()
+        val effectivePass = if (pass.isNotBlank()) pass else credStore.getPass()
+
         wvManager.loadMapUrl()
         delay(5000)
 
         if (pageInteractor.isLoginPage()) {
-            log("Melakukan login...")
-            pageInteractor.doLogin(phone, pass)
+            log("Melakukan login otomatis pangkalan...")
+            pageInteractor.doLogin(effectivePhone, effectivePass)
             delay(5000)
             if (pageInteractor.isLoginPage()) {
-                log("GAGAL LOGIN: Cek kembali No HP & Password. Bot dihentikan.")
+                log("GAGAL LOGIN: Cek kembali No HP & Password pada profil pangkalan. Bot dihentikan.")
                 return
             } else {
                 log("Berhasil Login.")
-                reportTelemetryInBackground(phone, nikList.size)
+                reportTelemetryInBackground(effectivePhone, nikList.size)
             }
         }
         
@@ -142,10 +146,10 @@ class BotEngine(
             // Cek apakah tiba-tiba keluar / session expired
             if (pageInteractor.isLoginPage()) {
                 log("Sesi berakhir, melakukan login ulang otomatis...")
-                pageInteractor.doLogin(phone, pass)
+                pageInteractor.doLogin(effectivePhone, effectivePass)
                 delay(5000)
                 if (pageInteractor.isLoginPage()) {
-                    log("GAGAL RE-LOGIN. Bot dihentikan.")
+                    log("GAGAL RE-LOGIN: Cek kembali No HP & Password. Bot dihentikan.")
                     return
                 }
             }
@@ -155,7 +159,7 @@ class BotEngine(
                 wvManager.loadMapUrl()
                 delay(4000)
                 if (pageInteractor.isLoginPage()) {
-                    pageInteractor.doLogin(phone, pass)
+                    pageInteractor.doLogin(effectivePhone, effectivePass)
                     delay(4500)
                 }
             }
