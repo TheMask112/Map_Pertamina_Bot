@@ -1,13 +1,68 @@
-// page.tsx (src/app/page.tsx)
-// Landing Page for Bot MAP Pertamina - Solusi Otomatisasi Transaksi Subsidi Tepat LPG
+'use client';
 
+// page.tsx (src/app/page.tsx)
+// Landing Page for Bot MAP Pertamina - Solusi Otomatisasi Transaksi Subsidi Tepat LPG (With Dynamic Affiliate Pricing)
+
+import React, { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { CONFIG } from '@/lib/config';
 
-export default function LandingPage() {
+function LandingPageContent() {
+  const searchParams = useSearchParams();
+  const [affiliateInfo, setAffiliateInfo] = useState<any>(null);
+
+  useEffect(() => {
+    let ref = searchParams.get('ref');
+    if (!ref && typeof document !== 'undefined') {
+      const match = document.cookie.match(/affiliate_ref=([^;]+)/);
+      if (match) ref = match[1];
+    }
+
+    if (ref) {
+      const cleanRef = ref.trim().toUpperCase();
+      // Simpan ke cookie 30 hari
+      if (typeof document !== 'undefined') {
+        document.cookie = `affiliate_ref=${cleanRef}; path=/; max-age=2592000; SameSite=Lax`;
+      }
+
+      fetch(`/api/affiliate/info?code=${encodeURIComponent(cleanRef)}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data?.success && data?.affiliate) {
+            setAffiliateInfo(data.affiliate);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [searchParams]);
+
   const pakets = Object.values(CONFIG.pakets);
+  const markupPercent = affiliateInfo ? (affiliateInfo.markupPercent || 0) : 0;
 
   return (
     <div style={styles.container}>
+      {/* AFFILIATE MITRA BANNER (HANYA MUNCUL JIKA LEWAT LINK AFFILIATOR) */}
+      {affiliateInfo && (
+        <div style={styles.affiliateBanner} className="animate-fade-in">
+          <div style={styles.affiliateBannerContent}>
+            <span>
+              🤝 Direkomendasikan oleh Mitra Resmi: <strong>{affiliateInfo.name}</strong> (Kode: <code>{affiliateInfo.code}</code>)
+            </span>
+            {affiliateInfo.whatsapp && (
+              <a
+                href={`https://wa.me/${affiliateInfo.whatsapp}?text=Halo%20Pak%20${encodeURIComponent(affiliateInfo.name)},%20saya%20tertarik%20dengan%20Bot%20MAP%20Pertamina`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={styles.affiliateWaBtn}
+              >
+                💬 Butuh Bantuan Pasang? Chat WA ({affiliateInfo.whatsapp})
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* 1. HERO SECTION */}
       <section style={styles.hero} className="animate-fade-in">
         <div style={styles.badge}>🚀 UPDATE TERBARU: AUTO-FILL TEMPAT & TANGGAL LAHIR NIK</div>
@@ -30,7 +85,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 2. CERITA MASALAH & SOLUSI PANGKALAN (STORYTELLING SECTION) */}
+      {/* 2. CERITA MASALAH & SOLUSI PANGKALAN */}
       <section style={styles.storySection} className="glass-card">
         <div style={{ maxWidth: '800px', margin: '0 auto', textAlign: 'center' }}>
           <span style={{ fontSize: '2.5rem' }}>😫 ➔ 😌</span>
@@ -40,27 +95,19 @@ export default function LandingPage() {
           <div style={styles.problemGrid}>
             <div style={styles.problemItem}>
               <div style={styles.problemIcon}>❌</div>
-              <div>
-                <strong>Mata lelah & tangan pegal</strong> mengetik NIK manual ratusan kali di website Subsidi Tepat.
-              </div>
+              <div><strong>Mata lelah & tangan pegal</strong> mengetik NIK manual ratusan kali di website Subsidi Tepat.</div>
             </div>
             <div style={styles.problemItem}>
               <div style={styles.problemIcon}>❌</div>
-              <div>
-                <strong>Stres dengan Puzzle Captcha geser</strong> yang sering gagal dan bikin transaksi macet.
-              </div>
+              <div><strong>Stres dengan Puzzle Captcha geser</strong> yang sering gagal dan bikin transaksi macet.</div>
             </div>
             <div style={styles.problemItem}>
               <div style={styles.problemIcon}>❌</div>
-              <div>
-                <strong>Form baru Pertamina makin ribet</strong> meminta Tempat Lahir & Tanggal Lahir pelanggan.
-              </div>
+              <div><strong>Form baru Pertamina makin ribet</strong> meminta Tempat Lahir & Tanggal Lahir pelanggan.</div>
             </div>
             <div style={styles.problemItem}>
               <div style={styles.problemIcon}>❌</div>
-              <div>
-                <strong>Waktu terbuang seharian</strong> di depan komputer hanya untuk input data jatah gas.
-              </div>
+              <div><strong>Waktu terbuang seharian</strong> di depan komputer hanya untuk input data jatah gas.</div>
             </div>
           </div>
 
@@ -75,7 +122,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 3. CARA PENGGUNAAN MUDAH UNTUK ORANG AWAM */}
+      {/* 3. CARA PENGGUNAAN MUDAH */}
       <section id="cara-kerja" style={styles.section}>
         <div style={styles.sectionHeader}>
           <div style={styles.badgeSmall}>SANGAT MUDAH</div>
@@ -166,7 +213,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 5. PRICING SECTION */}
+      {/* 5. PRICING SECTION (DYNAMIC ACCORDING TO AFFILIATE MARKUP) */}
       <section id="pricing" style={styles.section}>
         <div style={styles.sectionHeader}>
           <div style={styles.badgeSmall}>HARGA TERJANGKAU</div>
@@ -178,6 +225,10 @@ export default function LandingPage() {
           {pakets.map((paket) => {
             const isPro = paket.id === 'PRO';
             const isEnt = paket.id === 'ENTERPRISE';
+            const finalPrice = Math.round(paket.harga * (1 + markupPercent / 100));
+            const checkoutUrl = affiliateInfo
+              ? `/checkout?paket=${paket.id}&ref=${encodeURIComponent(affiliateInfo.code)}`
+              : `/checkout?paket=${paket.id}`;
             
             return (
               <div 
@@ -199,13 +250,13 @@ export default function LandingPage() {
                 <div style={styles.priceContainer}>
                   <div style={styles.priceVal}>
                     <span style={styles.priceCurrency}>Rp</span>
-                    <span style={styles.priceNumber}>{paket.harga.toLocaleString('id-ID')}</span>
+                    <span style={styles.priceNumber}>{finalPrice.toLocaleString('id-ID')}</span>
                   </div>
                   <div style={styles.pricePeriod}>
                     Sekali Bayar / Lifetime
                   </div>
                   <div style={styles.pricePerTabung}>
-                    Hanya Rp {(paket.harga / paket.kuota).toFixed(0)} per tabung
+                    Hanya Rp {(finalPrice / paket.kuota).toFixed(0)} per tabung
                   </div>
                 </div>
 
@@ -216,7 +267,7 @@ export default function LandingPage() {
                 </ul>
 
                 <a 
-                  href={`/checkout?paket=${paket.id}`} 
+                  href={checkoutUrl} 
                   className={`btn ${isEnt ? 'btn-success' : 'btn-primary'}`} 
                   style={styles.cardButton}
                 >
@@ -238,15 +289,15 @@ export default function LandingPage() {
 
         <div style={styles.featuresGrid}>
           <div style={styles.featureDetailCard} className="glass-card">
-            <h4 style={styles.featureDetailTitle}>🧩 AI Solver Captcha Puzzle</h4>
-            <p style={styles.featureDetailDesc}>Tidak perlu lagi pusing menggeser puzzle satu per satu. Algoritma cerdas bot otomatis memposisikan slider tepat di sasaran secara presisi.</p>
+            <h4 style={styles.featureDetailTitle}>🧩 AI Captcha Auto-Solver</h4>
+            <p style={styles.featureDetailDesc}>Teknologi computer vision membaca posisi puzzle captcha geser dan menggesernya dengan kurva gerakan tangan manusia (anti-bot detection).</p>
           </div>
           <div style={styles.featureDetailCard} className="glass-card">
-            <h4 style={styles.featureDetailTitle}>🎂 Ekstraksi Tanggal & Tempat Lahir NIK</h4>
-            <p style={styles.featureDetailDesc}>Sesuai update sistem Pertamina terbaru, bot otomatis menghitung tanggal lahir (termasuk kode wanita +40) dan mapping kota dari 16 digit NIK.</p>
+            <h4 style={styles.featureDetailTitle}>🎂 Auto-Fill Tempat & Tanggal Lahir</h4>
+            <p style={styles.featureDetailDesc}>Sistem otomatis membedah struktur 16 digit NIK pelanggan untuk mengisi data tempat & tanggal lahir Dukcapil secara akurat.</p>
           </div>
           <div style={styles.featureDetailCard} className="glass-card">
-            <h4 style={styles.featureDetailTitle}>📊 Multi-Batch & Auto-Resume</h4>
+            <h4 style={styles.featureDetailTitle}>🔄 Auto-Recovery & Smart Resume</h4>
             <p style={styles.featureDetailDesc}>Jika internet sempat putus, bot otomatis menyimpan sisa antrean NIK yang belum selesai. Anda bisa melanjutkannya kapan saja tanpa risiko transaksi ganda.</p>
           </div>
           <div style={styles.featureDetailCard} className="glass-card">
@@ -277,17 +328,38 @@ export default function LandingPage() {
             <h4 style={styles.faqQ}>❓ Setelah saya transfer / bayar QRIS, bagaimana cara mengaktifkan lisensinya?</h4>
             <p style={styles.faqA}>Begitu pembayaran berhasil, kode lisensi langsung muncul di layar checkout dan dikirim ke WhatsApp Anda. Buka Bot di Laptop atau HP Anda, tempelkan kodenya ke kolom Lisensi, lalu klik <strong>Aktivasi</strong>. Bot langsung siap digunakan!</p>
           </div>
-          <div style={styles.faqCard} className="glass-card">
-            <h4 style={styles.faqQ}>❓ Apakah data akun login pangkalan saya aman?</h4>
-            <p style={styles.faqA}><strong>Sangat aman.</strong> Nomor HP dan kata sandi login Merchant Pertamina Anda hanya disimpan secara terenkripsi di dalam komputer / HP Anda sendiri. Sistem kami tidak pernah merekam kata sandi Anda ke server luar.</p>
-          </div>
-          <div style={styles.faqCard} className="glass-card">
-            <h4 style={styles.faqQ}>❓ Jika saya ganti Laptop atau ganti HP, apakah lisensinya hangus?</h4>
-            <p style={styles.faqA}>Tidak hangus. Anda cukup menghubungi admin support kami dengan melampirkan nomor WhatsApp pembelian untuk melakukan reset perangkat secara gratis.</p>
+        </div>
+      </section>
+
+      {/* 8. AFFILIATE FOOTER PROMO BOX */}
+      <section style={styles.affiliateFooterBox} className="glass-card">
+        <div style={{ textAlign: 'center', maxWidth: '700px', margin: '0 auto' }}>
+          <span style={{ fontSize: '2.5rem' }}>💼 🤝 💰</span>
+          <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#ffffff', marginTop: '12px', marginBottom: '8px' }}>
+            Ingin Dapat Penghasilan Tambahan dari Bot MAP Pertamina?
+          </h3>
+          <p style={{ fontSize: '0.9rem', color: '#94a3b8', lineHeight: '1.6', marginBottom: '20px' }}>
+            Bergabunglah menjadi <strong>Mitra Affiliate / Reseller Resmi</strong>. Atur harga markup Anda sendiri dan dapatkan komisi langsung cair ke rekening / e-wallet Anda!
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', flexWrap: 'wrap' }}>
+            <Link href="/affiliate/register" className="btn btn-primary" style={{ padding: '12px 24px', fontWeight: 800 }}>
+              🚀 Gabung Jadi Mitra Affiliate
+            </Link>
+            <Link href="/affiliate/login" className="btn btn-secondary" style={{ padding: '12px 20px', fontWeight: 700 }}>
+              🔐 Login Dashboard Mitra
+            </Link>
           </div>
         </div>
       </section>
     </div>
+  );
+}
+
+export default function LandingPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: '60vh', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#38bdf8' }}>Memuat...</div>}>
+      <LandingPageContent />
+    </Suspense>
   );
 }
 
@@ -296,6 +368,33 @@ const styles = {
     display: 'flex',
     flexDirection: 'column' as const,
     gap: '80px',
+  },
+  affiliateBanner: {
+    background: 'linear-gradient(90deg, rgba(14, 165, 233, 0.2) 0%, rgba(16, 185, 129, 0.2) 100%)',
+    border: '1px solid rgba(56, 189, 248, 0.4)',
+    borderRadius: '16px',
+    padding: '16px 20px',
+    marginTop: '-20px',
+  },
+  affiliateBannerContent: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap' as const,
+    gap: '12px',
+    fontSize: '0.92rem',
+    color: '#e2e8f0',
+  },
+  affiliateWaBtn: {
+    padding: '8px 16px',
+    borderRadius: '20px',
+    background: '#10b981',
+    color: '#ffffff',
+    fontWeight: 700,
+    fontSize: '0.82rem',
+    textDecoration: 'none',
+    display: 'inline-flex',
+    alignItems: 'center',
   },
   hero: {
     textAlign: 'center' as const,
@@ -348,38 +447,60 @@ const styles = {
   storySection: {
     padding: '40px 30px',
     background: 'linear-gradient(180deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.8) 100%)',
-    border: '1px solid rgba(255, 255, 255, 0.08)',
     borderRadius: '20px',
+    border: '1px solid rgba(56, 189, 248, 0.2)',
   },
   problemGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
     gap: '16px',
-    margin: '28px 0',
+    margin: '30px 0',
     textAlign: 'left' as const,
   },
   problemItem: {
     display: 'flex',
-    alignItems: 'flex-start',
     gap: '12px',
-    padding: '14px 18px',
+    alignItems: 'flex-start',
     background: 'rgba(239, 68, 68, 0.08)',
     border: '1px solid rgba(239, 68, 68, 0.2)',
+    padding: '16px',
     borderRadius: '12px',
     fontSize: '0.9rem',
-    color: '#f87171',
-    lineHeight: '1.5',
+    color: 'hsl(215, 20%, 85%)',
+    lineHeight: '1.4',
   },
   problemIcon: {
-    fontSize: '1.1rem',
-    marginTop: '2px',
+    fontSize: '1.2rem',
   },
   solutionBox: {
     background: 'rgba(56, 189, 248, 0.08)',
-    border: '1px dashed rgba(56, 189, 248, 0.3)',
-    borderRadius: '14px',
-    padding: '24px 20px',
-    marginTop: '10px',
+    border: '1px solid rgba(56, 189, 248, 0.25)',
+    padding: '24px',
+    borderRadius: '16px',
+    textAlign: 'left' as const,
+    marginTop: '20px',
+  },
+  section: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '30px',
+  },
+  sectionHeader: {
+    textAlign: 'center' as const,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    gap: '8px',
+  },
+  sectionTitle: {
+    fontSize: '2rem',
+    fontWeight: 800,
+    color: '#ffffff',
+  },
+  sectionSub: {
+    fontSize: '0.95rem',
+    color: 'hsl(215, 20%, 65%)',
+    maxWidth: '600px',
   },
   stepsGridModern: {
     display: 'grid',
@@ -387,12 +508,11 @@ const styles = {
     gap: '24px',
   },
   stepCard: {
-    padding: '30px 24px',
+    padding: '28px 24px',
+    borderRadius: '16px',
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: '14px',
-    borderRadius: '16px',
-    border: '1px solid rgba(255, 255, 255, 0.06)',
+    gap: '12px',
   },
   stepHeader: {
     display: 'flex',
@@ -400,13 +520,12 @@ const styles = {
     alignItems: 'center',
   },
   stepBadgeNum: {
-    width: '36px',
-    height: '36px',
+    width: '32px',
+    height: '32px',
     borderRadius: '50%',
-    background: 'linear-gradient(135deg, #0284c7 0%, #38bdf8 100%)',
-    color: '#fff',
+    background: '#38bdf8',
+    color: '#0f172a',
     fontWeight: 800,
-    fontSize: '1.1rem',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -415,102 +534,72 @@ const styles = {
     fontSize: '1.8rem',
   },
   stepCardTitle: {
-    fontSize: '1.25rem',
-    fontWeight: 800,
+    fontSize: '1.2rem',
+    fontWeight: 700,
     color: '#fff',
   },
   stepCardDesc: {
     fontSize: '0.9rem',
-    color: 'hsl(215, 20%, 70%)',
-    lineHeight: '1.6',
+    color: 'hsl(215, 20%, 75%)',
+    lineHeight: '1.5',
   },
   stepTip: {
     fontSize: '0.8rem',
-    color: '#94a3b8',
+    color: '#38bdf8',
     marginTop: 'auto',
-    paddingTop: '10px',
-    borderTop: '1px solid rgba(255, 255, 255, 0.05)',
-  },
-  section: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '36px',
-  },
-  sectionHeader: {
-    textAlign: 'center' as const,
-    maxWidth: '700px',
-    margin: '0 auto',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '8px',
-  },
-  sectionTitle: {
-    fontSize: '2.2rem',
-    fontWeight: 800,
-    letterSpacing: '-0.02em',
-  },
-  sectionSub: {
-    fontSize: '1rem',
-    color: 'hsl(215, 20%, 65%)',
-    lineHeight: '1.5',
+    paddingTop: '8px',
   },
   pricingGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
     gap: '24px',
-    alignItems: 'stretch',
   },
   priceCard: {
-    position: 'relative' as const,
+    padding: '36px 28px',
+    borderRadius: '20px',
     display: 'flex',
     flexDirection: 'column' as const,
-    justifyContent: 'space-between',
-    padding: '36px 26px',
-    border: '1px solid rgba(255, 255, 255, 0.06)',
-    borderRadius: '16px',
-    height: '100%',
+    gap: '24px',
+    position: 'relative' as const,
   },
   priceCardFeatured: {
-    borderColor: 'rgba(56, 189, 248, 0.4)',
-    background: 'rgba(56, 189, 248, 0.03)',
-    boxShadow: '0 8px 40px rgba(56, 189, 248, 0.12)',
+    border: '2px solid #38bdf8',
+    transform: 'scale(1.02)',
   },
   featuredBadge: {
     position: 'absolute' as const,
-    top: '-13px',
+    top: '-12px',
     left: '50%',
     transform: 'translateX(-50%)',
-    background: 'linear-gradient(135deg, #0284c7 0%, #38bdf8 100%)',
-    color: '#ffffff',
+    background: '#38bdf8',
+    color: '#0f172a',
     fontSize: '0.75rem',
     fontWeight: 800,
-    borderRadius: '30px',
     padding: '4px 14px',
-    boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
-    letterSpacing: '0.05em',
+    borderRadius: '20px',
   },
   cardHeader: {
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: '10px',
-    marginBottom: '20px',
+    gap: '8px',
   },
   cardIcon: {
-    fontSize: '2.2rem',
+    fontSize: '2rem',
   },
   cardName: {
     fontSize: '1.4rem',
     fontWeight: 800,
+    color: '#fff',
   },
   cardDesc: {
     fontSize: '0.85rem',
     color: 'hsl(215, 20%, 65%)',
-    lineHeight: '1.5',
+    lineHeight: '1.4',
   },
   priceContainer: {
-    marginBottom: '24px',
-    paddingBottom: '16px',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '4px',
   },
   priceVal: {
     display: 'flex',
@@ -520,30 +609,28 @@ const styles = {
   priceCurrency: {
     fontSize: '1.2rem',
     fontWeight: 700,
-    color: 'hsl(215, 20%, 65%)',
+    color: '#38bdf8',
   },
   priceNumber: {
     fontSize: '2.4rem',
     fontWeight: 800,
-    color: '#ffffff',
+    color: '#fff',
   },
   pricePeriod: {
-    fontSize: '0.85rem',
-    fontWeight: 600,
-    color: '#38bdf8',
-    marginTop: '4px',
+    fontSize: '0.8rem',
+    color: '#94a3b8',
   },
   pricePerTabung: {
     fontSize: '0.8rem',
-    color: '#94a3b8',
-    marginTop: '2px',
+    color: '#34d399',
+    fontWeight: 700,
   },
   featureList: {
     listStyle: 'none',
     display: 'flex',
     flexDirection: 'column' as const,
     gap: '10px',
-    marginBottom: '30px',
+    margin: '10px 0',
   },
   featureItem: {
     fontSize: '0.88rem',
@@ -603,4 +690,11 @@ const styles = {
     color: 'hsl(215, 20%, 75%)',
     lineHeight: '1.6',
   },
+  affiliateFooterBox: {
+    padding: '40px 24px',
+    borderRadius: '20px',
+    background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%)',
+    border: '1px solid rgba(56, 189, 248, 0.3)',
+    marginTop: '20px',
+  }
 };

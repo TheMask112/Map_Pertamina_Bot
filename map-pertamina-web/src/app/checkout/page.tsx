@@ -25,6 +25,49 @@ function CheckoutContent() {
   const [whatsapp, setWhatsapp] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Affiliate State
+  const [affiliateCode, setAffiliateCode] = useState('');
+  const [affiliateInfo, setAffiliateInfo] = useState<any>(null);
+  const [showRefInput, setShowRefInput] = useState(false);
+
+  // Check referral code on mount
+  useEffect(() => {
+    let ref = searchParams.get('ref');
+    if (!ref && typeof document !== 'undefined') {
+      const match = document.cookie.match(/affiliate_ref=([^;]+)/);
+      if (match) ref = match[1];
+    }
+    if (ref) {
+      setAffiliateCode(ref.toUpperCase());
+      fetchAffiliateInfo(ref.toUpperCase());
+    }
+  }, [searchParams]);
+
+  const fetchAffiliateInfo = async (code: string) => {
+    try {
+      const res = await fetch(`/api/affiliate/info?code=${encodeURIComponent(code)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setAffiliateInfo(data.affiliate);
+      } else {
+        setAffiliateInfo(null);
+      }
+    } catch {
+      setAffiliateInfo(null);
+    }
+  };
+
+  const handleApplyRef = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (affiliateCode.trim()) {
+      fetchAffiliateInfo(affiliateCode.trim().toUpperCase());
+    }
+  };
+
+  // Calculate dynamic price based on affiliate markup
+  const markupPercent = affiliateInfo ? (affiliateInfo.markupPercent || 0) : 0;
+  const displayPrice = Math.round(paketInfo.harga * (1 + markupPercent / 100));
   
   // Order state
   const [orderId, setOrderId] = useState('');
@@ -53,7 +96,11 @@ function CheckoutContent() {
       const res = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paket: selectedPaket, whatsapp })
+        body: JSON.stringify({
+          paket: selectedPaket,
+          whatsapp,
+          affiliateCode: affiliateInfo ? affiliateInfo.code : (affiliateCode.trim() || undefined)
+        })
       });
       
       const data = await res.json();
@@ -73,7 +120,6 @@ function CheckoutContent() {
       if (typeof window !== 'undefined' && (window as any).snap) {
         (window as any).snap.pay(data.snapToken, {
           onSuccess: function(result: any) {
-            // Webhook & polling will naturally transition to step 3
             console.log('Payment success', result);
           },
           onPending: function(result: any) {
@@ -172,6 +218,17 @@ function CheckoutContent() {
             <p style={styles.boxDesc}>Konfirmasikan pembelian lisensi Anda dan masukkan nomor WhatsApp.</p>
           </div>
 
+          {affiliateInfo && (
+            <div style={{ background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '12px 16px', borderRadius: '12px', marginBottom: '16px', fontSize: '0.85rem', color: '#38bdf8' }}>
+              🤝 <strong>Direkomendasikan oleh Mitra:</strong> {affiliateInfo.name} (<code>{affiliateInfo.code}</code>)
+              {affiliateInfo.whatsapp && (
+                <span style={{ display: 'block', fontSize: '0.78rem', color: '#94a3b8', marginTop: '2px' }}>
+                  Bantuan & Support: {affiliateInfo.whatsapp}
+                </span>
+              )}
+            </div>
+          )}
+
           <div style={styles.summaryList}>
             <div style={styles.summaryItem}>
               <span>Paket Terpilih</span>
@@ -182,8 +239,8 @@ function CheckoutContent() {
               <strong style={{ color: '#fff' }}>{paketInfo.kuota.toLocaleString('id-ID')} Tabung</strong>
             </div>
             <div style={styles.summaryItem}>
-              <span>Harga Dasar</span>
-              <strong style={{ color: '#fff' }}>Rp {paketInfo.harga.toLocaleString('id-ID')}</strong>
+              <span>Total Tagihan</span>
+              <strong style={{ color: '#38bdf8', fontSize: '1.2rem' }}>Rp {displayPrice.toLocaleString('id-ID')}</strong>
             </div>
           </div>
 
@@ -202,10 +259,44 @@ function CheckoutContent() {
               <span style={styles.inputHelp}>Voucher lisensi dan instruksi akan dikirimkan otomatis ke nomor WA ini.</span>
             </div>
 
+            {/* KODE REFERRAL TOGGLE / INPUT */}
+            {!affiliateInfo && (
+              <div style={{ marginTop: '8px' }}>
+                {!showRefInput ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowRefInput(true)}
+                    style={{ background: 'none', border: 'none', color: '#38bdf8', fontSize: '0.82rem', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                  >
+                    🏷️ Punya Kode Referral / Mitra? Masukkan di sini
+                  </button>
+                ) : (
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="KODE REFERRAL (contoh: AGUS88)"
+                      value={affiliateCode}
+                      onChange={(e) => setAffiliateCode(e.target.value.toUpperCase())}
+                      style={{ padding: '8px 12px', fontSize: '0.85rem' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyRef}
+                      className="btn btn-secondary"
+                      style={{ padding: '8px 14px', fontSize: '0.82rem', whiteSpace: 'nowrap' }}
+                    >
+                      Terapkan
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {error && <div style={styles.errorBox}>❌ {error}</div>}
 
             <button type="submit" className="btn btn-primary" style={styles.submitBtn} disabled={loading}>
-              {loading ? 'Memproses Order...' : `Bayar Rp ${paketInfo.harga.toLocaleString('id-ID')}`}
+              {loading ? 'Memproses Order...' : `Bayar Rp ${displayPrice.toLocaleString('id-ID')}`}
             </button>
           </form>
         </div>

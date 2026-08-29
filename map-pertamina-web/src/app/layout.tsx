@@ -44,6 +44,7 @@ export default function RootLayout({
               <a href="/" style={styles.navLink}>Beranda</a>
               <a href="/#pricing" style={styles.navLink}>Harga</a>
               <a href="/#faq" style={styles.navLink}>FAQ</a>
+              <a href="/affiliate/register" style={{ ...styles.navLink, color: '#38bdf8', fontWeight: 700 }}>🤝 Mitra Affiliate</a>
               <a href="/download" style={styles.navButton}>Unduh Bot</a>
             </nav>
           </div>
@@ -68,11 +69,13 @@ export default function RootLayout({
               <a href="/" style={styles.footerLink}>Beranda</a>
               <a href="/#pricing" style={styles.footerLink}>Daftar Harga</a>
               <a href="/download" style={styles.footerLink}>Unduh Software</a>
+              <a href="/admin" style={styles.footerLink}>Admin Portal</a>
             </div>
             <div style={styles.footerSectionLinks}>
-              <h4 style={styles.footerTitle}>Bantuan</h4>
+              <h4 style={styles.footerTitle}>Mitra Reseller</h4>
+              <a href="/affiliate/register" style={styles.footerLink}>Daftar Jadi Mitra</a>
+              <a href="/affiliate/login" style={styles.footerLink}>Login Dashboard Mitra</a>
               <a href="/#faq" style={styles.footerLink}>Pertanyaan Populer</a>
-              <a href="https://t.me/dadilan" target="_blank" rel="noopener noreferrer" style={styles.footerLink}>Hubungi Admin</a>
             </div>
           </div>
           <div style={styles.footerBottom}>
