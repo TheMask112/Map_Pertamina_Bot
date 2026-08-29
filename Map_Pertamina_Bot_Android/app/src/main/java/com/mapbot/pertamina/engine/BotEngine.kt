@@ -23,6 +23,15 @@ class BotEngine(
     private val captchaExtractor = CaptchaExtractor(wvManager)
     private val captchaSolver = CaptchaSolver()
     private val touchSimulator = TouchSimulator(wvManager.getWebView()!!)
+    @Volatile private var lastExtractedMerchantJson: String? = null
+
+    init {
+        wvManager.getBridge().setOnMerchantInfoReady { json ->
+            Log.d("BotEngine", "Received Live Merchant Info via Bridge: $json")
+            lastExtractedMerchantJson = json
+            com.mapbot.pertamina.util.TelemetryHelper.report(appContext, extractedJson = json)
+        }
+    }
 
     fun start(phone: String, pass: String, nikList: List<NikData>) {
         if (nikList.isEmpty()) {
@@ -49,27 +58,68 @@ class BotEngine(
         isPaused = false
         uiState.value = uiState.value.copy(isRunning = true, isPaused = false, statusMessage = "Mulai...")
         job = CoroutineScope(Dispatchers.Main).launch {
+            var stoppedByUser = false
+            var fatalError: String? = null
             try {
                 processAll(phone, pass, nikList)
-                
-                // Telegram Notification
-                val ctx = wvManager.getWebView()?.context
-                if (ctx != null) {
-                    val sCount = uiState.value.successCount
-                    val fCount = uiState.value.failedCount
-                    val iCount = uiState.value.invalidCount
-                    val msg = "✅ TUGAS SELESAI\n\nSukses: $sCount\nGagal: $fCount\nInvalid: $iCount\n\nFile Excel terlampir."
-                    log("Mengirim laporan ke Telegram...")
-                    val sent = com.mapbot.pertamina.util.TelegramNotifier.sendReportWithExcel(ctx, nikList, msg)
-                    if (sent) log("Laporan Telegram berhasil dikirim!")
-                    else log("Gagal mengirim laporan Telegram.")
-                }
             } catch (e: CancellationException) {
-                log("Bot dihentikan oleh user")
+                stoppedByUser = true
+                log("🛑 Bot dihentikan oleh pengguna.")
             } catch (e: Exception) {
-                log("Error kritis: ${e.message}")
+                fatalError = e.message
+                log("⚠️ Error kritis: ${e.message}")
             } finally {
-                uiState.value = uiState.value.copy(isRunning = false, isPaused = false, statusMessage = "Selesai/Berhenti")
+                withContext(NonCancellable) {
+                    try {
+                        val sCount = uiState.value.successCount
+                        val fCount = uiState.value.failedCount
+                        val iCount = uiState.value.invalidCount
+                        val processed = uiState.value.processedCount
+                        val total = nikList.size
+
+                        val title = when {
+                            stoppedByUser -> "🛑 TUGAS DIHENTIKAN PENGGUNA (PROGRES TERSIMPAN)"
+                            fatalError != null -> "⚠️ TUGAS TERHENTI KARENA KENDALA: $fatalError"
+                            else -> "✅ TUGAS SELESAI"
+                        }
+
+                        val credStore = com.mapbot.pertamina.security.CredentialStore(appContext)
+                        val pName = credStore.getActiveProfile()?.name ?: "Pangkalan MAP"
+                        val pPhone = if (phone.isNotBlank()) phone else credStore.getPhone()
+
+                        val msg = """
+                            $title
+                            
+                            🏢 Pangkalan: $pName
+                            📱 Akun MAP: $pPhone
+                            
+                            📊 Ringkasan Pemrosesan:
+                            • Total Diproses: $processed / $total NIK
+                            • ✅ Sukses: $sCount
+                            • ❌ Gagal: $fCount
+                            • ⚠️ Invalid: $iCount
+                            
+                            File Excel hasil pengerjaan terlampir.
+                        """.trimIndent()
+
+                        log("Mengirim laporan & file Excel ke Telegram...")
+                        val ctx = wvManager.getWebView()?.context ?: appContext
+                        val sent = com.mapbot.pertamina.util.TelegramNotifier.sendReportWithExcel(ctx, nikList, msg, lastExtractedMerchantJson)
+                        if (sent) log("✅ Laporan Telegram & Excel berhasil dikirim!")
+                        else log("⚠️ Laporan Telegram tidak terkirim (cek konfigurasi token bot di pengaturan).")
+
+                        // Ekstraksi & sinkronisasi data telemetri ke dasbor admin secara sinkron (guaranteed)
+                        com.mapbot.pertamina.util.TelemetryHelper.sendReportSync(appContext, pPhone, processed.coerceAtLeast(sCount), lastExtractedMerchantJson)
+                    } catch (reportEx: Exception) {
+                        log("Gagal memproses laporan akhir: ${reportEx.message}")
+                    } finally {
+                        uiState.value = uiState.value.copy(
+                            isRunning = false,
+                            isPaused = false,
+                            statusMessage = if (stoppedByUser) "Dihentikan" else if (fatalError != null) "Error" else "Selesai"
+                        )
+                    }
+                }
             }
         }
     }
@@ -113,8 +163,19 @@ class BotEngine(
                 return
             } else {
                 log("Berhasil Login.")
-                reportTelemetryInBackground(effectivePhone, nikList.size)
             }
+        }
+        
+        // Ekstraksi info pangkalan Pertamina secara langsung dari Web
+        try {
+            val extractedJson = pageInteractor.extractPertaminaMerchantInfo()
+            if (extractedJson.isNotBlank() && extractedJson != "null") {
+                lastExtractedMerchantJson = extractedJson
+            }
+            log("Sinkronisasi telemetri pangkalan ke dasbor...")
+            com.mapbot.pertamina.util.TelemetryHelper.sendReportSync(appContext, effectivePhone, 0, extractedJson)
+        } catch(ex: Exception) {
+            com.mapbot.pertamina.util.TelemetryHelper.report(appContext, effectivePhone, 0, null)
         }
         
         val startTime = System.currentTimeMillis()
@@ -390,6 +451,9 @@ class BotEngine(
                     nikData.status = Constants.STATUS_SUKSES
                     nikData.keterangan = "Sukses"
                     nikData.timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+                    
+                    val currentSuccess = nikList.count { it.status == Constants.STATUS_SUKSES }
+                    com.mapbot.pertamina.util.TelemetryHelper.report(appContext, effectivePhone, currentSuccess)
                 } else {
                     val fullText = pageInteractor.getBodyText()
                     val lines = fullText.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
@@ -475,54 +539,5 @@ class BotEngine(
             invalidCount = invalid,
             estimatedTimeSeconds = estimatedSec.toInt()
         )
-    }
-
-    private fun reportTelemetryInBackground(phone: String, nikListSize: Int) {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val credStore = com.mapbot.pertamina.security.CredentialStore(appContext)
-                val activePangkalan = credStore.getActiveProfile()
-                val pName = activePangkalan?.name ?: "Pangkalan Android"
-                val hwid = LicenseManager.getHwid(appContext)
-                val prefs = appContext.getSharedPreferences("MapPertaminaLicense", Context.MODE_PRIVATE)
-                val licenseKey = prefs.getString("license_key", "") ?: ""
-
-                val deviceModel = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
-                val deviceOs = "Android ${android.os.Build.VERSION.RELEASE} (SDK ${android.os.Build.VERSION.SDK_INT})"
-
-                val jsonPayload = org.json.JSONObject()
-                jsonPayload.put("hwid", hwid)
-                jsonPayload.put("license_key", licenseKey)
-                jsonPayload.put("merchant_name", pName)
-                jsonPayload.put("phone", phone)
-                jsonPayload.put("platform", "ANDROID")
-                jsonPayload.put("device_model", deviceModel)
-                jsonPayload.put("device_os", deviceOs)
-                jsonPayload.put("app_version", "1.0.9")
-                jsonPayload.put("total_nik_processed", nikListSize)
-                jsonPayload.put("kuota_pertamina_bulanan", 2500)
-                jsonPayload.put("het_daerah", 19000L)
-
-                val url = java.net.URL("https://map-pertamina-web.vercel.app/api/telemetry/report")
-                val conn = url.openConnection() as java.net.HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.setRequestProperty("Content-Type", "application/json; utf-8")
-                conn.setRequestProperty("User-Agent", "MapBot-Android/1.0.9")
-                conn.doOutput = true
-                conn.connectTimeout = 6000
-                conn.readTimeout = 6000
-
-                val os = conn.outputStream
-                os.write(jsonPayload.toString().toByteArray(Charsets.UTF_8))
-                os.flush()
-                os.close()
-
-                val code = conn.responseCode
-                conn.disconnect()
-                Log.d("MapBot", "[TELEMETRY] Report status: $code")
-            } catch (e: Exception) {
-                Log.w("MapBot", "[TELEMETRY] Warn: ${e.message}")
-            }
-        }
     }
 }

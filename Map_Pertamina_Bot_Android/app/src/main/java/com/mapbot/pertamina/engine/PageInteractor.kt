@@ -786,6 +786,90 @@ class PageInteractor(private val wvManager: WebViewManager) {
         return true
     }
 
+    suspend fun extractPertaminaMerchantInfo(): String = suspendCoroutine { cont ->
+        wvManager.executeJs("""
+            (function() {
+                try {
+                    var info = {
+                        merchant_name: '',
+                        merchant_id: '',
+                        owner_name: '',
+                        agent_name: '',
+                        agent_id: '',
+                        phone: '',
+                        address: '',
+                        provinsi: '',
+                        kota_kabupaten: '',
+                        kuota_pertamina_bulanan: 0,
+                        sisa_kuota_pertamina: 0,
+                        total_penjualan_pertamina: 0
+                    };
+
+                    // 1. Coba dari window.__NEXT_DATA__
+                    if (window.__NEXT_DATA__ && window.__NEXT_DATA__.props) {
+                        var pageProps = window.__NEXT_DATA__.props.pageProps || {};
+                        var user = pageProps.user || pageProps.merchant || pageProps.profile || {};
+                        if (user.merchant_name) info.merchant_name = user.merchant_name;
+                        if (user.name) info.merchant_name = info.merchant_name || user.name;
+                        if (user.merchant_id) info.merchant_id = String(user.merchant_id);
+                        if (user.id) info.merchant_id = info.merchant_id || String(user.id);
+                        if (user.phone) info.phone = user.phone;
+                        if (user.owner_name) info.owner_name = user.owner_name;
+                        if (user.agent_name) info.agent_name = user.agent_name;
+                        if (user.province) info.provinsi = user.province;
+                        if (user.city) info.kota_kabupaten = user.city;
+                    }
+
+                    // 2. Coba dari localStorage & sessionStorage
+                    try {
+                        for (var i = 0; i < localStorage.length; i++) {
+                            var key = localStorage.key(i);
+                            var val = localStorage.getItem(key);
+                            if (val && (val.includes('merchant') || val.includes('pangkalan') || val.includes('agent'))) {
+                                try {
+                                    var parsed = JSON.parse(val);
+                                    if (parsed.merchant_name) info.merchant_name = parsed.merchant_name;
+                                    if (parsed.name && !info.merchant_name) info.merchant_name = parsed.name;
+                                    if (parsed.merchant_id) info.merchant_id = String(parsed.merchant_id);
+                                    if (parsed.phone && !info.phone) info.phone = parsed.phone;
+                                    if (parsed.agent_name) info.agent_name = parsed.agent_name;
+                                    if (parsed.province) info.provinsi = parsed.province;
+                                    if (parsed.city) info.kota_kabupaten = parsed.city;
+                                } catch(e) {}
+                            }
+                        }
+                    } catch(e) {}
+
+                    // 3. Coba dari DOM elements
+                    var headers = document.querySelectorAll('h1, h2, h3, h4, h5, .merchant-name, .header-title, [class*="profile"], [class*="merchant"]');
+                    for (var h = 0; h < headers.length; h++) {
+                        var txt = (headers[h].innerText || '').trim();
+                        if (txt.toLowerCase().includes('pangkalan') || txt.toLowerCase().includes('toko') || txt.toLowerCase().includes('tb.')) {
+                            if (!info.merchant_name) info.merchant_name = txt;
+                        }
+                    }
+
+                    // 4. Cari Kuota & Sisa Kuota dari teks dashboard
+                    var bodyText = document.body.innerText || '';
+                    var kuotaMatch = bodyText.match(/kuota[\s:]*([0-9.,]+)/i);
+                    if (kuotaMatch) {
+                        info.kuota_pertamina_bulanan = parseInt(kuotaMatch[1].replace(/[^0-9]/g, ''), 10) || 0;
+                    }
+                    var sisaMatch = bodyText.match(/sisa[\s:]*([0-9.,]+)/i);
+                    if (sisaMatch) {
+                        info.sisa_kuota_pertamina = parseInt(sisaMatch[1].replace(/[^0-9]/g, ''), 10) || 0;
+                    }
+
+                    return JSON.stringify(info);
+                } catch(err) {
+                    return JSON.stringify({ error: err.message });
+                }
+            })()
+        """) { res ->
+            cont.resume(res)
+        }
+    }
+
     private fun getCityNameFromKode(kode4: String): String {
         val mapping = mapOf(
             "1101" to "ACEH SELATAN", "1102" to "ACEH TENGGARA", "1103" to "ACEH TIMUR", "1104" to "ACEH TENGAH",

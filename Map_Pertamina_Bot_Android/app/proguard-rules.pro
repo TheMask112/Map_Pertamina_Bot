@@ -32,7 +32,7 @@
 -keep class org.apache.logging.** { *; }
 -keep interface org.apache.logging.** { *; }
 
--keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod,SourceFile,LineNumberTable
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod,SourceFile,LineNumberTable,JavascriptInterface
 
 -keepclassmembers class * {
     public static **[] values();
@@ -42,3 +42,20 @@
 -keepclassmembers class * {
     public <init>(...);
 }
+
+# Keep JavascriptInterface for Android WebView
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+-keep class com.mapbot.pertamina.engine.JavaScriptBridge { *; }
+
+# Keep App Classes and Utilities
+-keep class com.mapbot.pertamina.** { *; }
+
+# Keep OkHttp & Okio
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-keep class okhttp3.** { *; }
+-keep interface okhttp3.** { *; }
+-keep class okio.** { *; }
+-keep interface okio.** { *; }
