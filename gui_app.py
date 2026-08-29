@@ -923,23 +923,8 @@ class MainScreen(ctk.CTkFrame):
             print(f"[PANGKALAN] Aktif: {choice}")
 
     def _add_new_pangkalan(self):
-        """Tambah pangkalan baru dengan validasi tier lisensi Enterprise."""
-        from license_manager import can_use_multi_pangkalan, verify_license
-        from credentials import get_pangkalan_profiles, add_or_update_pangkalan
-        import tkinter.messagebox as mb
-
-        # Pengecekan Hak Akses Multi-Pangkalan (Eksklusif Enterprise 5000)
-        profiles = get_pangkalan_profiles()
-        if len(profiles) >= 1 and not can_use_multi_pangkalan(self.hwid):
-            valid, _, payload = verify_license(self.hwid)
-            cur_paket = payload.get("paket", "STARTER") if valid and payload else "STARTER"
-            mb.showinfo(
-                "Fitur Enterprise",
-                f"🏢 Fitur Multi-Pangkalan (Kelola Banyak Akun) eksklusif untuk Paket Enterprise 5.000 Tabung.\n\n"
-                f"Paket aktif Anda: {cur_paket}.\n"
-                f"Silakan hubungi Admin Telegram untuk upgrade lisensi ke Paket Enterprise."
-            )
-            return
+        """Tambah profil pangkalan baru (Bisa untuk semua paket)."""
+        from credentials import add_or_update_pangkalan
 
         # Simple Dialog Input Nama Pangkalan Baru
         import tkinter.simpledialog as sd
@@ -1135,9 +1120,10 @@ class MainScreen(ctk.CTkFrame):
             cur_paket = payload.get("paket", "STARTER") if valid and payload else "STARTER"
             mb.showinfo(
                 "Fitur Enterprise",
-                f"🏢 Fitur Jalankan Semua Pangkalan Otomatis (Batch Queue Runner) eksklusif untuk Paket Enterprise 5.000 Tabung.\n\n"
-                f"Paket aktif Anda: {cur_paket}.\n"
-                f"Silakan hubungi Admin Telegram untuk upgrade ke Paket Enterprise."
+                f"🏢 Fitur Jalankan Semua Pangkalan Otomatis (Auto-Batch Queue) eksklusif untuk Paket Enterprise 5.000 Tabung.\n\n"
+                f"Paket aktif Anda: {cur_paket}.\n\n"
+                f"Paket Starter & Pro dapat berganti profil pangkalan secara manual melalui dropdown pangkalan.\n"
+                f"Untuk memproses seluruh antrean pangkalan secara otomatis sekaligus tanpa ditunggu, silakan hubungi Admin untuk upgrade ke Paket Enterprise."
             )
             return
 
