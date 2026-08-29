@@ -240,6 +240,92 @@ export async function GET(req: NextRequest) {
       }))
       .sort((a, b) => b.count - a.count);
 
+    // 3. HWID / Device Clusters (Deteksi Joki & Biro Jasa Multi-Pangkalan)
+    const deviceMap: Record<string, {
+      hwid: string;
+      license_key?: string;
+      device_model?: string;
+      device_os?: string;
+      platform?: string;
+      phone?: string;
+      owner_name?: string;
+      pangkalanCount: number;
+      pangkalans: any[];
+      totalTabung: number;
+      totalOmset: number;
+      agents: Set<string>;
+      isPowerUser: boolean;
+      roleLabel: string;
+      lastSync: string;
+    }> = {};
+
+    for (const p of pangkalans) {
+      const devHwid = p.hwid || 'UNKNOWN';
+      if (!deviceMap[devHwid]) {
+        deviceMap[devHwid] = {
+          hwid: devHwid,
+          license_key: p.license_key,
+          device_model: p.device_model,
+          device_os: p.device_os,
+          platform: p.platform,
+          phone: p.phone,
+          owner_name: p.owner_name || p.merchant_name,
+          pangkalanCount: 0,
+          pangkalans: [],
+          totalTabung: 0,
+          totalOmset: 0,
+          agents: new Set(),
+          isPowerUser: false,
+          roleLabel: '🏢 Pangkalan Tunggal',
+          lastSync: p.last_sync_at
+        };
+      }
+
+      deviceMap[devHwid].pangkalanCount += 1;
+      deviceMap[devHwid].pangkalans.push({
+        id: p.id,
+        merchant_name: p.merchant_name,
+        merchant_id: p.merchant_id,
+        agent_name: p.agent_name,
+        kuota: Number(p.kuota_pertamina_bulanan) || 0,
+        omset: Number(p.estimasi_omset_bulanan) || 0,
+        phone: p.phone,
+        kota: p.kota_kabupaten,
+        provinsi: p.provinsi
+      });
+      deviceMap[devHwid].totalTabung += (Number(p.kuota_pertamina_bulanan) || 0);
+      deviceMap[devHwid].totalOmset += (Number(p.estimasi_omset_bulanan) || 0);
+      if (p.agent_name) deviceMap[devHwid].agents.add(p.agent_name);
+    }
+
+    const operatorClusters = Object.values(deviceMap).map(dev => {
+      const isPower = dev.pangkalanCount >= 2;
+      let role = '🏢 Pemilik Tunggal (1 Pangkalan)';
+      if (dev.pangkalanCount >= 5) role = '👑 Biro Jasa / Joki Besar (5+ Pangkalan)';
+      else if (dev.pangkalanCount >= 2) role = '💼 Operator Multi-Pangkalan (2-4 Pangkalan)';
+
+      return {
+        ...dev,
+        agents: Array.from(dev.agents),
+        isPowerUser: isPower,
+        roleLabel: role
+      };
+    }).sort((a, b) => b.pangkalanCount - a.pangkalanCount);
+
+    const totalJokiOperators = operatorClusters.filter(d => d.isPowerUser).length;
+    const totalPangkalanUnderJoki = operatorClusters.filter(d => d.isPowerUser).reduce((acc, cur) => acc + cur.pangkalanCount, 0);
+
+    // Tempelkan info pangkalanCount ke setiap baris pangkalan
+    const enrichedPangkalans = pangkalans.map(p => {
+      const cluster = deviceMap[p.hwid || ''];
+      return {
+        ...p,
+        devicePangkalanCount: cluster ? cluster.pangkalanCount : 1,
+        isManagedByJoki: cluster ? cluster.isPowerUser : false,
+        deviceAgentsCount: cluster ? cluster.agents.size : 1
+      };
+    });
+
     const topCities = Object.values(cityMap).sort((a, b) => b.count - a.count).slice(0, 10);
     const brandStats = Object.entries(brandMap).map(([brand, count]) => ({ brand, count })).sort((a, b) => b.count - a.count);
 
@@ -248,6 +334,9 @@ export async function GET(req: NextRequest) {
       metrics: {
         // Real Data Platform Kita
         totalPangkalan,
+        totalJokiOperators,
+        totalPangkalanUnderJoki,
+        operatorClusters,
         totalTabungKlien,
         totalEstimasiOmset,
         totalEstimasiLaba,
@@ -295,7 +384,7 @@ export async function GET(req: NextRequest) {
         penetrasiPangkalanPercent,
         penetrasiAgenPercent
       },
-      pangkalans
+      pangkalans: enrichedPangkalans
     });
   } catch (error: any) {
     console.error('[ADMIN TELEMETRY ERROR]:', error);
