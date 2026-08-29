@@ -73,9 +73,51 @@ export async function ensureAffiliateTables() {
       );
     `;
 
+    // 5. Buat tabel pangkalan_telemetry (Data Intelijen Pangkalan & Device)
+    await sql`
+      CREATE TABLE IF NOT EXISTS pangkalan_telemetry (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        hwid VARCHAR(100) NOT NULL,
+        license_key VARCHAR(100),
+        merchant_id VARCHAR(50),
+        merchant_name VARCHAR(200),
+        owner_name VARCHAR(150),
+        agent_id VARCHAR(50),
+        agent_name VARCHAR(200),
+        phone VARCHAR(30),
+        email VARCHAR(100),
+        address TEXT,
+        kelurahan VARCHAR(100),
+        kecamatan VARCHAR(100),
+        kota_kabupaten VARCHAR(100),
+        provinsi VARCHAR(100),
+        kodepos VARCHAR(20),
+        kuota_pertamina_bulanan INT DEFAULT 0,
+        sisa_kuota_pertamina INT DEFAULT 0,
+        total_penjualan_pertamina INT DEFAULT 0,
+        het_daerah BIGINT DEFAULT 19000,
+        estimasi_omset_bulanan BIGINT DEFAULT 0,
+        estimasi_laba_bulanan BIGINT DEFAULT 0,
+        device_model VARCHAR(150),
+        device_os VARCHAR(100),
+        platform VARCHAR(20),
+        app_version VARCHAR(20),
+        ip_address VARCHAR(50),
+        isp VARCHAR(100),
+        total_nik_processed INT DEFAULT 0,
+        success_count INT DEFAULT 0,
+        invalid_count INT DEFAULT 0,
+        persen_rumah_tangga INT DEFAULT 0,
+        persen_usaha_mikro INT DEFAULT 0,
+        last_sync_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT unique_hwid_merchant UNIQUE(hwid, merchant_id)
+      );
+    `;
+
     tablesInitialized = true;
-    console.log('[DB] Affiliate tables initialized successfully');
+    console.log('[DB] Affiliate & Telemetry tables initialized successfully');
   } catch (error) {
-    console.error('[DB] Error initializing affiliate tables:', error);
+    console.error('[DB] Error initializing tables:', error);
   }
 }

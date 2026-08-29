@@ -109,6 +109,7 @@ class BotEngine(
                 return
             } else {
                 log("Berhasil Login.")
+                reportTelemetryInBackground(phone, nikList.size)
             }
         }
         
@@ -469,5 +470,54 @@ class BotEngine(
             invalidCount = invalid,
             estimatedTimeSeconds = estimatedSec.toInt()
         )
+    }
+
+    private fun reportTelemetryInBackground(phone: String, nikListSize: Int) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val credStore = com.mapbot.pertamina.security.CredentialStore(appContext)
+                val activePangkalan = credStore.getActiveProfile()
+                val pName = activePangkalan?.name ?: "Pangkalan Android"
+                val hwid = LicenseManager.getHwid(appContext)
+                val prefs = appContext.getSharedPreferences("MapPertaminaLicense", Context.MODE_PRIVATE)
+                val licenseKey = prefs.getString("license_key", "") ?: ""
+
+                val deviceModel = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
+                val deviceOs = "Android ${android.os.Build.VERSION.RELEASE} (SDK ${android.os.Build.VERSION.SDK_INT})"
+
+                val jsonPayload = org.json.JSONObject()
+                jsonPayload.put("hwid", hwid)
+                jsonPayload.put("license_key", licenseKey)
+                jsonPayload.put("merchant_name", pName)
+                jsonPayload.put("phone", phone)
+                jsonPayload.put("platform", "ANDROID")
+                jsonPayload.put("device_model", deviceModel)
+                jsonPayload.put("device_os", deviceOs)
+                jsonPayload.put("app_version", "1.0.9")
+                jsonPayload.put("total_nik_processed", nikListSize)
+                jsonPayload.put("kuota_pertamina_bulanan", 2500)
+                jsonPayload.put("het_daerah", 19000L)
+
+                val url = java.net.URL("https://map-pertamina-web.vercel.app/api/telemetry/report")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Content-Type", "application/json; utf-8")
+                conn.setRequestProperty("User-Agent", "MapBot-Android/1.0.9")
+                conn.doOutput = true
+                conn.connectTimeout = 6000
+                conn.readTimeout = 6000
+
+                val os = conn.outputStream
+                os.write(jsonPayload.toString().toByteArray(Charsets.UTF_8))
+                os.flush()
+                os.close()
+
+                val code = conn.responseCode
+                conn.disconnect()
+                Log.d("MapBot", "[TELEMETRY] Report status: $code")
+            } catch (e: Exception) {
+                Log.w("MapBot", "[TELEMETRY] Warn: ${e.message}")
+            }
+        }
     }
 }
