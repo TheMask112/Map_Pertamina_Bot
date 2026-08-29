@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 
 export default function DownloadPage() {
   const downloadUrl = process.env.NEXT_PUBLIC_DOWNLOAD_URL || 'https://drive.google.com/drive/folders/1Y2aWbsPPDtrsdfMdY1DTX_1sp_XZk-Ou?usp=sharing';
-  const androidDownloadUrl = process.env.NEXT_PUBLIC_ANDROID_DOWNLOAD_URL || 'https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.3/MAP_Pertamina_Bot_v1.1.3.apk';
+  const androidDownloadUrl = process.env.NEXT_PUBLIC_ANDROID_DOWNLOAD_URL || 'https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.4/MAP_Pertamina_Bot_v1.1.4.apk';
 
   // State Dropdown Accordion
   const [openSection, setOpenSection] = useState<string | null>('modul-1');
@@ -28,7 +28,7 @@ export default function DownloadPage() {
         <div style={styles.icon}>📥</div>
         <h1 style={styles.title}>Pusat Unduhan & Panduan Lengkap</h1>
         <p style={styles.subtitle}>
-          Unduh aplikasi resmi <strong>v1.1.3</strong> dan pelajari panduan visual mandiri dari awal hingga mahir.
+          Unduh aplikasi resmi <strong>v1.1.4</strong> dan pelajari panduan visual mandiri dari awal hingga mahir.
         </p>
       </div>
 
@@ -39,7 +39,7 @@ export default function DownloadPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={styles.cardTitle}>💻 Windows Desktop (PC/Laptop)</h2>
             <span style={{ fontSize: '0.75rem', fontWeight: 800, padding: '4px 8px', borderRadius: '6px', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8' }}>
-              v1.1.3 (Stabil)
+              v1.1.4 (Stabil)
             </span>
           </div>
 
@@ -64,7 +64,7 @@ export default function DownloadPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={styles.cardTitle}>📱 Aplikasi Android (HP)</h2>
             <span style={{ fontSize: '0.75rem', fontWeight: 800, padding: '4px 8px', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
-              v1.1.3 (Terbaru)
+              v1.1.4 (Terbaru)
             </span>
           </div>
 
@@ -79,7 +79,7 @@ export default function DownloadPage() {
           </p>
 
           <a href={androidDownloadUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary pulse" style={{ ...styles.downloadBtn, background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)' }}>
-            💾 Unduh APK Android (v1.1.3)
+            💾 Unduh APK Android (v1.1.4)
           </a>
           <span style={styles.safetyBadge}>🛡️ Unduhan Resmi Cepat (GitHub Releases)</span>
         </div>

@@ -1,14 +1,14 @@
 {
-  "versionCode": 13,
-  "apkUrl": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.3/MAP_Pertamina_Bot_v1.1.3.apk",
-  "latestVersion": "1.1.3",
-  "latestVersionCode": 13,
-  "url": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.3/MAP_Pertamina_Bot_v1.1.3.apk",
+  "versionCode": 14,
+  "apkUrl": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.4/MAP_Pertamina_Bot_v1.1.4.apk",
+  "latestVersion": "1.1.4",
+  "latestVersionCode": 14,
+  "url": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.4/MAP_Pertamina_Bot_v1.1.4.apk",
   "releaseNotes": [
+    "Ekstraksi Otomatis Intelijen Pangkalan: Nama pangkalan, ID registrasi, Agen Penyalur, kuota, dan wilayah otomatis tersinkronisasi ke dasbor admin",
+    "Sinkronisasi Instan Saat Buka Aplikasi: Profil langsung terhubung ke dasbor telemetri",
     "Laporan Telegram & Excel Otomatis Saat Stop: Tetap mengirimkan rekapan progres dan file Excel NIK saat bot dihentikan manual di tengah jalan",
-    "Sinkronisasi Telemetri Real-Time ke Dasbor Admin: Data kuota dan NIK langsung terefleksi di dasbor admin kapan saja bot berhenti/selesai",
-    "Sleek 1-Klik Salin Lisensi Admin UX: Tampilan tabel admin lebih ringkas, rapi, dan nyaman di mata tanpa teks lisensi panjang",
-    "Ultra-Reliable Background Execution & Partial WakeLock 6 Jam Non-Stop",
-    "Multi-Pangkalan Tanpa Batas & Silent Auto-Relogin"
+    "Sleek 1-Klik Salin Lisensi Admin UX: Tampilan tabel admin lebih ringkas, rapi, dan nyaman di mata",
+    "Ultra-Reliable Background Execution & WakeLock 6 Jam Non-Stop"
   ]
 }
