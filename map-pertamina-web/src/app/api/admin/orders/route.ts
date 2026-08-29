@@ -39,12 +39,32 @@ export async function GET(request: Request) {
       WHERE status = 'PENDING' AND expires_at < NOW();
     `;
 
-    // Ambil data semua order dari database Neon (termasuk hwid dan license_key)
-    const orders = await sql`
-      SELECT id, paket, base_amount, amount, whatsapp, status, voucher_code, hwid, license_key, affiliate_code, customer_name, pangkalan_name, customer_type, created_at, expires_at, paid_at 
+    // Ambil data semua order dari database Neon (termasuk kuota_terpakai, hwid, dan license_key)
+    const rawOrders = await sql`
+      SELECT id, paket, base_amount, amount, whatsapp, status, voucher_code, hwid, license_key, kuota_terpakai, affiliate_code, customer_name, pangkalan_name, customer_type, created_at, expires_at, paid_at 
       FROM orders 
       ORDER BY created_at DESC;
     `;
+
+    const paketQuotaMap: Record<string, number> = {
+      STARTER: 500,
+      PRO: 2000,
+      ENTERPRISE: 5000,
+    };
+
+    const orders = rawOrders.map((o: any) => {
+      const pKey = (o.paket || 'STARTER').toUpperCase();
+      const kuotaTotal = paketQuotaMap[pKey] || CONFIG.pakets[pKey as keyof typeof CONFIG.pakets]?.kuota || 500;
+      const kuotaTerpakai = Number(o.kuota_terpakai || 0);
+      const sisaKuota = Math.max(0, kuotaTotal - kuotaTerpakai);
+
+      return {
+        ...o,
+        kuota_total: kuotaTotal,
+        kuota_terpakai: kuotaTerpakai,
+        sisa_kuota: sisaKuota,
+      };
+    });
 
     // Ambil data affiliates
     let affiliatesList: any[] = [];
