@@ -43,6 +43,7 @@ export default function RootLayout({
             <nav style={styles.nav}>
               <a href="/" style={styles.navLink}>Beranda</a>
               <a href="/#pricing" style={styles.navLink}>Harga</a>
+              <a href="/download#tutorial" style={styles.navLink}>📖 Tutorial</a>
               <a href="/#faq" style={styles.navLink}>FAQ</a>
               <a href="/affiliate/register" style={{ ...styles.navLink, color: '#38bdf8', fontWeight: 700 }}>🤝 Mitra Affiliate</a>
               <a href="/download" style={styles.navButton}>Unduh Bot</a>
