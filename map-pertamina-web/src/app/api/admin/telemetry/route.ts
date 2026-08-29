@@ -220,16 +220,18 @@ export async function GET(req: NextRequest) {
 
     const topAgents = Object.values(agentMap)
       .map(ag => {
-        const penetrasiInternal = Math.min(100, Math.round((ag.count / 40) * 100)); // Rata-rata 1 agen menaungi ~40 pangkalan
-        const sisaPotensi = Math.max(0, 40 - ag.count);
+        const estTotalPangkalan = Math.max(40, Math.ceil(ag.count * 1.5)); // Standar nasional: 1 PT Agen membawahi ~40-60 pangkalan
+        const penetrasiInternal = Math.min(100, Math.round((ag.count / estTotalPangkalan) * 100));
+        const sisaPotensi = Math.max(0, estTotalPangkalan - ag.count);
         return {
           ...ag,
+          estTotalPangkalan,
           penetrasiInternal,
           sisaPotensi
         };
       })
       .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
+      .slice(0, 15);
 
     // Heatmap Provinsi dengan Persentase
     const topProvinces = Object.values(provinceMap)
