@@ -1204,6 +1204,15 @@ def _handle_birth_details(page, nik_info: dict, stop_event=None):
                 time.sleep(3)
                 continue
 
+            # --- 4b. Cek Modal 'Segera Lengkapi NIB' (Usaha Mikro) ---
+            btn_nanti_nib = page.locator("button:has-text('NANTI SAJA, LANJUT PENJUALAN'), button:has-text('NANTI SAJA'), button:has-text('LANJUT PENJUALAN')").first
+            if btn_nanti_nib.count() > 0 and btn_nanti_nib.is_visible():
+                print("[BOT] Modal 'Segera Lengkapi NIB' terdeteksi. Mengklik NANTI SAJA, LANJUT PENJUALAN...")
+                btn_nanti_nib.click()
+                handled_something = True
+                time.sleep(2)
+                continue
+
             # --- 5. Cek Modal 'Data Pelanggan berhasil diperbarui' ---
             btn_lanjut_trans = page.locator("button:has-text('LANJUTKAN KE TRANSAKSI')").first
             if btn_lanjut_trans.count() > 0 and btn_lanjut_trans.is_visible():
@@ -1277,6 +1286,13 @@ def _handle_choice_popup(page):
     serta memilih NIB jika 'Usaha Mikro' terpilih.
     """
     try:
+        # Cek modal Segera Lengkapi NIB (Usaha Mikro)
+        btn_nanti_nib = page.locator("button:has-text('NANTI SAJA, LANJUT PENJUALAN'), button:has-text('NANTI SAJA'), button:has-text('LANJUT PENJUALAN')").first
+        if btn_nanti_nib.count() > 0 and btn_nanti_nib.is_visible():
+            print("[BOT] Modal 'Segera Lengkapi NIB' terdeteksi di choice popup. Mengklik NANTI SAJA...")
+            btn_nanti_nib.click()
+            time.sleep(1)
+
         popup_selectors = [
             "text='Pelanggan Terdaftar'",
             "text='pilihan jenis pelanggan'",

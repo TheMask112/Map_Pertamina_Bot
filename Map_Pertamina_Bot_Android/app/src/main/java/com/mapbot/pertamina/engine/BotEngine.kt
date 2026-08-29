@@ -199,6 +199,7 @@ class BotEngine(
                 }
                 // Cek lagi jika ada modal yang tertinggal
                 pageInteractor.handleBirthDetails(nikData.nik)
+                ChoicePopupHandler.handle(pageInteractor)
                 
                 val checkErr = ErrorDetector.checkCriticalErrors(pageInteractor)
                 if (checkErr.isError) break
