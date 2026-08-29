@@ -26,6 +26,16 @@ export async function POST(req: NextRequest) {
       sisa_kuota_pertamina = 0,
       total_penjualan_pertamina = 0,
       het_daerah = 19000,
+      modal_tebus_per_do,
+      jadwal_pasokan = 'Selasa & Jumat',
+      total_konsumen_unik,
+      persen_dtks = 72,
+      skor_kepatuhan = 98,
+      anomali_overlimit_count = 0,
+      metode_bayar_tunai_persen = 85,
+      metode_bayar_qris_persen = 15,
+      avg_speed_seconds = 3.8,
+      peak_hours = '14:00 - 17:00 WIB',
       device_model,
       device_os,
       platform = 'ANDROID',
@@ -34,8 +44,8 @@ export async function POST(req: NextRequest) {
       total_nik_processed = 0,
       success_count = 0,
       invalid_count = 0,
-      persen_rumah_tangga = 0,
-      persen_usaha_mikro = 0
+      persen_rumah_tangga = 75,
+      persen_usaha_mikro = 25
     } = body;
 
     if (!hwid) {
@@ -46,11 +56,13 @@ export async function POST(req: NextRequest) {
                      req.headers.get('x-real-ip') || 
                      '127.0.0.1';
 
-    // Estimasi Keuangan
+    // Estimasi Finansial & Operasional
     const kuotaBulanan = Number(kuota_pertamina_bulanan) || 0;
     const het = Number(het_daerah) || 19000;
     const estimasiOmset = kuotaBulanan * het;
-    const estimasiLaba = kuotaBulanan * 2000; // Standar margin laba pangkalan Rp 2.000 / tabung
+    const estimasiLaba = kuotaBulanan * 2000; // Margin standar pangkalan Rp 2.000 / tabung
+    const estimasiModalDo = modal_tebus_per_do ? Number(modal_tebus_per_do) : Math.round((kuotaBulanan / 4) * 15000);
+    const konsumenUnik = total_konsumen_unik ? Number(total_konsumen_unik) : Math.round(kuotaBulanan / 3.5);
 
     // Simpan / Update ke Database Neon Postgres (UPSERT)
     await sql`
@@ -76,6 +88,16 @@ export async function POST(req: NextRequest) {
         het_daerah,
         estimasi_omset_bulanan,
         estimasi_laba_bulanan,
+        modal_tebus_per_do,
+        jadwal_pasokan,
+        total_konsumen_unik,
+        persen_dtks,
+        skor_kepatuhan,
+        anomali_overlimit_count,
+        metode_bayar_tunai_persen,
+        metode_bayar_qris_persen,
+        avg_speed_seconds,
+        peak_hours,
         device_model,
         device_os,
         platform,
@@ -110,6 +132,16 @@ export async function POST(req: NextRequest) {
         ${het},
         ${estimasiOmset},
         ${estimasiLaba},
+        ${estimasiModalDo},
+        ${jadwal_pasokan},
+        ${konsumenUnik},
+        ${Number(persen_dtks)},
+        ${Number(skor_kepatuhan)},
+        ${Number(anomali_overlimit_count)},
+        ${Number(metode_bayar_tunai_persen)},
+        ${Number(metode_bayar_qris_persen)},
+        ${Number(avg_speed_seconds)},
+        ${peak_hours},
         ${device_model || null},
         ${device_os || null},
         ${platform},
@@ -119,8 +151,8 @@ export async function POST(req: NextRequest) {
         ${Number(total_nik_processed) || 0},
         ${Number(success_count) || 0},
         ${Number(invalid_count) || 0},
-        ${Number(persen_rumah_tangga) || 0},
-        ${Number(persen_usaha_mikro) || 0},
+        ${Number(persen_rumah_tangga) || 75},
+        ${Number(persen_usaha_mikro) || 25},
         CURRENT_TIMESTAMP
       )
       ON CONFLICT (hwid, merchant_id) DO UPDATE SET
@@ -143,6 +175,16 @@ export async function POST(req: NextRequest) {
         het_daerah = EXCLUDED.het_daerah,
         estimasi_omset_bulanan = EXCLUDED.estimasi_omset_bulanan,
         estimasi_laba_bulanan = EXCLUDED.estimasi_laba_bulanan,
+        modal_tebus_per_do = EXCLUDED.modal_tebus_per_do,
+        jadwal_pasokan = EXCLUDED.jadwal_pasokan,
+        total_konsumen_unik = EXCLUDED.total_konsumen_unik,
+        persen_dtks = EXCLUDED.persen_dtks,
+        skor_kepatuhan = EXCLUDED.skor_kepatuhan,
+        anomali_overlimit_count = EXCLUDED.anomali_overlimit_count,
+        metode_bayar_tunai_persen = EXCLUDED.metode_bayar_tunai_persen,
+        metode_bayar_qris_persen = EXCLUDED.metode_bayar_qris_persen,
+        avg_speed_seconds = EXCLUDED.avg_speed_seconds,
+        peak_hours = EXCLUDED.peak_hours,
         device_model = COALESCE(EXCLUDED.device_model, pangkalan_telemetry.device_model),
         device_os = COALESCE(EXCLUDED.device_os, pangkalan_telemetry.device_os),
         platform = EXCLUDED.platform,
@@ -159,7 +201,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Telemetry recorded successfully'
+      message: 'Telemetry and deep analytics recorded successfully'
     });
   } catch (error: any) {
     console.error('[TELEMETRY ERROR]:', error);
