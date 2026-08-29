@@ -889,9 +889,29 @@ Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long
                         </td>
                         <td style={{ padding: '14px 12px' }}>
                           {o.license_key ? (
-                            <code style={{ background: 'rgba(0,0,0,0.3)', padding: '4px 8px', borderRadius: '6px', color: '#fbbf24', fontSize: '0.85rem' }}>
-                              {o.license_key}
-                            </code>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(o.license_key);
+                                alert('✓ Kunci lisensi berhasil disalin ke clipboard!');
+                              }}
+                              title="Klik untuk menyalin Kunci Lisensi"
+                              style={{
+                                padding: '6px 12px',
+                                borderRadius: '8px',
+                                background: 'rgba(251, 191, 36, 0.12)',
+                                border: '1px solid rgba(251, 191, 36, 0.35)',
+                                color: '#fbbf24',
+                                fontSize: '0.78rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                transition: 'all 0.2s'
+                              }}
+                            >
+                              📋 Salin Lisensi
+                            </button>
                           ) : (
                             <span style={{ color: 'hsl(var(--text-muted))', fontSize: '0.85rem' }}>-</span>
                           )}
