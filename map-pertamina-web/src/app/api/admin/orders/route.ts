@@ -27,12 +27,33 @@ export async function GET(request: Request) {
 
     // Ambil data semua order dari database Neon (termasuk hwid dan license_key)
     const orders = await sql`
-      SELECT id, paket, base_amount, amount, whatsapp, status, voucher_code, hwid, license_key, created_at, expires_at, paid_at 
+      SELECT id, paket, base_amount, amount, whatsapp, status, voucher_code, hwid, license_key, affiliate_code, created_at, expires_at, paid_at 
       FROM orders 
       ORDER BY created_at DESC;
     `;
 
-    return NextResponse.json({ orders });
+    // Ambil data affiliates
+    let affiliatesList: any[] = [];
+    let payoutsList: any[] = [];
+    try {
+      affiliatesList = await sql`
+        SELECT id, code, name, whatsapp, markup_percent, bank_name, bank_account_number, bank_account_name, total_earnings, withdrawn_amount, status, created_at
+        FROM affiliates
+        ORDER BY created_at DESC;
+      `;
+
+      payoutsList = await sql`
+        SELECT p.id, p.affiliate_id, p.amount, p.bank_name, p.bank_account_number, p.bank_account_name, p.status, p.notes, p.created_at, p.processed_at,
+               a.name AS affiliate_name, a.code AS affiliate_code, a.whatsapp AS affiliate_whatsapp
+        FROM affiliate_payouts p
+        JOIN affiliates a ON p.affiliate_id = a.id
+        ORDER BY p.created_at DESC;
+      `;
+    } catch (e) {
+      console.warn('[Admin API] Affiliate tables not yet created or empty:', e);
+    }
+
+    return NextResponse.json({ orders, affiliates: affiliatesList, payouts: payoutsList });
   } catch (error: any) {
     console.error('Error fetching admin orders:', error);
     return NextResponse.json({ error: 'Terjadi kesalahan sistem internal.' }, { status: 500 });
@@ -50,7 +71,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { orderId, action } = await request.json();
+    const body = await request.json().catch(() => ({}));
+    const { orderId, payoutId, action, notes } = body;
+
+    if (action === 'complete_payout') {
+      if (!payoutId) {
+        return NextResponse.json({ error: 'Payout ID is required' }, { status: 400 });
+      }
+
+      await sql`
+        UPDATE affiliate_payouts
+        SET status = 'COMPLETED',
+            notes = ${notes || 'Transfer berhasil diproses admin'},
+            processed_at = CURRENT_TIMESTAMP
+        WHERE id = ${payoutId}
+      `;
+
+      return NextResponse.json({ success: true, message: 'Payout marked as COMPLETED' });
+    }
+
     if (!orderId) {
       return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
     }

@@ -90,7 +90,7 @@ export async function POST(request: Request) {
             voucher_code = ${voucherCode}
         WHERE id = ${order.id} 
           AND (status = 'PENDING' OR status = 'EXPIRED')
-        RETURNING id, paket, whatsapp, amount, hwid
+        RETURNING id, paket, whatsapp, amount, base_amount, hwid, affiliate_code, affiliate_markup
       `;
 
       if (updateResult.length === 0) {
@@ -105,6 +105,70 @@ export async function POST(request: Request) {
       const paketNama = paketDetail ? paketDetail.nama : updatedOrder.paket;
 
       console.log(`[Webhook Midtrans] Order ${order_id} successfully marked as PAID. Voucher: ${voucherCode}`);
+
+      // === ATRIBUSI KOMISI AFFILIATE (JIKA ADA) ===
+      if (updatedOrder.affiliate_code) {
+        try {
+          const affRows = await sql`
+            SELECT id, code, name, whatsapp, hwid, total_earnings, withdrawn_amount, status
+            FROM affiliates
+            WHERE UPPER(code) = ${String(updatedOrder.affiliate_code).trim().toUpperCase()} AND status = 'ACTIVE'
+            LIMIT 1
+          `;
+
+          if (affRows.length > 0) {
+            const aff = affRows[0];
+            const isSelfReferral = (updatedOrder.whatsapp === aff.whatsapp) || 
+                                   (updatedOrder.hwid && aff.hwid && updatedOrder.hwid === aff.hwid);
+
+            if (isSelfReferral) {
+              console.warn(`[Webhook Midtrans] Self-referral detected for affiliate "${aff.code}". Commission skipped.`);
+            } else {
+              const grossAmount = Number(updatedOrder.amount);
+              const baseAmount = Number(updatedOrder.base_amount || paketDetail?.harga || grossAmount);
+              const gatewayFee = Math.round(grossAmount * 0.007); // 0.7% QRIS fee
+              const netCommission = Math.max(grossAmount - baseAmount - gatewayFee, 0);
+
+              if (netCommission > 0) {
+                // Simpan ke affiliate_commissions
+                await sql`
+                  INSERT INTO affiliate_commissions (
+                    order_id, affiliate_id, base_amount, gross_amount, gateway_fee, net_commission, status
+                  ) VALUES (
+                    ${order.id}, ${aff.id}, ${baseAmount}, ${grossAmount}, ${gatewayFee}, ${netCommission}, 'AVAILABLE'
+                  )
+                  ON CONFLICT (order_id) DO NOTHING
+                `;
+
+                // Update saldo total_earnings affiliator
+                await sql`
+                  UPDATE affiliates
+                  SET total_earnings = total_earnings + ${netCommission}
+                  WHERE id = ${aff.id}
+                `;
+
+                const newBalance = (Number(aff.total_earnings || 0) + netCommission) - Number(aff.withdrawn_amount || 0);
+
+                console.log(`[Webhook Midtrans] Commission +Rp ${netCommission} credited to affiliate "${aff.code}"`);
+
+                // Kirim Notifikasi WhatsApp KASINGG ke Affiliator
+                if (aff.whatsapp) {
+                  const affMsg = 
+                    `🎉 *KASINGG! PENJUALAN BARU MASUK!* 🔔\n\n` +
+                    `Pelanggan baru telah membeli paket *${paketNama}* via link/kode referral Anda (*${aff.code}*).\n\n` +
+                    `💰 Komisi Bersih Anda: *+Rp ${netCommission.toLocaleString('id-ID')}*\n` +
+                    `📊 Saldo Dompet Anda: *Rp ${newBalance.toLocaleString('id-ID')}*\n\n` +
+                    `Pantau saldo & ajukan penarikan di dashboard:\nhttps://map-pertamina-web.vercel.app/affiliate/dashboard\n\n` +
+                    `Terus bagikan link Anda di grup pangkalan untuk komisi tanpa batas! 🚀`;
+                  await sendWhatsApp(aff.whatsapp, affMsg);
+                }
+              }
+            }
+          }
+        } catch (affError) {
+          console.error('[Webhook Midtrans] Error processing affiliate commission:', affError);
+        }
+      }
 
       // === AUTO-ACTIVATE jika Android/Desktop sudah kirim hwid ===
       let autoLicenseKey: string | null = null;
@@ -139,7 +203,8 @@ export async function POST(request: Request) {
             `Paket: *${paketNama}* (${kuota.toLocaleString('id-ID')} Tabung)\n` +
             `Nominal: *Rp ${updatedOrder.amount.toLocaleString('id-ID')}*\n` +
             `HP User: *${updatedOrder.whatsapp}*\n` +
-            `Voucher: \`${voucherCode}\`\n\n` +
+            `Voucher: \`${voucherCode}\`\n` +
+            (updatedOrder.affiliate_code ? `Mitra Ref: *${updatedOrder.affiliate_code}*\n\n` : `\n`) +
             `Sistem berhasil memverifikasi pembayaran Midtrans secara otomatis. 🚀`;
           await sendWhatsApp(adminPhone, adminMsg);
         }
