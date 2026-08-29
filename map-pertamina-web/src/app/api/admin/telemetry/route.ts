@@ -3,6 +3,13 @@ import { sql, ensureAffiliateTables } from '@/lib/db';
 
 const ADMIN_PASSCODE = process.env.ADMIN_PASSCODE || 'Thema$k4j4';
 
+// Benchmark Resmi Nasional (ESDM & Pertamina Patra Niaga)
+const BENCHMARK_NASIONAL = {
+  totalPangkalanNasional: 250000, // ~250.000 pangkalan resmi se-Indonesia
+  totalAgenNasional: 5500,        // ~5.500 PT Agen LPG 3Kg
+  totalTabungNasionalBulanan: 220000000 // ~220 Juta tabung/bulan (~8.03 Juta Metrik Ton kuota APBN/tahun)
+};
+
 export async function GET(req: NextRequest) {
   try {
     const passcode = req.headers.get('x-admin-passcode');
@@ -12,15 +19,15 @@ export async function GET(req: NextRequest) {
 
     await ensureAffiliateTables();
 
-    // 1. Ambil seluruh data pangkalan
+    // 1. Ambil seluruh data pangkalan real yang masuk ke sistem kita
     const pangkalans = await sql`
       SELECT * FROM pangkalan_telemetry 
       ORDER BY last_sync_at DESC
     `;
 
-    // 2. Hitung Agregat & Analisis Mendalam
+    // 2. Hitung Agregat Data Klien Kita
     const totalPangkalan = pangkalans.length;
-    let totalTabungNasional = 0;
+    let totalTabungKlien = 0;
     let totalEstimasiOmset = 0;
     let totalEstimasiLaba = 0;
     let totalModalTebusDo = 0;
@@ -51,7 +58,7 @@ export async function GET(req: NextRequest) {
       const inv = Number(p.invalid_count) || 0;
       const unik = Number(p.total_konsumen_unik) || Math.round(kuota / 3.5);
 
-      totalTabungNasional += kuota;
+      totalTabungKlien += kuota;
       totalEstimasiOmset += omset;
       totalEstimasiLaba += laba;
       totalModalTebusDo += modalDo;
@@ -69,7 +76,7 @@ export async function GET(req: NextRequest) {
       else windowsCount++;
 
       // Agen
-      const agName = p.agent_name || 'PT. Penyalur Mandiri';
+      const agName = p.agent_name || 'PT. Agen Penyalur';
       if (!agentMap[agName]) {
         agentMap[agName] = { name: agName, id: p.agent_id || '-', count: 0, tabung: 0, omset: 0 };
       }
@@ -112,7 +119,25 @@ export async function GET(req: NextRequest) {
     const avgRt = totalPangkalan > 0 ? Math.round(sumRt / totalPangkalan) : 75;
     const avgUm = totalPangkalan > 0 ? Math.round(sumUm / totalPangkalan) : 25;
 
-    const topAgents = Object.values(agentMap).sort((a, b) => b.count - a.count).slice(0, 10);
+    // Perhitungan Pangsa Pasar (Market Share) terhadap Benchmark Nasional
+    const totalAgenKita = Object.keys(agentMap).length;
+    const marketShareTabungPercent = totalTabungKlien > 0 ? Number(((totalTabungKlien / BENCHMARK_NASIONAL.totalTabungNasionalBulanan) * 100).toFixed(4)) : 0;
+    const penetrasiPangkalanPercent = totalPangkalan > 0 ? Number(((totalPangkalan / BENCHMARK_NASIONAL.totalPangkalanNasional) * 100).toFixed(3)) : 0;
+    const penetrasiAgenPercent = totalAgenKita > 0 ? Number(((totalAgenKita / BENCHMARK_NASIONAL.totalAgenNasional) * 100).toFixed(2)) : 0;
+
+    const topAgents = Object.values(agentMap)
+      .map(ag => {
+        const penetrasiInternal = Math.min(100, Math.round((ag.count / 40) * 100)); // Rata-rata 1 agen menaungi ~40 pangkalan
+        const sisaPotensi = Math.max(0, 40 - ag.count);
+        return {
+          ...ag,
+          penetrasiInternal,
+          sisaPotensi
+        };
+      })
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
     const topProvinces = Object.values(provinceMap).sort((a, b) => b.count - a.count).slice(0, 10);
     const topCities = Object.values(cityMap).sort((a, b) => b.count - a.count).slice(0, 10);
     const brandStats = Object.entries(brandMap).map(([brand, count]) => ({ brand, count })).sort((a, b) => b.count - a.count);
@@ -120,8 +145,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       success: true,
       metrics: {
+        // Real Data Platform Kita
         totalPangkalan,
-        totalTabungNasional,
+        totalTabungKlien,
         totalEstimasiOmset,
         totalEstimasiLaba,
         totalModalTebusDo,
@@ -129,6 +155,7 @@ export async function GET(req: NextRequest) {
         totalSuccessCount,
         totalInvalidCount,
         totalKonsumenUnik,
+        totalAgenKita,
         avgDtks,
         avgKepatuhan,
         avgRt,
@@ -138,7 +165,13 @@ export async function GET(req: NextRequest) {
         topAgents,
         topProvinces,
         topCities,
-        brandStats
+        brandStats,
+
+        // Benchmark & Pangsa Pasar (Market Share)
+        benchmarkNasional: BENCHMARK_NASIONAL,
+        marketShareTabungPercent,
+        penetrasiPangkalanPercent,
+        penetrasiAgenPercent
       },
       pangkalans
     });
