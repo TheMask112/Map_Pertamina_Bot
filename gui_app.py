@@ -435,6 +435,17 @@ class MainScreen(ctk.CTkFrame):
         )
         self.btn_reset.pack(side="left", expand=True, fill="x", padx=(6, 0))
 
+        # Tombol Auto-Batch Multi-Pangkalan (Eksklusif Enterprise 5000)
+        self.btn_batch = ctk.CTkButton(
+            left,
+            text="🏢  JALANKAN SEMUA PANGKALAN (AUTO-BATCH)",
+            height=38,
+            font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
+            fg_color="#8B5CF6", hover_color="#7C3AED",
+            command=self._open_batch_runner_dialog,
+        )
+        self.btn_batch.pack(fill="x", pady=(0, 6))
+
         # ── STATUS BAR ────────────────────────────────────────
         self.lbl_status = ctk.CTkLabel(
             left,
@@ -1110,6 +1121,196 @@ class MainScreen(ctk.CTkFrame):
             print(f"\n[ERROR] Fatal: {e}")
         finally:
             self.after(0, self._on_bot_finished)
+
+    def _open_batch_runner_dialog(self):
+        """Buka dialog eksekusi antrean batch semua pangkalan (Eksklusif Enterprise 5000)."""
+        from license_manager import can_use_multi_pangkalan, verify_license
+        from credentials import get_pangkalan_profiles
+        import tkinter.messagebox as mb
+        from tkinter import filedialog
+
+        # Validasi Hak Akses Enterprise 5000
+        if not can_use_multi_pangkalan(self.hwid):
+            valid, _, payload = verify_license(self.hwid)
+            cur_paket = payload.get("paket", "STARTER") if valid and payload else "STARTER"
+            mb.showinfo(
+                "Fitur Enterprise",
+                f"🏢 Fitur Jalankan Semua Pangkalan Otomatis (Batch Queue Runner) eksklusif untuk Paket Enterprise 5.000 Tabung.\n\n"
+                f"Paket aktif Anda: {cur_paket}.\n"
+                f"Silakan hubungi Admin Telegram untuk upgrade ke Paket Enterprise."
+            )
+            return
+
+        profiles = get_pangkalan_profiles()
+        if not profiles:
+            mb.showwarning("Perhatian", "Belum ada profil pangkalan tersimpan. Tambahkan profil pangkalan terlebih dahulu.")
+            return
+
+        # Buat Custom TopLevel Window untuk Batch Runner
+        dlg = ctk.CTkToplevel(self)
+        dlg.title("🏢 Antrean Batch Semua Pangkalan")
+        dlg.geometry("640x520")
+        dlg.configure(fg_color=C_BG)
+        dlg.grab_set()
+
+        ctk.CTkLabel(
+            dlg, text="🏢 Eksekusi Antrean Semua Pangkalan (Auto-Batch)",
+            font=ctk.CTkFont(family="Segoe UI", size=16, weight="bold"),
+            text_color=C_GOLD
+        ).pack(pady=(16, 4))
+
+        ctk.CTkLabel(
+            dlg, text="Pilih file Excel untuk setiap pangkalan. Bot akan memproses setiap pangkalan secara otomatis berurutan sampai selesai semua tanpa henti.",
+            font=ctk.CTkFont(size=11), text_color=C_MUTED, wraplength=580
+        ).pack(pady=(0, 12))
+
+        scroll_frame = ctk.CTkScrollableFrame(dlg, fg_color=C_PANEL, height=300)
+        scroll_frame.pack(fill="both", expand=True, padx=16, pady=6)
+
+        queue_vars = []
+
+        for p in profiles:
+            p_card = ctk.CTkFrame(scroll_frame, fg_color=C_BG, corner_radius=8)
+            p_card.pack(fill="x", pady=6, padx=4)
+
+            top_row = ctk.CTkFrame(p_card, fg_color="transparent")
+            top_row.pack(fill="x", padx=8, pady=4)
+
+            chk_var = ctk.BooleanVar(value=True)
+            chk = ctk.CTkCheckBox(
+                top_row, text=f"🏢 {p.get('name', 'Pangkalan')} ({p.get('username', '-')})",
+                variable=chk_var, font=ctk.CTkFont(size=13, weight="bold"),
+                text_color=C_TEXT, fg_color=C_ACCENT
+            )
+            chk.pack(side="left")
+
+            bot_row = ctk.CTkFrame(p_card, fg_color="transparent")
+            bot_row.pack(fill="x", padx=8, pady=(0, 6))
+
+            file_var = ctk.StringVar(value="")
+            lbl_file = ctk.CTkLabel(bot_row, text="File: (Belum dipilih)", font=ctk.CTkFont(size=11), text_color=C_MUTED)
+            lbl_file.pack(side="left", padx=(28, 8))
+
+            def _make_picker(f_var, l_file):
+                def _picker():
+                    path = filedialog.askopenfilename(
+                        title="Pilih File Excel Pangkalan",
+                        filetypes=[("Excel Files", "*.xlsx *.xls"), ("All Files", "*.*")]
+                    )
+                    if path:
+                        f_var.set(path)
+                        l_file.configure(text=f"📁 {os.path.basename(path)}", text_color=C_SUCCESS)
+                return _picker
+
+            ctk.CTkButton(
+                bot_row, text="Pilih File Excel...", width=120, height=26,
+                font=ctk.CTkFont(size=11), fg_color=C_BORDER, hover_color=C_ACCENT,
+                command=_make_picker(file_var, lbl_file)
+            ).pack(side="right")
+
+            queue_vars.append({
+                "profile": p,
+                "chk_var": chk_var,
+                "file_var": file_var,
+                "lbl_file": lbl_file,
+            })
+
+        def _start_queue():
+            active_queue = []
+            for item in queue_vars:
+                if item["chk_var"].get():
+                    f_path = item["file_var"].get().strip()
+                    if not f_path or not os.path.exists(f_path):
+                        mb.showwarning("File Belum Dipilih", f"Silakan pilih file Excel untuk pangkalan: {item['profile'].get('name')}")
+                        return
+                    active_queue.append((item["profile"], f_path))
+
+            if not active_queue:
+                mb.showwarning("Perhatian", "Centang minimal 1 pangkalan untuk dijalankan.")
+                return
+
+            dlg.destroy()
+            self._start_batch_queue(active_queue)
+
+        btn_run = ctk.CTkButton(
+            dlg, text="▶️ MULAI PROSES SELURUH ANTREAN", height=44,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            fg_color="#8B5CF6", hover_color="#7C3AED",
+            command=_start_queue
+        )
+        btn_run.pack(fill="x", padx=16, pady=12)
+
+    def _start_batch_queue(self, queue_items):
+        """Memulai antrean batch multi-pangkalan."""
+        self.bot_failed = False
+        self.bot_error_msg = ""
+        self.btn_start.configure(state="disabled", text="⚙  BATCH BERJALAN...")
+        self.btn_batch.configure(state="disabled")
+        self.btn_stop.configure(state="normal")
+        self.btn_pause.configure(state="disabled")
+        self.lbl_status.configure(text="● Memulai Antrean Batch Multi-Pangkalan...", text_color=C_ACCENT)
+        self.progress_bar.set(0)
+        self._is_paused = False
+        self._bot_start_time = time.time()
+        self._nik_times = []
+
+        self.stop_event = threading.Event()
+        self.pause_event = threading.Event()
+        self.bot_thread = threading.Thread(target=self._run_batch_queue_worker, args=(queue_items,), daemon=True)
+        self.bot_thread.start()
+
+    def _run_batch_queue_worker(self, queue_items):
+        """Worker thread untuk memproses tiap pangkalan dalam antrean secara otomatis berurutan."""
+        try:
+            total_pangkalans = len(queue_items)
+            for idx, (p_profile, excel_path) in enumerate(queue_items, 1):
+                if self.stop_event.is_set():
+                    print("[BATCH QUEUE] Dihentikan oleh pengguna.")
+                    break
+
+                p_name = p_profile.get("name", f"Pangkalan {idx}")
+                print(f"\n=======================================================")
+                print(f"[BATCH QUEUE {idx}/{total_pangkalans}] MEMPROSES: {p_name}")
+                print(f"[BATCH QUEUE] File: {excel_path}")
+                print(f"=======================================================\n")
+
+                # Set aktif kredensial & pangkalan
+                self.after(0, lambda n=p_name: self._on_pangkalan_selected(n))
+                self.selected_file = excel_path
+
+                status_msg = f"🏢 [ANTREAN {idx}/{total_pangkalans}] Memproses: {p_name}..."
+                self.after(0, lambda m=status_msg: self.lbl_status.configure(text=m, text_color=C_GOLD))
+
+                # Jalankan bot untuk pangkalan ini
+                run_bot(
+                    data_file     = excel_path,
+                    stop_event    = self.stop_event,
+                    pause_event   = self.pause_event,
+                    batch_limit   = self._get_batch_limit(),
+                    jumlah_tabung = self._get_jumlah_tabung(),
+                    on_progress   = self._on_progress,
+                    hwid          = self.hwid,
+                    captcha_mode  = self._get_captcha_mode(),
+                )
+
+                if self.stop_event.is_set():
+                    break
+
+                if idx < total_pangkalans:
+                    print(f"[BATCH QUEUE] Pangkalan '{p_name}' selesai. Jeda 3 detik sebelum pangkalan berikutnya...")
+                    time.sleep(3)
+
+            if not self.stop_event.is_set():
+                print(f"\n🎉 [BATCH QUEUE SELESAI] Seluruh {total_pangkalans} pangkalan berhasil diproses otomatis!\n")
+                self.after(0, lambda: self.lbl_status.configure(text=f"✓ Selesai! Seluruh {total_pangkalans} Pangkalan berhasil diproses!", text_color=C_SUCCESS))
+
+        except Exception as e:
+            self.bot_failed = True
+            self.bot_error_msg = str(e)
+            print(f"\n[ERROR BATCH QUEUE] Fatal: {e}")
+        finally:
+            self.after(0, self._on_bot_finished)
+            self.after(0, lambda: self.btn_batch.configure(state="normal"))
 
     def _on_progress(self, current: int, total: int, status_text: str):
         """Callback dari bot → update UI (thread-safe via after)."""

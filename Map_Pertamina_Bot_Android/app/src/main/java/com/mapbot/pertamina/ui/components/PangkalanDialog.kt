@@ -27,6 +27,12 @@ import androidx.compose.ui.unit.sp
 import com.mapbot.pertamina.security.CredentialStore
 import com.mapbot.pertamina.security.PangkalanProfile
 import com.mapbot.pertamina.util.LicenseManager
+import com.mapbot.pertamina.data.ExcelReader
+import com.mapbot.pertamina.data.NikData
+import com.mapbot.pertamina.data.QueuePangkalanItem
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 
 @Composable
 fun PangkalanSelectorDialog(
@@ -309,6 +315,197 @@ fun AddEditPangkalanDialog(
                 enabled = name.isNotBlank()
             ) {
                 Text("Simpan")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Batal")
+            }
+        }
+    )
+}
+
+@Composable
+fun BatchQueuePangkalanDialog(
+    context: Context,
+    onDismiss: () -> Unit,
+    onStartBatch: (List<com.mapbot.pertamina.data.QueuePangkalanItem>) -> Unit
+) {
+    val credStore = remember { CredentialStore(context) }
+    val profiles = remember { credStore.getProfiles() }
+    val isEnterprise = remember { LicenseManager.canUseMultiPangkalan(context) }
+    val licenseStatus = remember { LicenseManager.getLicenseStatus(context) }
+
+    var showUpgradePrompt by remember { mutableStateOf(!isEnterprise) }
+    val selectedMap = remember { mutableStateMapOf<String, Boolean>().apply { profiles.forEach { put(it.id, true) } } }
+    val fileSummaryMap = remember { mutableStateMapOf<String, String>() }
+    val nikListMap = remember { mutableStateMapOf<String, List<com.mapbot.pertamina.data.NikData>>() }
+
+    val coroutineScope = rememberCoroutineScope()
+    var currentPickingProfileId by remember { mutableStateOf<String?>(null) }
+
+    val filePicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        uri?.let {
+            val pid = currentPickingProfileId ?: return@let
+            coroutineScope.launch {
+                val list = withContext(Dispatchers.IO) {
+                    ExcelReader.readNikFromExcel(context, it)
+                }
+                nikListMap[pid] = list
+                fileSummaryMap[pid] = "✓ ${list.size} NIK"
+            }
+        }
+    }
+
+    if (showUpgradePrompt) {
+        AlertDialog(
+            onDismissRequest = { 
+                showUpgradePrompt = false
+                onDismiss()
+            },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Lock, contentDescription = null, tint = Color(0xFFEAB308))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Fitur Enterprise", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column {
+                    Text(
+                        "🏢 Fitur Jalankan Semua Pangkalan Otomatis (Batch Queue Runner) eksklusif untuk Paket Enterprise 5.000 Tabung.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Paket aktif Anda: ${licenseStatus.paket} (${licenseStatus.totalQuota} Tabung).",
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Silakan hubungi Admin Telegram untuk upgrade ke Paket Enterprise.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = { 
+                    showUpgradePrompt = false 
+                    onDismiss()
+                }) {
+                    Text("Mengerti")
+                }
+            }
+        )
+        return
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text("🏢 Antrean Semua Pangkalan", fontWeight = FontWeight.Bold)
+                Text(
+                    "Pilih file Excel untuk setiap pangkalan. Bot akan otomatis memproses berurutan sampai selesai semua.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
+            }
+        },
+        text = {
+            if (profiles.isEmpty()) {
+                Text("Belum ada profil pangkalan tersimpan. Tambahkan profil pangkalan di layar utama terlebih dahulu.")
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    items(profiles) { p ->
+                        val isChecked = selectedMap[p.id] ?: true
+                        val summary = fileSummaryMap[p.id] ?: "File belum dipilih"
+
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Checkbox(
+                                        checked = isChecked,
+                                        onCheckedChange = { selectedMap[p.id] = it }
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(p.name, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                        Text(p.phone, fontSize = 12.sp, color = Color.Gray)
+                                    }
+                                }
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 40.dp, top = 4.dp)
+                                ) {
+                                    Text(
+                                        summary,
+                                        fontSize = 11.sp,
+                                        color = if (nikListMap.containsKey(p.id)) Color(0xFF10B981) else Color.Gray
+                                    )
+
+                                    OutlinedButton(
+                                        onClick = {
+                                            currentPickingProfileId = p.id
+                                            filePicker.launch("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                                        },
+                                        shape = RoundedCornerShape(6.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                        modifier = Modifier.height(28.dp)
+                                    ) {
+                                        Text("Pilih Excel", fontSize = 10.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val queue = mutableListOf<com.mapbot.pertamina.data.QueuePangkalanItem>()
+                    for (p in profiles) {
+                        if (selectedMap[p.id] == true) {
+                            val list = nikListMap[p.id]
+                            if (list.isNullOrEmpty()) {
+                                Toast.makeText(context, "Pilih file Excel untuk: ${p.name}", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            queue.add(com.mapbot.pertamina.data.QueuePangkalanItem(
+                                profile = p,
+                                nikList = list,
+                                fileName = fileSummaryMap[p.id] ?: "Excel"
+                            ))
+                        }
+                    }
+
+                    if (queue.isEmpty()) {
+                        Toast.makeText(context, "Centang minimal 1 pangkalan", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+
+                    onStartBatch(queue)
+                },
+                enabled = profiles.isNotEmpty()
+            ) {
+                Text("▶ Mulai Semua Antrean")
             }
         },
         dismissButton = {
