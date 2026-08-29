@@ -24,14 +24,14 @@ sealed class Screen(val route: String) {
 fun AppNavigation(navController: NavHostController = rememberNavController()) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val hasValidLicense = remember { com.mapbot.pertamina.util.LicenseManager.getLicenseStatus(context).isValid }
-    val startRoute = if (hasValidLicense) Screen.Login.route else Screen.Pricing.route
+    val startRoute = if (hasValidLicense) Screen.Home.route else Screen.Pricing.route
 
     NavHost(navController = navController, startDestination = startRoute) {
         composable(Screen.Pricing.route) {
             PricingScreen(
                 onLicenseActivated = {
-                    // Lisensi aktif otomatis → langsung ke Login/Home, skip License screen
-                    navController.navigate(Screen.Login.route) {
+                    // Lisensi aktif otomatis → langsung ke Home, skip manual login screen
+                    navController.navigate(Screen.Home.route) {
                         popUpTo(Screen.Pricing.route) { inclusive = true }
                     }
                 },
@@ -43,7 +43,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
         composable(Screen.License.route) {
             LicenseScreen(
                 onLicenseValid = {
-                    navController.navigate(Screen.Login.route) {
+                    navController.navigate(Screen.Home.route) {
                         popUpTo(Screen.License.route) { inclusive = true }
                     }
                 }

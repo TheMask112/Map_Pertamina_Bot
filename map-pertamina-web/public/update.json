@@ -1,15 +1,14 @@
 {
-  "versionCode": 10,
-  "apkUrl": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.0/MAP_Pertamina_Bot_v1.1.0.apk",
-  "latestVersion": "1.1.0",
-  "latestVersionCode": 10,
-  "url": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.0/MAP_Pertamina_Bot_v1.1.0.apk",
+  "versionCode": 11,
+  "apkUrl": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.1/MAP_Pertamina_Bot_v1.1.1.apk",
+  "latestVersion": "1.1.1",
+  "latestVersionCode": 11,
+  "url": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.1/MAP_Pertamina_Bot_v1.1.1.apk",
   "releaseNotes": [
-    "Sinkronisasi Kode Wilayah Kemendagri 2024 (7.288 Kecamatan se-Indonesia)",
-    "Peningkatan Akurasi Auto-Fill Tempat & Tanggal Lahir NIK (Mantine UI Datepicker)",
-    "Telemetri Intelijen Pangkalan & Kepatuhan Audit ESDM Real-Time",
-    "Penyempurnaan Aksesibilitas & Mode Full-Screen Layar Melayang",
-    "Multi-Pangkalan Switcher & Optimasi Alur Transaksi Tanpa Antre",
-    "Peningkatan Stabilitas & Kecepatan Bot Android & Desktop"
+    "Multi-Pangkalan Tanpa Batas: Simpan & kelola banyak akun di semua paket lisensi",
+    "Bypass Form Login Pertamina: Langsung masuk dashboard pangkalan aktif tanpa webview lambat",
+    "Silent Auto-Relogin: Otomatis login ulang di background saat sesi terputus/expired",
+    "Antrean Otomatis Berurutan (Batch Queue): Khusus Enterprise 5.000 Tabung",
+    "Penanganan Edge Cases Sempurna: First-time setup modal & auto-sync data login"
   ]
 }

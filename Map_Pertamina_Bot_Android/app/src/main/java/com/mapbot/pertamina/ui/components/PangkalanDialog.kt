@@ -48,45 +48,6 @@ fun PangkalanSelectorDialog(
 
     var showAddEditDialog by remember { mutableStateOf(false) }
     var editingProfile by remember { mutableStateOf<PangkalanProfile?>(null) }
-    var showUpgradePrompt by remember { mutableStateOf(false) }
-
-    if (showUpgradePrompt) {
-        AlertDialog(
-            onDismissRequest = { showUpgradePrompt = false },
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Lock, contentDescription = null, tint = Color(0xFFEAB308))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Fitur Enterprise", fontWeight = FontWeight.Bold)
-                }
-            },
-            text = {
-                Column {
-                    Text(
-                        "🏢 Fitur Multi-Pangkalan (Kelola Banyak Akun) eksklusif untuk Paket Enterprise 5.000 Tabung.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "Paket aktif Anda saat ini: ${licenseStatus.paket} (${licenseStatus.totalQuota} Tabung).",
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "Silakan hubungi admin untuk upgrade lisensi ke Paket Enterprise agar dapat mengelola banyak pangkalan sekaligus di 1 perangkat.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray
-                    )
-                }
-            },
-            confirmButton = {
-                Button(onClick = { showUpgradePrompt = false }) {
-                    Text("Mengerti")
-                }
-            }
-        )
-    }
 
     if (showAddEditDialog) {
         AddEditPangkalanDialog(
