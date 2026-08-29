@@ -582,7 +582,18 @@ def get_license_info(hwid: str) -> dict:
         "kuota_total": total,
         "kuota_sisa": max(0, total - terpakai),
         "persen_terpakai": min(100.0, round((terpakai / total) * 100, 1)) if total > 0 else 0,
+        "is_enterprise": can_use_multi_pangkalan(hwid)
     }
+
+
+def can_use_multi_pangkalan(hwid: str) -> bool:
+    """Cek apakah lisensi mengizinkan fitur Multi-Pangkalan (khusus Enterprise 5000)."""
+    valid, _, payload = verify_license(hwid)
+    if not valid or not payload:
+        return False
+    paket = str(payload.get("paket", "")).upper()
+    total_quota = int(payload.get("kuota_total", 0))
+    return paket == "ENTERPRISE" or total_quota >= 5000
 
 
 def generate_license_key(hwid: str, paket: str, custom_hari: int = None, custom_kuota: int = None) -> str:

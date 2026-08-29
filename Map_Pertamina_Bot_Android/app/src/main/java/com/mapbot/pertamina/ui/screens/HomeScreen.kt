@@ -30,10 +30,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+import com.mapbot.pertamina.security.CredentialStore
+import com.mapbot.pertamina.ui.components.PangkalanSelectorDialog
+
 @Composable
 fun HomeScreen(onNavigateToBot: () -> Unit, onNavigateToSettings: () -> Unit) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val credStore = remember { CredentialStore(context) }
+    var activeProfile by remember { mutableStateOf(credStore.getActiveProfile()) }
+    var showPangkalanDialog by remember { mutableStateOf(false) }
+
     var isReadingFile by remember { mutableStateOf(false) }
     var fileSummary by remember { mutableStateOf(
         if (SessionData.loadedNikList.isNotEmpty()) "Dimuat: ${SessionData.loadedNikList.size} NIK" else "Belum ada file Excel yang dipilih"
@@ -43,12 +50,31 @@ fun HomeScreen(onNavigateToBot: () -> Unit, onNavigateToSettings: () -> Unit) {
 
     LaunchedEffect(Unit) {
         licenseStatus = LicenseManager.getLicenseStatus(context)
+        activeProfile = credStore.getActiveProfile()
+        if (activeProfile != null) {
+            SessionData.phone = activeProfile!!.phone
+            SessionData.pass = activeProfile!!.pass
+        }
         coroutineScope.launch {
             val synced = LicenseManager.syncLicenseStatusOnline(context)
             if (synced) {
                 licenseStatus = LicenseManager.getLicenseStatus(context)
             }
         }
+    }
+
+    if (showPangkalanDialog) {
+        PangkalanSelectorDialog(
+            context = context,
+            onDismiss = { showPangkalanDialog = false },
+            onProfileChanged = {
+                activeProfile = credStore.getActiveProfile()
+                if (activeProfile != null) {
+                    SessionData.phone = activeProfile!!.phone
+                    SessionData.pass = activeProfile!!.pass
+                }
+            }
+        )
     }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -98,7 +124,7 @@ fun HomeScreen(onNavigateToBot: () -> Unit, onNavigateToSettings: () -> Unit) {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 24.dp, bottom = 32.dp)
+                    .padding(top = 20.dp, bottom = 12.dp)
                     .clip(RoundedCornerShape(16.dp)),
                 color = Color.White.copy(alpha = 0.05f),
                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
@@ -113,6 +139,48 @@ fun HomeScreen(onNavigateToBot: () -> Unit, onNavigateToSettings: () -> Unit) {
                     ) {
                         Text(licenseStatus.paket, color = Color(0xFFEAB308), fontWeight = FontWeight.Bold, fontSize = 20.sp)
                         Text("${licenseStatus.usedQuota} / ${licenseStatus.totalQuota} Tabung", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+
+            // Pangkalan Switcher Card
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp)
+                    .clip(RoundedCornerShape(16.dp)),
+                color = Color.White.copy(alpha = 0.04f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("PANGKALAN AKTIF", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            activeProfile?.name ?: "Pangkalan Utama",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                        Text(
+                            activeProfile?.phone?.ifBlank { "Data login belum diset" } ?: "0812...",
+                            color = Color.Gray,
+                            fontSize = 12.sp
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = { showPangkalanDialog = true },
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text("Ganti", fontSize = 12.sp, color = Color(0xFFEAB308))
                     }
                 }
             }
