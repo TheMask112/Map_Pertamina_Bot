@@ -8,6 +8,7 @@ import { CONFIG } from '@/lib/config';
 import { generateVoucherCode } from '@/lib/voucher';
 import { generateLicenseKey } from '@/lib/keygen';
 import { sendWhatsApp, getVoucherMessageTemplate } from '@/lib/fonnte';
+import { sendTelegramToAdmin } from '@/lib/notify';
 
 export async function POST(request: Request) {
   try {
@@ -196,20 +197,25 @@ export async function POST(request: Request) {
           : getVoucherMessageTemplate(paketNama, kuota, updatedOrder.amount, voucherCode);
         await sendWhatsApp(updatedOrder.whatsapp, customerMsg);
 
+        const adminMsg = 
+          `*🔔 MIDTRANS: PENJUALAN MASUK* 🔔\n\n` +
+          `📦 Paket: *${paketNama}* (${kuota.toLocaleString('id-ID')} Tabung)\n` +
+          `💰 Nominal: *Rp ${updatedOrder.amount.toLocaleString('id-ID')}*\n` +
+          `📱 HP Pembeli: *${updatedOrder.whatsapp}*\n` +
+          `🎟️ Voucher: \`${voucherCode}\`\n` +
+          (autoLicenseKey ? `🔑 Auto-Activated HWID: \`${updatedOrder.hwid}\`\n` : '') +
+          (updatedOrder.affiliate_code ? `🤝 Mitra Referral: *${updatedOrder.affiliate_code}*\n` : '') +
+          `\n🚀 Sistem berhasil memverifikasi pembayaran Midtrans secara otomatis.`;
+
+        // Kirim Notifikasi Telegram ke Admin
+        await sendTelegramToAdmin(adminMsg);
+
         const adminPhone = process.env.ADMIN_PHONE;
         if (adminPhone) {
-          const adminMsg = 
-            `*🔔 MIDTRANS: PENJUALAN MASUK* 🔔\n\n` +
-            `Paket: *${paketNama}* (${kuota.toLocaleString('id-ID')} Tabung)\n` +
-            `Nominal: *Rp ${updatedOrder.amount.toLocaleString('id-ID')}*\n` +
-            `HP User: *${updatedOrder.whatsapp}*\n` +
-            `Voucher: \`${voucherCode}\`\n` +
-            (updatedOrder.affiliate_code ? `Mitra Ref: *${updatedOrder.affiliate_code}*\n\n` : `\n`) +
-            `Sistem berhasil memverifikasi pembayaran Midtrans secara otomatis. 🚀`;
           await sendWhatsApp(adminPhone, adminMsg);
         }
-      } catch (waError) {
-        console.warn('[Webhook Midtrans] Error saat mengirim notifikasi WA:', waError);
+      } catch (notifyError) {
+        console.warn('[Webhook Midtrans] Error saat mengirim notifikasi:', notifyError);
       }
 
       return NextResponse.json({

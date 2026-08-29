@@ -4,6 +4,7 @@ import { CONFIG } from '@/lib/config';
 import { generateVoucherCode } from '@/lib/voucher';
 import { generateLicenseKey } from '@/lib/keygen';
 import { sendWhatsApp, getVoucherMessageTemplate } from '@/lib/fonnte';
+import { sendTelegramToAdmin } from '@/lib/notify';
 
 export const dynamic = 'force-dynamic';
 
@@ -163,12 +164,21 @@ export async function POST(request: Request) {
       }
     }
 
-    // Kirim notifikasi WA (Non-blocking)
+    // Kirim notifikasi WA & Telegram (Non-blocking)
     try {
       const customerMsg = autoLicenseKey
         ? `✅ *Pembayaran ${paketNama} berhasil diverifikasi admin!*\n\nLisensi Anda sudah AKTIF otomatis di perangkat Anda.\n\n🔑 License Key:\n\`${autoLicenseKey}\`\n\nTerima kasih sudah menggunakan Bot MAP Pertamina! 🚀`
         : getVoucherMessageTemplate(paketNama, kuota, updatedOrder.amount, voucherCode);
       sendWhatsApp(updatedOrder.whatsapp, customerMsg).catch(e => console.warn('[Fonnte Background] Customer WA error:', e));
+
+      const adminMsg = 
+        `*✅ MANUAL APPROVE: TRANSAKSI LUNAS*\n\n` +
+        `📦 Paket: *${paketNama}* (${kuota.toLocaleString('id-ID')} Tabung)\n` +
+        `💰 Nominal: *Rp ${updatedOrder.amount.toLocaleString('id-ID')}*\n` +
+        `📱 HP Pembeli: *${updatedOrder.whatsapp}*\n` +
+        `🎟️ Voucher: \`${voucherCode}\`\n` +
+        (autoLicenseKey ? `🔑 Auto-Activated HWID: \`${updatedOrder.hwid}\`\n` : '');
+      sendTelegramToAdmin(adminMsg).catch(e => console.warn('[Telegram Admin] Error:', e));
     } catch (waErr) {
       console.warn('[Admin Override] WA error:', waErr);
     }
