@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createHash } from 'crypto';
 import { sql, ensureAffiliateTables } from '@/lib/db';
+import { sendAdminPayoutAlert } from '@/lib/notify';
 
 function verifySessionToken(token: string): string | null {
   try {
@@ -212,6 +213,21 @@ export async function POST(request: Request) {
         SET withdrawn_amount = withdrawn_amount + ${amount}
         WHERE id = ${affiliate.id}
       `;
+
+      // Kirim Notifikasi Instan ke Telegram & WhatsApp Admin
+      try {
+        await sendAdminPayoutAlert({
+          affiliateName: affiliate.name,
+          affiliateCode: affiliate.code,
+          affiliatePhone: affiliate.whatsapp,
+          amount,
+          bankName: affiliate.bank_name,
+          bankAccountNumber: affiliate.bank_account_number,
+          bankAccountName: affiliate.bank_account_name,
+        });
+      } catch (alertError) {
+        console.warn('[API Affiliate Dashboard] Gagal mengirim alert ke admin:', alertError);
+      }
 
       return NextResponse.json({
         success: true,
