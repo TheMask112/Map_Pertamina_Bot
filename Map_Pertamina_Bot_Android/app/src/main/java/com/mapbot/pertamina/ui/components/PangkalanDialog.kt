@@ -234,23 +234,19 @@ fun PangkalanSelectorDialog(
 
                 OutlinedButton(
                     onClick = {
-                        if (isEnterprise || profiles.isEmpty()) {
-                            editingProfile = null
-                            showAddEditDialog = true
-                        } else {
-                            showUpgradePrompt = true
-                        }
+                        editingProfile = null
+                        showAddEditDialog = true
                     },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp)
                 ) {
                     Icon(
-                        if (isEnterprise || profiles.isEmpty()) Icons.Default.Add else Icons.Default.Lock,
+                        Icons.Default.Add,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(if (isEnterprise || profiles.isEmpty()) "Tambah Pangkalan Baru" else "Tambah Pangkalan (Khusus Enterprise)")
+                    Text("Tambah Pangkalan Baru")
                 }
             }
         },
@@ -386,7 +382,7 @@ fun BatchQueuePangkalanDialog(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        "Silakan hubungi Admin Telegram untuk upgrade ke Paket Enterprise.",
+                        "Paket Starter & Pro dapat berganti pangkalan secara manual di layar utama. Untuk menjalankan antrean seluruh pangkalan secara otomatis sekaligus (Auto-Batch tanpa ditunggu), silakan upgrade ke Paket Enterprise 5.000 Tabung.",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.Gray
                     )

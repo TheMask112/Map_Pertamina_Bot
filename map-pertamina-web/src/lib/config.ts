@@ -56,6 +56,7 @@ export const CONFIG = {
       fitur: [
         '✔ Kuota 500 Tabung NIK',
         '✔ Masa Aktif Lifetime (Tanpa Batas)',
+        '✔ Simpan & Ganti Profil Pangkalan Bebas',
         '✔ Bypass Captcha Otomatis',
         '✔ Dukungan Multi-Batch Excel',
         '✔ Lisensi Terkunci per HWID'
@@ -72,6 +73,7 @@ export const CONFIG = {
       fitur: [
         '✔ Kuota 2.000 Tabung NIK',
         '✔ Masa Aktif Lifetime (Tanpa Batas)',
+        '✔ Simpan & Ganti Profil Pangkalan Bebas',
         '✔ Bypass Captcha Otomatis',
         '✔ Dukungan Multi-Batch Excel',
         '✔ Lisensi Terkunci per HWID',
@@ -89,7 +91,8 @@ export const CONFIG = {
       fitur: [
         '✔ Kuota 5.000 Tabung NIK',
         '✔ Masa Aktif Lifetime (Tanpa Batas)',
-        '✔ 🏢 Fitur Multi-Pangkalan (Bebas Kelola Banyak Akun)',
+        '✔ 🏢 Auto-Batch Semua Pangkalan (Proses Otomatis Sekali Klik)',
+        '✔ Bebas Simpan & Ganti Profil Pangkalan',
         '✔ Bypass Captcha Otomatis',
         '✔ Dukungan Multi-Batch Excel',
         '✔ Lisensi Terkunci per HWID',
