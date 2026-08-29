@@ -2,7 +2,7 @@
 // API Endpoint to Create a New License Order (Integrated with Midtrans QRIS)
 
 import { NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
+import { sql, ensureAffiliateTables } from '@/lib/db';
 import { CONFIG } from '@/lib/config';
 
 export async function POST(request: Request) {
@@ -10,7 +10,8 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}));
     // hwid opsional (dikirim dari Android/Desktop untuk aktivasi otomatis)
     // affiliateCode opsional (dikirim dari URL ref / input referral)
-    const { paket, whatsapp, hwid, affiliateCode } = body;
+    // customerName, pangkalanName, customerType opsional (untuk database customer follow-up)
+    const { paket, whatsapp, hwid, affiliateCode, customerName, pangkalanName, customerType } = body;
 
     // 1. Validasi input parameter
     if (!paket || !whatsapp) {
@@ -19,6 +20,8 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    await ensureAffiliateTables();
 
     const paketKey = paket.toUpperCase();
     const paketDetail = CONFIG.pakets[paketKey];
@@ -71,14 +74,20 @@ export async function POST(request: Request) {
 
     // 5. Simpan data order awal ke database PostgreSQL (Neon)
     const cleanHwid = hwid ? String(hwid).replace(/-/g, '').toUpperCase() : null;
+    const cleanCustomerName = customerName ? String(customerName).trim().slice(0, 100) : null;
+    const cleanPangkalanName = pangkalanName ? String(pangkalanName).trim().slice(0, 150) : null;
+    const cleanCustomerType = customerType ? String(customerType).trim().slice(0, 50) : null;
+
     const result = await sql`
       INSERT INTO orders (
         paket, base_amount, amount, whatsapp, hwid, status, expires_at,
-        affiliate_code, affiliate_markup
+        affiliate_code, affiliate_markup,
+        customer_name, pangkalan_name, customer_type
       )
       VALUES (
         ${paketKey}, ${paketDetail.harga}, ${finalPrice}, ${whatsapp}, ${cleanHwid}, 'PENDING', ${expiresAt},
-        ${validAffiliateCode}, ${affiliateMarkup}
+        ${validAffiliateCode}, ${affiliateMarkup},
+        ${cleanCustomerName}, ${cleanPangkalanName}, ${cleanCustomerType}
       )
       RETURNING id, expires_at
     `;

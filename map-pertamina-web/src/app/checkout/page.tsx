@@ -23,6 +23,10 @@ function CheckoutContent() {
 
   const [step, setStep] = useState(1); // 1: Input HP, 2: QRIS Payment, 3: Success Voucher
   const [whatsapp, setWhatsapp] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [pangkalanName, setPangkalanName] = useState('');
+  const [customerType, setCustomerType] = useState('Pangkalan');
+  const [showOptionalData, setShowOptionalData] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -99,7 +103,10 @@ function CheckoutContent() {
         body: JSON.stringify({
           paket: selectedPaket,
           whatsapp,
-          affiliateCode: affiliateInfo ? affiliateInfo.code : (affiliateCode.trim() || undefined)
+          affiliateCode: affiliateInfo ? affiliateInfo.code : (affiliateCode.trim() || undefined),
+          customerName: customerName.trim() || undefined,
+          pangkalanName: pangkalanName.trim() || undefined,
+          customerType: customerType || undefined
         })
       });
       
@@ -257,6 +264,68 @@ function CheckoutContent() {
                 disabled={loading}
               />
               <span style={styles.inputHelp}>Voucher lisensi dan instruksi akan dikirimkan otomatis ke nomor WA ini.</span>
+            </div>
+
+            {/* DATA PELANGGAN / USAHA (OPSIONAL UNTUK DATABASE & GARANSI) */}
+            <div style={{ marginTop: '4px', marginBottom: '8px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '12px', padding: '12px' }}>
+              <div 
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', userSelect: 'none' }} 
+                onClick={() => setShowOptionalData(!showOptionalData)}
+              >
+                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  🏢 Data Pelanggan / Pangkalan <span style={{ fontSize: '0.7rem', background: 'rgba(148, 163, 184, 0.15)', color: '#94a3b8', padding: '2px 6px', borderRadius: '4px' }}>Opsional</span>
+                </span>
+                <span style={{ fontSize: '0.78rem', color: '#38bdf8', fontWeight: 500 }}>
+                  {showOptionalData ? '▲ Tutup' : '▼ Lengkapi Data'}
+                </span>
+              </div>
+              <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px', marginBottom: showOptionalData ? '12px' : '0', lineHeight: 1.4 }}>
+                💡 Dianjurkan diisi untuk mempermudah bantuan teknis & layanan garansi prioritas.
+              </p>
+
+              {showOptionalData && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '8px' }}>
+                  <div>
+                    <label style={{ fontSize: '0.78rem', color: '#cbd5e1', display: 'block', marginBottom: '4px' }}>Nama Lengkap / Kontak (Opsional)</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Contoh: Budi Santoso"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      disabled={loading}
+                      style={{ padding: '8px 12px', fontSize: '0.85rem' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.78rem', color: '#cbd5e1', display: 'block', marginBottom: '4px' }}>Nama Pangkalan / Agen / Toko (Opsional)</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Contoh: Pangkalan Gas Berkah"
+                      value={pangkalanName}
+                      onChange={(e) => setPangkalanName(e.target.value)}
+                      disabled={loading}
+                      style={{ padding: '8px 12px', fontSize: '0.85rem' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.78rem', color: '#cbd5e1', display: 'block', marginBottom: '4px' }}>Kategori Usaha</label>
+                    <select
+                      className="form-input"
+                      value={customerType}
+                      onChange={(e) => setCustomerType(e.target.value)}
+                      disabled={loading}
+                      style={{ padding: '8px 12px', fontSize: '0.85rem', background: '#0f172a', color: '#fff' }}
+                    >
+                      <option value="Pangkalan">Pangkalan LPG 3Kg</option>
+                      <option value="Agen">Agen / Sub-Penyalur Gas</option>
+                      <option value="Perorangan">Perorangan / Retail</option>
+                      <option value="Lainnya">Lainnya</option>
+                    </select>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* KODE REFERRAL TOGGLE / INPUT */}
