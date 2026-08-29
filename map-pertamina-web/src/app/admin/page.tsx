@@ -87,6 +87,9 @@ interface TelemetryPangkalan {
   isp: string;
   hwid: string;
   app_version: string;
+  devicePangkalanCount?: number;
+  isManagedByJoki?: boolean;
+  deviceAgentsCount?: number;
   last_sync_at: string;
   created_at: string;
 }
@@ -127,7 +130,7 @@ export default function AdminPortal() {
   const [statusFilter, setStatusFilter] = useState('ALL');
 
   // Filter Intelijen & Heatmap
-  const [telemetryStatusFilter, setTelemetryStatusFilter] = useState<'ALL' | 'ACTIVE' | 'DORMANT' | 'LOW_QUOTA'>('ALL');
+  const [telemetryStatusFilter, setTelemetryStatusFilter] = useState<'ALL' | 'ACTIVE' | 'DORMANT' | 'LOW_QUOTA' | 'JOKI_HUB'>('ALL');
   const [selectedIslandFilter, setSelectedIslandFilter] = useState<string>('ALL');
   const [selectedPlatformFilter, setSelectedPlatformFilter] = useState<'ALL' | 'ANDROID' | 'WINDOWS'>('ALL');
   const [sortField, setSortField] = useState<string>('last_sync_at');
@@ -529,6 +532,7 @@ Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long
         if (telemetryStatusFilter === 'ACTIVE' && days >= 3) return false;
         if (telemetryStatusFilter === 'DORMANT' && days < 7) return false;
         if (telemetryStatusFilter === 'LOW_QUOTA' && (Number(p.sisa_kuota_pertamina) || 0) > 150) return false;
+        if (telemetryStatusFilter === 'JOKI_HUB' && (!p.devicePangkalanCount || p.devicePangkalanCount < 2)) return false;
       }
 
       // Filter Island Region
@@ -1903,6 +1907,142 @@ Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long
             </div>
           )}
 
+          {/* 👑 SEKSI ANALISIS JOKI & OPERATOR MULTI-PANGKALAN (AGENCY HUB) */}
+          <div className="glass-card" style={{ padding: '24px', borderRadius: '18px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '18px' }}>
+              <div>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  👑 Analisis Operator &amp; Joki Multi-Pangkalan (Agency / Freelance Hub)
+                </h3>
+                <p style={{ color: '#94a3b8', fontSize: '0.85rem', marginTop: '4px' }}>
+                  Mendeteksi 1 Device (HWID/No HP) yang mengelola beberapa pangkalan dan PT Agen sekaligus. Target bernilai tinggi (*Power Users*) untuk Paket Enterprise &amp; Kemitraan Reseller.
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.82rem', color: '#fbbf24', background: 'rgba(245, 158, 11, 0.15)', padding: '6px 12px', borderRadius: '8px', fontWeight: 800 }}>
+                  👑 {telemetryMetrics?.totalJokiOperators || 0} Joki / Biro Jasa Terdeteksi
+                </span>
+                <span style={{ fontSize: '0.82rem', color: '#34d399', background: 'rgba(52, 211, 153, 0.15)', padding: '6px 12px', borderRadius: '8px', fontWeight: 800 }}>
+                  🏢 {telemetryMetrics?.totalPangkalanUnderJoki || 0} Pangkalan Dikelola
+                </span>
+              </div>
+            </div>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                    <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>No</th>
+                    <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Kontak Operator / Joki</th>
+                    <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Kategori Profil</th>
+                    <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Daftar Pangkalan Dikelola</th>
+                    <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Lintas PT Agen</th>
+                    <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Total Tabung Gabungan</th>
+                    <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Device / Platform</th>
+                    <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Aksi Khusus</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {!telemetryMetrics?.operatorClusters || telemetryMetrics.operatorClusters.filter((d: any) => d.isPowerUser).length === 0 ? (
+                    <tr>
+                      <td colSpan={8} style={{ padding: '24px', textAlign: 'center', color: 'hsl(var(--text-muted))' }}>
+                        Belum terdeteksi device dengan multi-pangkalan. Saat klien joki/freelance menambahkan $\ge 2$ akun di aplikasinya, profil mereka akan terkelompok otomatis di sini.
+                      </td>
+                    </tr>
+                  ) : (
+                    telemetryMetrics.operatorClusters
+                      .filter((dev: any) => dev.isPowerUser)
+                      .map((dev: any, idx: number) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                          <td style={{ padding: '12px 10px', fontWeight: 800, color: '#fbbf24' }}>
+                            #{idx + 1}
+                          </td>
+                          <td style={{ padding: '12px 10px' }}>
+                            <strong style={{ color: '#ffffff' }}>{dev.owner_name || 'Operator Joki'}</strong>
+                            {dev.phone && (
+                              <div style={{ marginTop: '2px' }}>
+                                <a
+                                  href={formatWaUrl(dev.phone, `Halo Bapak/Ibu ${dev.owner_name || ''}, kami dari Layanan Teknis & Kemitraan Bot MAP Pertamina. Kami melihat Anda mengelola ${dev.pangkalanCount} pangkalan LPG 3Kg.`)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{ color: '#38bdf8', fontSize: '0.8rem', textDecoration: 'underline' }}
+                                >
+                                  💬 {dev.phone}
+                                </a>
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding: '12px 10px' }}>
+                            <span style={{
+                              padding: '4px 8px',
+                              borderRadius: '6px',
+                              background: dev.pangkalanCount >= 5 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                              color: dev.pangkalanCount >= 5 ? '#f87171' : '#fbbf24',
+                              fontWeight: 800,
+                              fontSize: '0.78rem'
+                            }}>
+                              {dev.roleLabel}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 10px' }}>
+                            <div style={{ fontWeight: 800, color: '#38bdf8', marginBottom: '4px' }}>
+                              🏢 {dev.pangkalanCount} Pangkalan:
+                            </div>
+                            <div style={{ fontSize: '0.78rem', color: '#cbd5e1', maxWidth: '280px', lineHeight: '1.4' }}>
+                              {dev.pangkalans?.map((p: any) => p.merchant_name).slice(0, 3).join(', ')}
+                              {dev.pangkalans?.length > 3 ? ` (+${dev.pangkalans.length - 3} lainnya)` : ''}
+                            </div>
+                          </td>
+                          <td style={{ padding: '12px 10px', fontSize: '0.82rem' }}>
+                            <span style={{ color: '#a78bfa', fontWeight: 700 }}>
+                              🏢 {dev.agents?.length || 1} PT Agen
+                            </span>
+                            <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
+                              {dev.agents?.slice(0, 2).join(', ')}
+                            </div>
+                          </td>
+                          <td style={{ padding: '12px 10px', fontWeight: 800, color: '#34d399' }}>
+                            {(dev.totalTabung || 0).toLocaleString('id-ID')} Tabung/bln
+                            <div style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 400 }}>
+                              Omset: {formatRupiah(dev.totalOmset || 0)}
+                            </div>
+                          </td>
+                          <td style={{ padding: '12px 10px', fontSize: '0.78rem', color: '#cbd5e1' }}>
+                            <div>{dev.platform || 'ANDROID'}</div>
+                            <div style={{ color: '#64748b' }}>{dev.device_model || '-'}</div>
+                          </td>
+                          <td style={{ padding: '12px 10px' }}>
+                            {dev.phone && (
+                              <a
+                                href={formatWaUrl(dev.phone, `Halo Bapak/Ibu ${dev.owner_name || ''}, kami dari Manajemen Bot MAP Pertamina. Kami melihat Anda mengelola ${dev.pangkalanCount} pangkalan. Kami ingin menawarkan Paket Khusus Borongan Enterprise (Auto-Batch Queue) & Penawaran Kemitraan Reseller dengan bagi hasil menarik. Apakah Anda tertarik?`)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  padding: '6px 10px',
+                                  borderRadius: '8px',
+                                  background: 'rgba(245, 158, 11, 0.2)',
+                                  color: '#fbbf24',
+                                  border: '1px solid rgba(245, 158, 11, 0.4)',
+                                  fontWeight: 700,
+                                  fontSize: '0.78rem',
+                                  textDecoration: 'none',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                              >
+                                💼 Tawari Enterprise / Afiliasi
+                              </a>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           {/* Search, Filter Multi-Dimensi & Export CSV Toolbar */}
           <div className="glass-card" style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1968,6 +2108,21 @@ Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long
                   }}
                 >
                   🔔 Kuota Tipis ({telemetryMetrics?.lowQuotaCount || 0})
+                </button>
+                <button
+                  onClick={() => setTelemetryStatusFilter('JOKI_HUB')}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: telemetryStatusFilter === 'JOKI_HUB' ? '#f59e0b' : 'rgba(255,255,255,0.05)',
+                    color: telemetryStatusFilter === 'JOKI_HUB' ? '#0f172a' : '#cbd5e1',
+                    fontWeight: 700,
+                    fontSize: '0.8rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  👑 Joki / Multi-Pangkalan ({telemetryMetrics?.totalJokiOperators || 0})
                 </button>
               </div>
 
@@ -2100,6 +2255,24 @@ Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long
                           <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
                             ID: {p.merchant_id || '-'}
                           </div>
+                          {(p.devicePangkalanCount ?? 1) >= 2 && (
+                            <div style={{ marginTop: '4px' }}>
+                              <span style={{
+                                fontSize: '0.68rem',
+                                fontWeight: 800,
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                background: 'rgba(245, 158, 11, 0.2)',
+                                color: '#fbbf24',
+                                border: '1px solid rgba(245, 158, 11, 0.4)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px'
+                              }}>
+                                👑 Joki Hub ({p.devicePangkalanCount} Pangkalan • {p.deviceAgentsCount || 1} Agen)
+                              </span>
+                            </div>
+                          )}
                         </td>
                         <td style={{ padding: '14px 12px' }}>
                           <div>{p.owner_name || 'Owner'}</div>
