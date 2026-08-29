@@ -55,6 +55,44 @@ interface PayoutItem {
   processed_at?: string;
 }
 
+interface TelemetryPangkalan {
+  id: string;
+  hwid: string;
+  license_key: string | null;
+  merchant_id: string | null;
+  merchant_name: string | null;
+  owner_name: string | null;
+  agent_id: string | null;
+  agent_name: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  kelurahan: string | null;
+  kecamatan: string | null;
+  kota_kabupaten: string | null;
+  provinsi: string | null;
+  kodepos: string | null;
+  kuota_pertamina_bulanan: number;
+  sisa_kuota_pertamina: number;
+  total_penjualan_pertamina: number;
+  het_daerah: number;
+  estimasi_omset_bulanan: number;
+  estimasi_laba_bulanan: number;
+  device_model: string | null;
+  device_os: string | null;
+  platform: string | null;
+  app_version: string | null;
+  ip_address: string | null;
+  isp: string | null;
+  total_nik_processed: number;
+  success_count: number;
+  invalid_count: number;
+  persen_rumah_tangga: number;
+  persen_usaha_mikro: number;
+  last_sync_at: string;
+  created_at: string;
+}
+
 function formatWaUrl(phone: string, text?: string): string {
   if (!phone) return '#';
   let clean = phone.replace(/\D/g, '');
@@ -73,7 +111,11 @@ export default function AdminPortal() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [affiliates, setAffiliates] = useState<AffiliateItem[]>([]);
   const [payouts, setPayouts] = useState<PayoutItem[]>([]);
-  const [adminTab, setAdminTab] = useState<'orders' | 'affiliates'>('orders');
+  const [telemetryPangkalans, setTelemetryPangkalans] = useState<TelemetryPangkalan[]>([]);
+  const [telemetryMetrics, setTelemetryMetrics] = useState<any>(null);
+  const [telemetrySearch, setTelemetrySearch] = useState('');
+  const [selectedPangkalan, setSelectedPangkalan] = useState<TelemetryPangkalan | null>(null);
+  const [adminTab, setAdminTab] = useState<'orders' | 'affiliates' | 'intelligence'>('orders');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
@@ -104,6 +146,19 @@ export default function AdminPortal() {
         setPayouts(data.payouts || []);
         setIsAuthorized(true);
         localStorage.setItem('gorillaz_admin_passcode', codeToTest.trim());
+
+        // Muat data intelijen pangkalan & telemetri
+        fetch('/api/admin/telemetry', {
+          headers: { 'x-admin-passcode': codeToTest.trim() }
+        })
+        .then(tRes => tRes.ok ? tRes.json() : null)
+        .then(tData => {
+          if (tData?.success) {
+            setTelemetryPangkalans(tData.pangkalans || []);
+            setTelemetryMetrics(tData.metrics || null);
+          }
+        })
+        .catch(() => {});
       } else {
         const errData = await res.json().catch(() => ({}));
         setError(errData.error === 'Unauthorized' ? 'Passcode kunci keamanan salah.' : (errData.error || 'Gagal memuat data admin.'));
@@ -246,6 +301,23 @@ export default function AdminPortal() {
     };
   }, [orders, affiliates, payouts]);
 
+  const filteredTelemetry = useMemo(() => {
+    return telemetryPangkalans.filter(p => {
+      const q = telemetrySearch.toLowerCase().trim();
+      if (!q) return true;
+      const mName = (p.merchant_name || '').toLowerCase();
+      const mId = (p.merchant_id || '').toLowerCase();
+      const oName = (p.owner_name || '').toLowerCase();
+      const aName = (p.agent_name || '').toLowerCase();
+      const city = (p.kota_kabupaten || '').toLowerCase();
+      const prov = (p.provinsi || '').toLowerCase();
+      const phone = (p.phone || '').toLowerCase();
+      const dev = (p.device_model || '').toLowerCase();
+      const os = (p.device_os || '').toLowerCase();
+      return mName.includes(q) || mId.includes(q) || oName.includes(q) || aName.includes(q) || city.includes(q) || prov.includes(q) || phone.includes(q) || dev.includes(q) || os.includes(q);
+    });
+  }, [telemetryPangkalans, telemetrySearch]);
+
   if (!isAuthorized) {
     return (
       <div style={{
@@ -357,6 +429,21 @@ export default function AdminPortal() {
               {metrics.pendingPayoutCount} PENDING
             </span>
           )}
+        </button>
+        <button
+          onClick={() => setAdminTab('intelligence')}
+          style={{
+            padding: '12px 24px',
+            borderRadius: '12px',
+            background: adminTab === 'intelligence' ? '#8b5cf6' : 'rgba(30, 41, 59, 0.6)',
+            color: adminTab === 'intelligence' ? '#ffffff' : '#94a3b8',
+            border: '1px solid rgba(139, 92, 246, 0.3)',
+            fontWeight: 800,
+            fontSize: '0.95rem',
+            cursor: 'pointer'
+          }}
+        >
+          🏢 Intelijen Pasar & Pangkalan ({telemetryPangkalans.length})
         </button>
       </div>
 
@@ -788,6 +875,156 @@ export default function AdminPortal() {
                       </tr>
                     );
                   })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW 3: INTELIJEN PANGKALAN & PASAR */}
+      {adminTab === 'intelligence' && (
+        <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
+          {/* KPI Metrics */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+            gap: '20px'
+          }}>
+            <div className="glass-card">
+              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))', marginBottom: '8px', textTransform: 'uppercase' }}>🏢 Total Pangkalan Terdata</h3>
+              <p style={{ fontSize: '2.2rem', fontWeight: 800, color: '#a78bfa' }}>{telemetryMetrics?.totalPangkalan || telemetryPangkalans.length}</p>
+              <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginTop: '4px' }}>
+                📱 Android: {telemetryMetrics?.androidCount || 0} | 💻 PC: {telemetryMetrics?.windowsCount || 0}
+              </div>
+            </div>
+
+            <div className="glass-card">
+              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))', marginBottom: '8px', textTransform: 'uppercase' }}>🛢️ Total Tabung Pertamina</h3>
+              <p style={{ fontSize: '2.2rem', fontWeight: 800, color: '#38bdf8' }}>
+                {(telemetryMetrics?.totalTabungNasional || 0).toLocaleString('id-ID')}
+              </p>
+              <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginTop: '4px' }}>
+                Alokasi kuota bulanan resmi terdata
+              </div>
+            </div>
+
+            <div className="glass-card">
+              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))', marginBottom: '8px', textTransform: 'uppercase' }}>💰 Estimasi Omset Pasar</h3>
+              <p style={{ fontSize: '2.2rem', fontWeight: 800, color: '#34d399' }}>
+                {formatRupiah(telemetryMetrics?.totalEstimasiOmset || 0)}
+              </p>
+              <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginTop: '4px' }}>
+                Omset perputaran gas pangkalan klien
+              </div>
+            </div>
+
+            <div className="glass-card">
+              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))', marginBottom: '8px', textTransform: 'uppercase' }}>💵 Estimasi Laba Bersih Pangkalan</h3>
+              <p style={{ fontSize: '2.2rem', fontWeight: 800, color: '#fbbf24' }}>
+                {formatRupiah(telemetryMetrics?.totalEstimasiLaba || 0)}
+              </p>
+              <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginTop: '4px' }}>
+                Estimasi margin pangkalan (Rp 2.000/tb)
+              </div>
+            </div>
+          </div>
+
+          {/* Search & Filter */}
+          <div className="glass-card" style={{ padding: '16px 24px', display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="🔍 Cari pangkalan, nama pemilik, PT Agen, kota/provinsi, atau tipe HP/Laptop..."
+              value={telemetrySearch}
+              onChange={(e) => setTelemetrySearch(e.target.value)}
+              style={{ flex: 1, minWidth: '280px', fontSize: '0.95rem' }}
+            />
+            <span style={{ fontSize: '0.85rem', color: 'hsl(var(--text-muted))' }}>
+              Menampilkan {filteredTelemetry.length} dari {telemetryPangkalans.length} pangkalan
+            </span>
+          </div>
+
+          {/* Tabel Intelijen Pangkalan */}
+          <div className="glass-card" style={{ padding: '24px', borderRadius: '16px' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                    <th style={{ padding: '12px', color: 'hsl(var(--text-secondary))' }}>Nama Pangkalan & ID</th>
+                    <th style={{ padding: '12px', color: 'hsl(var(--text-secondary))' }}>Pemilik & No HP</th>
+                    <th style={{ padding: '12px', color: 'hsl(var(--text-secondary))' }}>PT Agen Penyalur</th>
+                    <th style={{ padding: '12px', color: 'hsl(var(--text-secondary))' }}>Wilayah</th>
+                    <th style={{ padding: '12px', color: 'hsl(var(--text-secondary))' }}>Jatah Kuota</th>
+                    <th style={{ padding: '12px', color: 'hsl(var(--text-secondary))' }}>Estimasi Laba</th>
+                    <th style={{ padding: '12px', color: 'hsl(var(--text-secondary))' }}>Device & OS</th>
+                    <th style={{ padding: '12px', color: 'hsl(var(--text-secondary))' }}>Terakhir Aktif</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredTelemetry.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} style={{ padding: '30px', textAlign: 'center', color: 'hsl(var(--text-muted))' }}>
+                        Belum ada data pangkalan tersinkronkan. Data akan otomatis masuk saat bot dijalankan oleh klien.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredTelemetry.map(p => (
+                      <tr key={p.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '14px 12px' }}>
+                          <strong style={{ color: '#ffffff' }}>{p.merchant_name || 'Pangkalan MAP'}</strong>
+                          <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                            ID: {p.merchant_id || '-'}
+                          </div>
+                        </td>
+                        <td style={{ padding: '14px 12px' }}>
+                          <div>{p.owner_name || 'Owner'}</div>
+                          {p.phone && (
+                            <a
+                              href={formatWaUrl(p.phone, `Halo Bapak/Ibu ${p.owner_name || p.merchant_name || ''}, kami dari Layanan Teknis Bot MAP Pertamina.`)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ color: '#38bdf8', fontSize: '0.8rem', textDecoration: 'underline' }}
+                            >
+                              💬 {p.phone}
+                            </a>
+                          )}
+                        </td>
+                        <td style={{ padding: '14px 12px', color: '#e2e8f0' }}>
+                          <strong>{p.agent_name || '-'}</strong>
+                        </td>
+                        <td style={{ padding: '14px 12px', fontSize: '0.82rem' }}>
+                          <div>{p.kota_kabupaten ? `${p.kota_kabupaten}, ${p.provinsi || ''}` : (p.address || '-')}</div>
+                        </td>
+                        <td style={{ padding: '14px 12px', fontWeight: 800, color: '#38bdf8' }}>
+                          {(p.kuota_pertamina_bulanan || 0).toLocaleString('id-ID')} Tabung
+                        </td>
+                        <td style={{ padding: '14px 12px', fontWeight: 800, color: '#34d399' }}>
+                          {formatRupiah(p.estimasi_laba_bulanan || 0)}
+                          <div style={{ fontSize: '0.72rem', color: 'hsl(var(--text-muted))', fontWeight: 400 }}>
+                            Omset: {formatRupiah(p.estimasi_omset_bulanan || 0)}
+                          </div>
+                        </td>
+                        <td style={{ padding: '14px 12px', fontSize: '0.8rem' }}>
+                          <span style={{
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            background: p.platform === 'ANDROID' ? 'rgba(52, 211, 153, 0.15)' : 'rgba(56, 189, 248, 0.15)',
+                            color: p.platform === 'ANDROID' ? '#34d399' : '#38bdf8',
+                            fontWeight: 700,
+                            marginRight: '6px'
+                          }}>
+                            {p.platform || 'ANDROID'}
+                          </span>
+                          <span style={{ color: '#cbd5e1' }}>{p.device_model || '-'}</span>
+                          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{p.device_os || ''}</div>
+                        </td>
+                        <td style={{ padding: '14px 12px', fontSize: '0.8rem', color: 'hsl(var(--text-muted))' }}>
+                          {p.last_sync_at ? new Date(p.last_sync_at).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

