@@ -1304,37 +1304,184 @@ export default function AdminPortal() {
             </div>
           </div>
 
-          {/* 3. 🗺️ HEATMAP SEBARAN PETA WILAYAH INDONESIA (Provinsi) */}
-          {telemetryMetrics?.topProvinces && telemetryMetrics.topProvinces.length > 0 && (
-            <div className="glass-card" style={{ padding: '24px', borderRadius: '18px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' }}>
-                <div>
-                  <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    🗺️ Heatmap Sebaran Pangkalan Per Provinsi di Indonesia
-                  </h3>
-                  <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px' }}>
-                    Konsentrasi sebaran pangkalan klien dan perputaran volume tabung per wilayah provinsi
-                  </p>
-                </div>
-                <span style={{ fontSize: '0.8rem', color: '#a78bfa', background: 'rgba(167, 139, 250, 0.15)', padding: '4px 10px', borderRadius: '8px', fontWeight: 700 }}>
-                  {telemetryMetrics.topProvinces.length} Provinsi Terpetakan
+          {/* 3. 🗺️ PETA VISUAL & HEATMAP SEBARAN WILAYAH INDONESIA */}
+          <div className="glass-card" style={{ padding: '26px', borderRadius: '20px', border: '1px solid rgba(167, 139, 250, 0.3)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
+              <div>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  🗺️ Peta Heatmap Sebaran Pangkalan Se-Indonesia
+                </h3>
+                <p style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '2px' }}>
+                  Visualisasi sebaran pangkalan klien dan perputaran tabung gas LPG 3Kg per kluster kepulauan & provinsi
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.78rem', color: '#34d399', background: 'rgba(52, 211, 153, 0.15)', padding: '4px 10px', borderRadius: '8px', fontWeight: 700 }}>
+                  🟢 Live Telemetri
+                </span>
+                <span style={{ fontSize: '0.78rem', color: '#a78bfa', background: 'rgba(167, 139, 250, 0.15)', padding: '4px 10px', borderRadius: '8px', fontWeight: 700 }}>
+                  {telemetryMetrics?.topProvinces?.length || 0} Provinsi Terdata
                 </span>
               </div>
+            </div>
 
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Ranking</th>
-                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Nama Provinsi</th>
-                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Jumlah Pangkalan</th>
-                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Sebaran (%)</th>
-                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Total Tabung / Bln</th>
-                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Estimasi Omset Regional</th>
+            {/* Visual SVG Map Banner Indonesia */}
+            <div style={{
+              width: '100%',
+              background: 'radial-gradient(ellipse at center, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%)',
+              borderRadius: '16px',
+              padding: '24px 16px',
+              border: '1px solid rgba(255, 255, 255, 0.06)',
+              marginBottom: '20px',
+              textAlign: 'center',
+              position: 'relative',
+              overflow: 'hidden'
+            }}>
+              <svg viewBox="0 0 900 320" style={{ width: '100%', maxHeight: '240px' }}>
+                <defs>
+                  <linearGradient id="mapGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.8" />
+                    <stop offset="50%" stopColor="#818cf8" stopOpacity="0.8" />
+                    <stop offset="100%" stopColor="#c084fc" stopOpacity="0.8" />
+                  </linearGradient>
+                  <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="3" result="blur" />
+                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                  </filter>
+                </defs>
+
+                {/* Grid Koordinat Latar */}
+                <path d="M50 80 H850 M50 160 H850 M50 240 H850 M150 40 V280 M300 40 V280 M450 40 V280 M600 40 V280 M750 40 V280" stroke="rgba(255,255,255,0.03)" strokeWidth="1" strokeDasharray="4 4" />
+
+                {/* Pulau Sumatera */}
+                <path d="M80 60 L140 120 L190 190 L170 210 L120 160 L60 80 Z" fill="rgba(56, 189, 248, 0.25)" stroke="#38bdf8" strokeWidth="1.5" filter="url(#glow)" />
+                <circle cx="120" cy="110" r="5" fill="#38bdf8" />
+                <text x="120" y="95" fill="#e2e8f0" fontSize="11" fontWeight="700" textAnchor="middle">SUMATERA</text>
+
+                {/* Pulau Jawa */}
+                <path d="M190 225 L280 235 L380 245 L420 240 L380 255 L260 250 L190 235 Z" fill="rgba(52, 211, 153, 0.35)" stroke="#34d399" strokeWidth="2" filter="url(#glow)" />
+                <circle cx="250" cy="240" r="7" fill="#34d399" />
+                <circle cx="340" cy="245" r="6" fill="#34d399" />
+                <text x="300" y="275" fill="#34d399" fontSize="12" fontWeight="800" textAnchor="middle">JAWA (Konsentrasi Utama)</text>
+
+                {/* Pulau Kalimantan */}
+                <path d="M280 90 L360 80 L400 130 L380 180 L310 175 L270 140 Z" fill="rgba(251, 191, 36, 0.25)" stroke="#fbbf24" strokeWidth="1.5" filter="url(#glow)" />
+                <circle cx="330" cy="130" r="5" fill="#fbbf24" />
+                <text x="330" y="115" fill="#e2e8f0" fontSize="11" fontWeight="700" textAnchor="middle">KALIMANTAN</text>
+
+                {/* Pulau Sulawesi */}
+                <path d="M440 95 L490 110 L470 150 L510 180 L460 200 L445 150 Z" fill="rgba(167, 139, 250, 0.25)" stroke="#a78bfa" strokeWidth="1.5" filter="url(#glow)" />
+                <circle cx="470" cy="145" r="5" fill="#a78bfa" />
+                <text x="475" y="85" fill="#e2e8f0" fontSize="11" fontWeight="700" textAnchor="middle">SULAWESI</text>
+
+                {/* Bali & Nusa Tenggara */}
+                <path d="M435 245 L460 248 L500 252 L540 255 L535 260 L440 252 Z" fill="rgba(244, 114, 182, 0.3)" stroke="#f472b6" strokeWidth="1.5" />
+                <circle cx="450" cy="248" r="4" fill="#f472b6" />
+                <text x="490" y="275" fill="#e2e8f0" fontSize="10" fontWeight="700" textAnchor="middle">BALI &amp; NUSRA</text>
+
+                {/* Maluku & Papua */}
+                <path d="M570 120 L610 130 L590 170 Z M640 100 L760 90 L800 160 L780 220 L720 230 L650 160 Z" fill="rgba(147, 197, 253, 0.25)" stroke="#93c5fd" strokeWidth="1.5" filter="url(#glow)" />
+                <circle cx="710" cy="150" r="5" fill="#93c5fd" />
+                <text x="715" y="85" fill="#e2e8f0" fontSize="11" fontWeight="700" textAnchor="middle">PAPUA &amp; MALUKU</text>
+              </svg>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '4px' }}>
+                💡 Peta Kepulauan Nusantara: Node warna menandai area aktif pangkalan klien bot MAP Pertamina
+              </div>
+            </div>
+
+            {/* 6 Regional Kepulauan Cards */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+              gap: '14px',
+              marginBottom: '24px'
+            }}>
+              {/* Jawa */}
+              <div style={{ background: 'rgba(52, 211, 153, 0.06)', border: '1px solid rgba(52, 211, 153, 0.2)', padding: '14px', borderRadius: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <strong style={{ color: '#34d399', fontSize: '0.9rem' }}>🏝️ Pulau Jawa &amp; Banten</strong>
+                  <span style={{ fontSize: '0.75rem', color: '#34d399', fontWeight: 700 }}>Prioritas #1</span>
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>Jabar, Jateng, Jatim, DKI, Banten, DIY</div>
+                <div style={{ marginTop: '8px', fontSize: '0.75rem', color: '#94a3b8' }}>Konsentrasi kuota terbesar nasional</div>
+              </div>
+
+              {/* Sumatera */}
+              <div style={{ background: 'rgba(56, 189, 248, 0.06)', border: '1px solid rgba(56, 189, 248, 0.2)', padding: '14px', borderRadius: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <strong style={{ color: '#38bdf8', fontSize: '0.9rem' }}>🏝️ Pulau Sumatera</strong>
+                  <span style={{ fontSize: '0.75rem', color: '#38bdf8', fontWeight: 700 }}>Wilayah #2</span>
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>Sumut, Sumbar, Riau, Sumsel, Lampung, Aceh</div>
+                <div style={{ marginTop: '8px', fontSize: '0.75rem', color: '#94a3b8' }}>Potensi ekspansi B2B agen tinggi</div>
+              </div>
+
+              {/* Kalimantan */}
+              <div style={{ background: 'rgba(251, 191, 36, 0.06)', border: '1px solid rgba(251, 191, 36, 0.2)', padding: '14px', borderRadius: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <strong style={{ color: '#fbbf24', fontSize: '0.9rem' }}>🏝️ Pulau Kalimantan</strong>
+                  <span style={{ fontSize: '0.75rem', color: '#fbbf24', fontWeight: 700 }}>Wilayah #3</span>
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>Kalbar, Kalsel, Kaltim, Kalteng, Kaltara</div>
+                <div style={{ marginTop: '8px', fontSize: '0.75rem', color: '#94a3b8' }}>HET daerah relatif tinggi</div>
+              </div>
+
+              {/* Sulawesi */}
+              <div style={{ background: 'rgba(167, 139, 250, 0.06)', border: '1px solid rgba(167, 139, 250, 0.2)', padding: '14px', borderRadius: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <strong style={{ color: '#a78bfa', fontSize: '0.9rem' }}>🏝️ Pulau Sulawesi</strong>
+                  <span style={{ fontSize: '0.75rem', color: '#a78bfa', fontWeight: 700 }}>Wilayah #4</span>
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>Sulsel, Sulut, Sulteng, Sultra, Gorontalo</div>
+                <div style={{ marginTop: '8px', fontSize: '0.75rem', color: '#94a3b8' }}>Distribusi agen merata</div>
+              </div>
+
+              {/* Bali & Nusra */}
+              <div style={{ background: 'rgba(244, 114, 182, 0.06)', border: '1px solid rgba(244, 114, 182, 0.2)', padding: '14px', borderRadius: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <strong style={{ color: '#f472b6', fontSize: '0.9rem' }}>🏝️ Bali &amp; Nusa Tenggara</strong>
+                  <span style={{ fontSize: '0.75rem', color: '#f472b6', fontWeight: 700 }}>Wilayah #5</span>
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>Bali, NTB, NTT</div>
+                <div style={{ marginTop: '8px', fontSize: '0.75rem', color: '#94a3b8' }}>Dominasi konsumen UMKM/Wisata</div>
+              </div>
+
+              {/* Maluku & Papua */}
+              <div style={{ background: 'rgba(147, 197, 253, 0.06)', border: '1px solid rgba(147, 197, 253, 0.2)', padding: '14px', borderRadius: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <strong style={{ color: '#93c5fd', fontSize: '0.9rem' }}>🏝️ Maluku &amp; Papua</strong>
+                  <span style={{ fontSize: '0.75rem', color: '#93c5fd', fontWeight: 700 }}>Wilayah #6</span>
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>Maluku, Malut, Papua, Papua Barat</div>
+                <div style={{ marginTop: '8px', fontSize: '0.75rem', color: '#94a3b8' }}>Konversi LPG &amp; perintis</div>
+              </div>
+            </div>
+
+            {/* Tabel Sebaran Pangkalan Per Provinsi */}
+            <div style={{ overflowX: 'auto' }}>
+              <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#ffffff', marginBottom: '12px' }}>
+                📋 Rincian Data Klien Per Provinsi:
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                    <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Ranking</th>
+                    <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Nama Provinsi</th>
+                    <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Jumlah Pangkalan</th>
+                    <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Sebaran (%)</th>
+                    <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Total Tabung / Bln</th>
+                    <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Estimasi Omset Regional</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {!telemetryMetrics?.topProvinces || telemetryMetrics.topProvinces.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: 'hsl(var(--text-muted))' }}>
+                        Peta siap menerima data! Pangkalan akan terpetakan otomatis per provinsi saat bot dijalankan oleh klien.
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {telemetryMetrics.topProvinces.map((prov: any, idx: number) => (
+                  ) : (
+                    telemetryMetrics.topProvinces.map((prov: any, idx: number) => (
                       <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                         <td style={{ padding: '12px 10px', fontWeight: 800, color: idx === 0 ? '#fbbf24' : '#94a3b8' }}>
                           #{idx + 1}
@@ -1360,12 +1507,12 @@ export default function AdminPortal() {
                           {formatRupiah(prov.omset || 0)}
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
-          )}
+          </div>
 
           {/* Ranking & Peta Penetrasi PT Agen Penyalur Terbesar */}
           {telemetryMetrics?.topAgents && telemetryMetrics.topAgents.length > 0 && (
