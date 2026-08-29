@@ -158,7 +158,20 @@ export default function AdminPortal() {
       });
       if (res.ok) {
         const data = await res.json();
-        setOrders(data.orders || []);
+        const rawOrders = data.orders || [];
+        const normalizedOrders = rawOrders.map((o: any) => ({
+          ...o,
+          order_id: o.order_id || o.id || '',
+          customer_name: o.customer_name || 'Pelanggan',
+          customer_whatsapp: o.customer_whatsapp || o.whatsapp || '',
+          customer_email: o.customer_email || '',
+          package_type: o.package_type || o.paket || 'STARTER',
+          total_amount: Number(o.total_amount || o.amount || 0),
+          payment_status: (o.payment_status || o.status || 'UNPAID').toUpperCase(),
+          license_key: o.license_key || '',
+          created_at: o.created_at || new Date().toISOString()
+        }));
+        setOrders(normalizedOrders);
         setAffiliates(data.affiliates || []);
         setPayouts(data.payouts || []);
         setIsAuthorized(true);
@@ -448,27 +461,36 @@ Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long
 
   // Filter dan Pencarian Orders
   const filteredOrders = useMemo(() => {
-    return orders.filter(o => {
-      const matchSearch = 
-        o.order_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        o.customer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        o.customer_whatsapp.includes(searchQuery) ||
-        (o.customer_email && o.customer_email.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (o.license_key && o.license_key.toLowerCase().includes(searchQuery.toLowerCase()));
+    return orders.filter((o: any) => {
+      const oId = (o.order_id || o.id || '').toLowerCase();
+      const cName = (o.customer_name || '').toLowerCase();
+      const cWa = (o.customer_whatsapp || o.whatsapp || '');
+      const cEmail = (o.customer_email || '').toLowerCase();
+      const lKey = (o.license_key || '').toLowerCase();
+      const pStatus = (o.payment_status || o.status || 'UNPAID').toUpperCase();
+      const q = (searchQuery || '').toLowerCase().trim();
 
-      const matchStatus = statusFilter === 'ALL' || o.payment_status === statusFilter;
+      const matchSearch = 
+        !q ||
+        oId.includes(q) ||
+        cName.includes(q) ||
+        cWa.includes(q) ||
+        cEmail.includes(q) ||
+        lKey.includes(q);
+
+      const matchStatus = statusFilter === 'ALL' || pStatus === statusFilter;
       return matchSearch && matchStatus;
     });
   }, [orders, searchQuery, statusFilter]);
 
   // Metrik Agregat Transaksi Lisensi
   const metrics = useMemo(() => {
-    const paidOrders = orders.filter(o => o.payment_status === 'PAID');
-    const totalRev = paidOrders.reduce((acc, curr) => acc + Number(curr.total_amount), 0);
+    const paidOrders = orders.filter((o: any) => (o.payment_status === 'PAID' || o.status === 'PAID'));
+    const totalRev = paidOrders.reduce((acc, curr: any) => acc + Number(curr.total_amount || curr.amount || 0), 0);
     const successRate = orders.length > 0 ? ((paidOrders.length / orders.length) * 100).toFixed(1) : '0';
-    const totalAffiliates = affiliates.length;
-    const pendingPayouts = payouts.filter(p => p.status === 'PENDING');
-    const pendingPayoutAmount = pendingPayouts.reduce((acc, curr) => acc + Number(curr.amount), 0);
+    const totalAffiliates = (affiliates || []).length;
+    const pendingPayouts = (payouts || []).filter((p: any) => (p.status || '').toUpperCase() === 'PENDING');
+    const pendingPayoutAmount = pendingPayouts.reduce((acc, curr: any) => acc + Number(curr.amount || 0), 0);
 
     return {
       revenue: totalRev,
