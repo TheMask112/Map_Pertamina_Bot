@@ -15,6 +15,9 @@ interface Order {
   voucher_code: string | null;
   hwid: string | null;
   license_key: string | null;
+  kuota_total?: number;
+  kuota_terpakai?: number;
+  sisa_kuota?: number;
   affiliate_code: string | null;
   created_at: string;
   expires_at: string;
@@ -429,19 +432,20 @@ export default function AdminPortal() {
               <thead>
                 <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', background: 'rgba(255, 255, 255, 0.01)' }}>
                   <th style={{ padding: '16px 24px', color: 'hsl(var(--text-secondary))', fontWeight: 600 }}>Tanggal</th>
-                  <th style={{ padding: '16px 24px', color: 'hsl(var(--text-secondary))', fontWeight: 600 }}>WhatsApp</th>
+                  <th style={{ padding: '16px 24px', color: 'hsl(var(--text-secondary))', fontWeight: 600 }}>WhatsApp & Pelanggan</th>
                   <th style={{ padding: '16px 24px', color: 'hsl(var(--text-secondary))', fontWeight: 600 }}>Paket</th>
+                  <th style={{ padding: '16px 24px', color: 'hsl(var(--text-secondary))', fontWeight: 600 }}>Sisa Kuota</th>
                   <th style={{ padding: '16px 24px', color: 'hsl(var(--text-secondary))', fontWeight: 600 }}>Nominal</th>
                   <th style={{ padding: '16px 24px', color: 'hsl(var(--text-secondary))', fontWeight: 600 }}>Mitra Ref</th>
                   <th style={{ padding: '16px 24px', color: 'hsl(var(--text-secondary))', fontWeight: 600 }}>Status</th>
-                  <th style={{ padding: '16px 24px', color: 'hsl(var(--text-secondary))', fontWeight: 600 }}>Voucher Code</th>
+                  <th style={{ padding: '16px 24px', color: 'hsl(var(--text-secondary))', fontWeight: 600 }}>Voucher / HWID</th>
                   <th style={{ padding: '16px 24px', color: 'hsl(var(--text-secondary))', fontWeight: 600, textAlign: 'center' }}>Aksi</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ padding: '40px', textAlign: 'center', color: 'hsl(var(--text-muted))' }}>
+                    <td colSpan={9} style={{ padding: '40px', textAlign: 'center', color: 'hsl(var(--text-muted))' }}>
                       Tidak ada data order ditemukan.
                     </td>
                   </tr>
@@ -486,11 +490,36 @@ export default function AdminPortal() {
                           borderRadius: '6px',
                           fontSize: '0.8rem',
                           fontWeight: 600,
-                          background: o.paket === 'PRO' ? 'hsla(var(--accent), 0.15)' : 'hsla(var(--primary), 0.15)',
-                          color: o.paket === 'PRO' ? 'hsl(var(--accent))' : 'hsl(var(--primary))'
+                          background: o.paket === 'PRO' ? 'hsla(var(--accent), 0.15)' : o.paket === 'ENTERPRISE' ? 'rgba(168, 85, 247, 0.15)' : 'hsla(var(--primary), 0.15)',
+                          color: o.paket === 'PRO' ? 'hsl(var(--accent))' : o.paket === 'ENTERPRISE' ? '#c084fc' : 'hsl(var(--primary))'
                         }}>
                           {o.paket}
                         </span>
+                      </td>
+                      <td style={{ padding: '18px 24px' }}>
+                        {o.status === 'PAID' || o.status === 'REDEEMED' ? (
+                          <div>
+                            <div style={{
+                              fontWeight: 800,
+                              fontSize: '0.92rem',
+                              color: (o.sisa_kuota ?? 0) <= 50 ? '#ef4444' : (o.sisa_kuota ?? 0) <= 200 ? '#facc15' : '#34d399',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px'
+                            }}>
+                              <span>{o.sisa_kuota ?? o.kuota_total ?? 500}</span>
+                              <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 400 }}>/ {o.kuota_total ?? 500}</span>
+                              {(o.sisa_kuota ?? 0) <= 50 && (
+                                <span style={{ fontSize: '0.68rem', padding: '1px 5px', borderRadius: '4px', background: 'rgba(239,68,68,0.2)', color: '#f87171', fontWeight: 800 }}>MENIPIS</span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '2px' }}>
+                              Terpakai: {o.kuota_terpakai || 0} NIK
+                            </div>
+                          </div>
+                        ) : (
+                          <span style={{ color: '#64748b', fontSize: '0.8rem' }}>-</span>
+                        )}
                       </td>
                       <td style={{ padding: '18px 24px', fontWeight: 700 }}>
                         {formatRupiah(o.amount)}
@@ -545,11 +574,11 @@ export default function AdminPortal() {
                                 alert('License Key disalin!');
                               }}
                             >
-                              🔑 Salin Lisensi
+                              📋 Salin Key
                             </button>
                           </div>
                         )}
-                        {!o.voucher_code && !o.license_key && '-'}
+                        {!o.voucher_code && !o.license_key && !o.hwid && '-'}
                       </td>
                       <td style={{ padding: '18px 24px', textAlign: 'center' }}>
                         {o.status === 'PENDING' || o.status === 'EXPIRED' ? (
