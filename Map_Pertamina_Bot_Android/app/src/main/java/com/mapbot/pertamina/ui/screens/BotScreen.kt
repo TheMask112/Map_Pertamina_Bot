@@ -136,9 +136,13 @@ fun BotScreen(onNavigateBack: () -> Unit) {
                                 Button(
                                     onClick = {
                                         if (SessionData.loadedNikList.isNotEmpty()) {
+                                            val credStore = com.mapbot.pertamina.security.CredentialStore(context)
+                                            val phoneToUse = SessionData.phone.ifBlank { credStore.getPhone() }
+                                            val passToUse = SessionData.pass.ifBlank { credStore.getPass() }
+                                            
                                             com.mapbot.pertamina.engine.BotManager.botEngine?.start(
-                                                SessionData.phone,
-                                                SessionData.pass,
+                                                phoneToUse,
+                                                passToUse,
                                                 SessionData.loadedNikList
                                             )
                                         }

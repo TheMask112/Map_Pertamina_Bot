@@ -10,6 +10,8 @@
 -dontwarn org.apache.xmlbeans.**
 -dontwarn org.openxmlformats.**
 -dontwarn schemaorg_apache_xmlbeans.**
+-dontwarn com.google.errorprone.annotations.**
+-dontwarn com.google.crypto.tink.**
 
 -keep class org.apache.poi.** { *; }
 -keep interface org.apache.poi.** { *; }

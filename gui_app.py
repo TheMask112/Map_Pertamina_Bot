@@ -332,32 +332,62 @@ class MainScreen(ctk.CTkFrame):
         self.combo_captcha.grid(row=3, column=1, padx=(12, 0), pady=4)
 
         # Separator line
-        ctk.CTkFrame(sg, fg_color=C_BORDER, height=1).grid(row=4, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        ctk.CTkFrame(sg, fg_color=C_BORDER, height=1).grid(row=4, column=0, columnspan=2, sticky="ew", pady=(6, 6))
 
-        ctk.CTkLabel(sg, text="Username/HP:", font=ctk.CTkFont(size=12), text_color=C_MUTED).grid(row=5, column=0, sticky="w", pady=4)
+        # Multi-Pangkalan Profile Row
+        ctk.CTkLabel(sg, text="Pangkalan:", font=ctk.CTkFont(size=12, weight="bold"), text_color=C_GOLD).grid(row=5, column=0, sticky="w", pady=4)
+        p_frame = ctk.CTkFrame(sg, fg_color="transparent")
+        p_frame.grid(row=5, column=1, sticky="w", pady=4)
+
+        self.combo_pangkalan = ctk.CTkComboBox(
+            p_frame,
+            values=["Pangkalan Utama"],
+            width=180, height=32,
+            fg_color=C_BG, border_color=C_BORDER, button_color=C_ACCENT,
+            text_color=C_TEXT, font=ctk.CTkFont(size=12),
+            command=self._on_pangkalan_selected,
+        )
+        self.combo_pangkalan.pack(side="left")
+
+        ctk.CTkButton(
+            p_frame, text="➕", width=32, height=32,
+            fg_color=C_BORDER, hover_color=C_ACCENT, text_color=C_TEXT,
+            font=ctk.CTkFont(size=13),
+            command=self._add_new_pangkalan,
+        ).pack(side="left", padx=(6, 2))
+
+        self.btn_del_pangkalan = ctk.CTkButton(
+            p_frame, text="🗑", width=32, height=32,
+            fg_color=C_BORDER, hover_color=C_DANGER, text_color=C_TEXT,
+            font=ctk.CTkFont(size=13),
+            command=self._delete_current_pangkalan,
+        )
+        self.btn_del_pangkalan.pack(side="left", padx=2)
+
+        ctk.CTkLabel(sg, text="Username/HP:", font=ctk.CTkFont(size=12), text_color=C_MUTED).grid(row=6, column=0, sticky="w", pady=4)
         self.entry_username = ctk.CTkEntry(
             sg, width=200, height=32,
             fg_color=C_BG, border_color=C_BORDER, text_color=C_TEXT,
             font=ctk.CTkFont(size=12),
             placeholder_text="Nomor HP atau Email",
         )
-        self.entry_username.grid(row=5, column=1, padx=(12, 0), pady=4, sticky="w")
+        self.entry_username.grid(row=6, column=1, padx=(12, 0), pady=4, sticky="w")
 
-        ctk.CTkLabel(sg, text="PIN:", font=ctk.CTkFont(size=12), text_color=C_MUTED).grid(row=6, column=0, sticky="w", pady=4)
+        ctk.CTkLabel(sg, text="PIN:", font=ctk.CTkFont(size=12), text_color=C_MUTED).grid(row=7, column=0, sticky="w", pady=4)
         self.entry_password = ctk.CTkEntry(
             sg, width=200, height=32, show="*",
             fg_color=C_BG, border_color=C_BORDER, text_color=C_TEXT,
             font=ctk.CTkFont(size=12),
             placeholder_text="PIN (6 digit)",
         )
-        self.entry_password.grid(row=6, column=1, padx=(12, 0), pady=4, sticky="w")
+        self.entry_password.grid(row=7, column=1, padx=(12, 0), pady=4, sticky="w")
 
         ctk.CTkButton(
-            sg, text="Simpan Credentials", height=28, width=140,
+            sg, text="Simpan Profil Pangkalan", height=28, width=170,
             fg_color=C_BORDER, hover_color=C_BG, text_color=C_MUTED,
             font=ctk.CTkFont(size=11),
             command=self._save_credentials,
-        ).grid(row=7, column=0, columnspan=2, pady=(4, 8), sticky="e")
+        ).grid(row=8, column=0, columnspan=2, pady=(4, 8), sticky="e")
 
         self._load_saved_credentials()
         btn_card = ctk.CTkFrame(left, fg_color="transparent")
@@ -850,26 +880,129 @@ class MainScreen(ctk.CTkFrame):
         print("[INFO] File hasil dihapus. Sesi direset.")
         self._load_nik_data()
 
+    def _refresh_pangkalan_dropdown(self):
+        """Memuat daftar pangkalan ke ComboBox."""
+        from credentials import get_pangkalan_profiles, get_active_pangkalan
+        profiles = get_pangkalan_profiles()
+        if not profiles:
+            self.combo_pangkalan.configure(values=["Pangkalan Utama"])
+            self.combo_pangkalan.set("Pangkalan Utama")
+            return
+
+        names = [p.get("name", "Pangkalan") for p in profiles]
+        self.combo_pangkalan.configure(values=names)
+        active = get_active_pangkalan()
+        if active and active.get("name") in names:
+            self.combo_pangkalan.set(active["name"])
+        else:
+            self.combo_pangkalan.set(names[0])
+
+    def _on_pangkalan_selected(self, choice: str):
+        """Saat user memilih nama pangkalan di dropdown."""
+        from credentials import get_pangkalan_profiles, set_active_pangkalan
+        profiles = get_pangkalan_profiles()
+        match = next((p for p in profiles if p.get("name") == choice), None)
+        if match:
+            set_active_pangkalan(match["id"])
+            self.entry_username.delete(0, "end")
+            self.entry_username.insert(0, match.get("username", ""))
+            self.entry_password.delete(0, "end")
+            self.entry_password.insert(0, match.get("password", ""))
+            self.lbl_status.configure(text=f"● Beralih ke pangkalan: {choice}", text_color=C_SUCCESS)
+            print(f"[PANGKALAN] Aktif: {choice}")
+
+    def _add_new_pangkalan(self):
+        """Tambah pangkalan baru dengan validasi tier lisensi Enterprise."""
+        from license_manager import can_use_multi_pangkalan, verify_license
+        from credentials import get_pangkalan_profiles, add_or_update_pangkalan
+        import tkinter.messagebox as mb
+
+        # Pengecekan Hak Akses Multi-Pangkalan (Eksklusif Enterprise 5000)
+        profiles = get_pangkalan_profiles()
+        if len(profiles) >= 1 and not can_use_multi_pangkalan(self.hwid):
+            valid, _, payload = verify_license(self.hwid)
+            cur_paket = payload.get("paket", "STARTER") if valid and payload else "STARTER"
+            mb.showinfo(
+                "Fitur Enterprise",
+                f"🏢 Fitur Multi-Pangkalan (Kelola Banyak Akun) eksklusif untuk Paket Enterprise 5.000 Tabung.\n\n"
+                f"Paket aktif Anda: {cur_paket}.\n"
+                f"Silakan hubungi Admin Telegram untuk upgrade lisensi ke Paket Enterprise."
+            )
+            return
+
+        # Simple Dialog Input Nama Pangkalan Baru
+        import tkinter.simpledialog as sd
+        name = sd.askstring("Pangkalan Baru", "Masukkan Nama Pangkalan Baru:\n(Contoh: Pangkalan Gas Berkah 2)")
+        if not name or not name.strip():
+            return
+
+        new_p = add_or_update_pangkalan(name.strip(), "", "")
+        self._refresh_pangkalan_dropdown()
+        self.combo_pangkalan.set(name.strip())
+        self.entry_username.delete(0, "end")
+        self.entry_password.delete(0, "end")
+        self.lbl_status.configure(text=f"✓ Pangkalan '{name.strip()}' dibuat. Silakan isi Username & PIN.", text_color=C_SUCCESS)
+        print(f"[PANGKALAN] Berhasil menambahkan pangkalan: {name.strip()}")
+
+    def _delete_current_pangkalan(self):
+        """Hapus profil pangkalan aktif."""
+        from credentials import get_pangkalan_profiles, get_active_pangkalan, delete_pangkalan
+        import tkinter.messagebox as mb
+
+        profiles = get_pangkalan_profiles()
+        if len(profiles) <= 1:
+            mb.showwarning("Perhatian", "Tidak dapat menghapus satu-satunya profil pangkalan tersimpan.")
+            return
+
+        active = get_active_pangkalan()
+        if not active:
+            return
+
+        if not mb.askyesno("Hapus Pangkalan", f"Apakah Anda yakin ingin menghapus profil '{active.get('name')}'?"):
+            return
+
+        delete_pangkalan(active["id"])
+        self._refresh_pangkalan_dropdown()
+        self._load_saved_credentials()
+        self.lbl_status.configure(text="✓ Profil pangkalan dihapus", text_color=C_MUTED)
+
     def _save_credentials(self):
-        """Simpan username & password ke credentials.json."""
-        from credentials import save_credentials
+        """Simpan profil username & password pangkalan aktif."""
+        from credentials import get_active_pangkalan, add_or_update_pangkalan, save_credentials
         username = self.entry_username.get().strip()
         password = self.entry_password.get().strip()
+        active = get_active_pangkalan()
+        p_name = active.get("name") if active else self.combo_pangkalan.get().strip()
+
         if username and password:
+            if active:
+                add_or_update_pangkalan(p_name, username, password, profile_id=active.get("id"))
+            else:
+                add_or_update_pangkalan(p_name, username, password)
             save_credentials(username, password)
-            self.lbl_status.configure(text="✓ Credentials tersimpan", text_color=C_SUCCESS)
-            print("[INFO] Credentials saved")
+            self.lbl_status.configure(text=f"✓ Profil '{p_name}' tersimpan", text_color=C_SUCCESS)
+            print(f"[INFO] Profil pangkalan '{p_name}' tersimpan")
         else:
             self.lbl_status.configure(text="⚠ Isi username dan PIN", text_color=C_WARNING)
 
     def _load_saved_credentials(self):
-        """Load credentials tersimpan ke UI."""
-        from credentials import load_credentials
-        username, password = load_credentials()
-        if username:
-            self.entry_username.insert(0, username)
-        if password:
-            self.entry_password.insert(0, password)
+        """Load credentials pangkalan aktif ke UI."""
+        self._refresh_pangkalan_dropdown()
+        from credentials import get_active_pangkalan, load_credentials
+        active = get_active_pangkalan()
+        if active:
+            self.entry_username.delete(0, "end")
+            self.entry_username.insert(0, active.get("username", ""))
+            self.entry_password.delete(0, "end")
+            self.entry_password.insert(0, active.get("password", ""))
+        else:
+            u, p = load_credentials()
+            if u:
+                self.entry_username.delete(0, "end")
+                self.entry_username.insert(0, u)
+            if p:
+                self.entry_password.delete(0, "end")
+                self.entry_password.insert(0, p)
 
     def _start_bot(self):
         # AUTO-SAVE credentials sebelum bot mulai

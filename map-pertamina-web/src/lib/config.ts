@@ -89,6 +89,7 @@ export const CONFIG = {
       fitur: [
         '✔ Kuota 5.000 Tabung NIK',
         '✔ Masa Aktif Lifetime (Tanpa Batas)',
+        '✔ 🏢 Fitur Multi-Pangkalan (Bebas Kelola Banyak Akun)',
         '✔ Bypass Captcha Otomatis',
         '✔ Dukungan Multi-Batch Excel',
         '✔ Lisensi Terkunci per HWID',
