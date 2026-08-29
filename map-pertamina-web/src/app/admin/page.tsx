@@ -891,8 +891,10 @@ Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long
                           {o.license_key ? (
                             <button
                               onClick={() => {
-                                navigator.clipboard.writeText(o.license_key);
-                                alert('✓ Kunci lisensi berhasil disalin ke clipboard!');
+                                if (o.license_key) {
+                                  navigator.clipboard.writeText(o.license_key);
+                                  alert('✓ Kunci lisensi berhasil disalin ke clipboard!');
+                                }
                               }}
                               title="Klik untuk menyalin Kunci Lisensi"
                               style={{
