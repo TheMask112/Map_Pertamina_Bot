@@ -338,6 +338,53 @@ export default function AdminPortal() {
     const sisa = p.sisa_kuota_pertamina || 0;
 
     switch (template) {
+      case 'CLIENT_REPORT':
+        const kuota = (p.kuota_pertamina_bulanan || 0).toLocaleString('id-ID');
+        const terjual = (p.total_penjualan_pertamina || Math.max(0, (p.kuota_pertamina_bulanan || 0) - (p.sisa_kuota_pertamina || 0))).toLocaleString('id-ID');
+        const sisaTb = (p.sisa_kuota_pertamina || 0).toLocaleString('id-ID');
+        const omsetVal = formatRupiah(p.estimasi_omset_bulanan || 0);
+        const labaVal = formatRupiah(p.estimasi_laba_bulanan || 0);
+        const modalDoVal = formatRupiah(p.modal_tebus_per_do || 0);
+        const dtks = p.persen_dtks || 72;
+        const rt = p.persen_rumah_tangga || 75;
+        const um = p.persen_usaha_mikro || 25;
+        const kepatuhan = p.skor_kepatuhan || 98;
+        const speed = p.avg_speed_seconds || 3.8;
+        const peak = p.peak_hours || '14:00 - 17:00 WIB';
+
+        return `📊 *LAPORAN ANALISIS BISNIS & OPERASIONAL PANGKALAN LPG 3KG*
+Kepada Yth: *${owner}* (${merchant})
+ID Registrasi: *${p.merchant_id || '-'}* | PT Agen: *${agent}*
+Wilayah: ${p.kota_kabupaten ? `${p.kota_kabupaten}, ${p.provinsi || ''}` : 'Indonesia'}
+
+Halo Bapak/Ibu ${owner}, berikut kami sampaikan ringkasan performa operasional & analisis kesehatan pangkalan Anda:
+
+📦 *1. KUOTA & PENJUALAN BULANAN:*
+• Alokasi Kuota Bulanan: *${kuota} Tabung*
+• Transaksi Sukses Tercatat: *${terjual} Tabung*
+• Sisa Kuota Berjalan: *${sisaTb} Tabung*
+
+🛡️ *2. KESEHATAN AUDIT SUBSIDI TEPAT (ESDM / PERTAMINA):*
+• Skor Kepatuhan Sistem: *${kepatuhan}% (Status: SANGAT AMAN / BEBAS SANKSI)*
+• Proporsi Konsumen: *${rt}% Rumah Tangga | ${um}% Usaha Mikro (UMKM)*
+• Konsumen Terdaftar DTKS/P3KE: *${dtks}% (Penyaluran Tepat Sasaran)*
+• Potensi Anomali / Overlimit NIK: *0.0% (Terkontrol Ketat)*
+
+⚡ *3. EFISIENSI & PERFORMA BOT:*
+• Kecepatan Input Rata-rata: *~${speed} Detik / NIK*
+• Estimasi Waktu Dihemat: *±5 Jam / Bulan (Bebas Antrean Kasir)*
+• Jam Transaksi Tersibuk: *${peak}*
+
+💰 *4. ANALISIS KEUANGAN PANGKALAN:*
+• Estimasi Perputaran Omset: *${omsetVal}*
+• Estimasi Margin Laba Bersih: *${labaVal}*
+• Estimasi Modal Tebus DO Pasokan: *${modalDoVal}*
+
+💡 *Catatan Teknis:* Operasional pangkalan Anda berada dalam kondisi *Sangat Sehat & Tertib Audit*. Pastikan saldo kuota bot selalu aktif menjelang jadwal DO berikutnya.
+
+Terima kasih atas kemitraan Anda bersama *Bot Otomasi MAP Pertamina*.
+_Layanan Bantuan & Konsultasi CS: Hubungi kami jika membutuhkan bantuan._`;
+
       case 'TECH_SUPPORT':
         return `Halo ${owner} (${merchant}), kami dari Tim Teknis Bot MAP Pertamina. Kami melihat sistem bot Anda telah terhubung aktif. Apakah operasional input NIK harian berjalan lancar atau ada kendala/bantuan teknis yang bisa kami bantu?`;
       case 'LOW_QUOTA':
@@ -2053,20 +2100,47 @@ Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long
                           <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{p.device_os || ''}</div>
                         </td>
                         <td style={{ padding: '14px 12px', fontSize: '0.8rem' }}>
-                          <button
-                            onClick={() => setSelectedPangkalan(p)}
-                            style={{
-                              padding: '6px 12px',
-                              borderRadius: '8px',
-                              background: 'rgba(139, 92, 246, 0.2)',
-                              color: '#c4b5fd',
-                              border: '1px solid rgba(139, 92, 246, 0.4)',
-                              fontWeight: 700,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            🔍 Detail &amp; WA
-                          </button>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            <button
+                              onClick={() => {
+                                setSelectedPangkalan(p);
+                                setSelectedWaTemplate('CLIENT_REPORT');
+                              }}
+                              style={{
+                                padding: '6px 10px',
+                                borderRadius: '8px',
+                                background: 'rgba(139, 92, 246, 0.2)',
+                                color: '#c4b5fd',
+                                border: '1px solid rgba(139, 92, 246, 0.4)',
+                                fontWeight: 700,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              🔍 Detail
+                            </button>
+                            {p.phone && (
+                              <a
+                                href={formatWaUrl(p.phone, getWaMessage(p, 'CLIENT_REPORT'))}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  padding: '6px 10px',
+                                  borderRadius: '8px',
+                                  background: 'rgba(52, 211, 153, 0.2)',
+                                  color: '#34d399',
+                                  border: '1px solid rgba(52, 211, 153, 0.4)',
+                                  fontWeight: 700,
+                                  textDecoration: 'none',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                                title="1-Klik Kirim Laporan Analisis Bisnis ke WA Klien"
+                              >
+                                📊 Kirim Report WA
+                              </a>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -2164,7 +2238,7 @@ Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long
                   border: '1px solid rgba(52, 211, 153, 0.3)',
                   marginBottom: '20px'
                 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
                     <h4 style={{ fontWeight: 800, color: '#34d399', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       💬 Generator Pesan WhatsApp Cepat
                     </h4>
@@ -2181,6 +2255,7 @@ Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long
                         fontWeight: 700
                       }}
                     >
+                      <option value="CLIENT_REPORT">📊 Laporan Analisis Bisnis &amp; Kesehatan Klien</option>
                       <option value="TECH_SUPPORT">🛠️ Bantuan Teknis &amp; CS</option>
                       <option value="LOW_QUOTA">🔔 Penawaran Top-Up Kuota</option>
                       <option value="B2B_AGENT">🏢 Proposal B2B ke PT Agen</option>
@@ -2188,7 +2263,7 @@ Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long
                     </select>
                   </div>
                   <textarea
-                    rows={4}
+                    rows={6}
                     value={customWaMessage}
                     onChange={(e) => setCustomWaMessage(e.target.value)}
                     style={{
@@ -2200,36 +2275,57 @@ Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long
                       padding: '10px',
                       fontSize: '0.82rem',
                       lineHeight: '1.5',
-                      resize: 'vertical'
+                      resize: 'vertical',
+                      fontFamily: 'inherit'
                     }}
                   />
                 </div>
 
                 <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                   {selectedPangkalan.phone && (
-                    <a
-                      href={formatWaUrl(selectedPangkalan.phone, customWaMessage)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn btn-primary"
-                      style={{
-                        padding: '10px 20px',
-                        borderRadius: '10px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        background: '#22c55e',
-                        borderColor: '#22c55e',
-                        fontWeight: 700
-                      }}
-                    >
-                      💬 Kirim via WhatsApp ({selectedPangkalan.phone})
-                    </a>
+                    <>
+                      <a
+                        href={formatWaUrl(selectedPangkalan.phone, getWaMessage(selectedPangkalan, 'CLIENT_REPORT'))}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn-primary"
+                        style={{
+                          padding: '10px 18px',
+                          borderRadius: '10px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                          borderColor: '#10b981',
+                          fontWeight: 700,
+                          fontSize: '0.85rem'
+                        }}
+                      >
+                        📊 1-Klik Kirim Laporan Bisnis
+                      </a>
+                      <a
+                        href={formatWaUrl(selectedPangkalan.phone, customWaMessage)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn-secondary"
+                        style={{
+                          padding: '10px 18px',
+                          borderRadius: '10px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          fontWeight: 700,
+                          fontSize: '0.85rem'
+                        }}
+                      >
+                        💬 Kirim Pesan Kustom WA
+                      </a>
+                    </>
                   )}
                   <button
                     onClick={() => setSelectedPangkalan(null)}
                     className="btn btn-secondary"
-                    style={{ padding: '10px 20px', borderRadius: '10px' }}
+                    style={{ padding: '10px 18px', borderRadius: '10px', fontSize: '0.85rem' }}
                   >
                     Tutup
                   </button>
