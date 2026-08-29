@@ -687,6 +687,23 @@ class PageInteractor(private val wvManager: WebViewManager) {
 
             val bText = getBodyText().lowercase()
 
+            // 0a. Modal "Segera Lengkapi NIB" / "Perbarui Data Pelanggan" Usaha Mikro
+            if (bText.contains("segera lengkapi nib") || 
+                bText.contains("lengkapi nib") || 
+                bText.contains("nanti saja") || 
+                isElementVisibleByText("NANTI SAJA, LANJUT PENJUALAN") || 
+                isElementVisibleByText("NANTI SAJA")) {
+                dismissKeyboard()
+                val clicked = clickButtonByText("NANTI SAJA, LANJUT PENJUALAN") ||
+                              clickButtonByText("NANTI SAJA, LANJUTKAN PENJUALAN") ||
+                              clickButtonByText("NANTI SAJA") ||
+                              clickButtonByText("LANJUT PENJUALAN")
+                if (clicked) {
+                    delay(1500)
+                    continue
+                }
+            }
+
             // 1. Modal Sukses "Data Pelanggan berhasil diperbarui" (Prioritas Utama)
             if (bText.contains("berhasil diperbarui") || isElementVisibleByText("LANJUTKAN KE TRANSAKSI")) {
                 dismissKeyboard()
