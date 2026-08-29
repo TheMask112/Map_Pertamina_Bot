@@ -1863,11 +1863,12 @@ Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long
                     <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
                       <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Ranking</th>
                       <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Nama PT Agen Penyalur</th>
-                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Pangkalan Kita</th>
-                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Penetrasi Agen</th>
-                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>🎯 Sisa Potensi Belum Terjamah</th>
+                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Pangkalan Klien Kita</th>
+                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Estimasi Jaringan Agen</th>
+                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Penetrasi Bot (%)</th>
+                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>🎯 Sisa Potensi Borongan</th>
                       <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Volume Tabung Klien</th>
-                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Estimasi Omset</th>
+                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Aksi Target B2B</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1877,10 +1878,13 @@ Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long
                           #{idx + 1}
                         </td>
                         <td style={{ padding: '12px 10px', fontWeight: 700, color: '#ffffff' }}>
-                          {ag.name}
+                          🏢 {ag.name}
                         </td>
                         <td style={{ padding: '12px 10px', fontWeight: 800, color: '#38bdf8' }}>
                           {ag.count} Pangkalan
+                        </td>
+                        <td style={{ padding: '12px 10px', color: '#cbd5e1' }}>
+                          ~{ag.estTotalPangkalan || 40} Pangkalan
                         </td>
                         <td style={{ padding: '12px 10px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1893,11 +1897,29 @@ Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long
                         <td style={{ padding: '12px 10px', fontWeight: 700, color: '#fbbf24' }}>
                           +{ag.sisaPotensi || 35} Pangkalan
                         </td>
-                        <td style={{ padding: '12px 10px', fontWeight: 700 }}>
+                        <td style={{ padding: '12px 10px', fontWeight: 700, color: '#34d399' }}>
                           {(ag.tabung || 0).toLocaleString('id-ID')} Tabung/bln
                         </td>
-                        <td style={{ padding: '12px 10px', fontWeight: 800, color: '#34d399' }}>
-                          {formatRupiah(ag.omset || 0)}
+                        <td style={{ padding: '12px 10px' }}>
+                          <button
+                            onClick={() => {
+                              setTelemetrySearch(ag.name);
+                              window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                            }}
+                            style={{
+                              padding: '5px 10px',
+                              borderRadius: '6px',
+                              background: 'rgba(56, 189, 248, 0.15)',
+                              color: '#38bdf8',
+                              border: '1px solid rgba(56, 189, 248, 0.3)',
+                              fontWeight: 700,
+                              fontSize: '0.75rem',
+                              cursor: 'pointer'
+                            }}
+                            title={`Tampilkan semua pangkalan binaan ${ag.name}`}
+                          >
+                            🔍 Lihat Pangkalan Agen
+                          </button>
                         </td>
                       </tr>
                     ))}
