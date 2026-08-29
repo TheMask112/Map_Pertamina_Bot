@@ -12,11 +12,14 @@ let tablesInitialized = false;
 export async function ensureAffiliateTables() {
   if (tablesInitialized) return;
   try {
-    // 1. Tambah kolom affiliate ke tabel orders jika belum ada
+    // 1. Tambah kolom affiliate & customer profile ke tabel orders jika belum ada
     await sql`
       ALTER TABLE orders 
       ADD COLUMN IF NOT EXISTS affiliate_code VARCHAR(50),
-      ADD COLUMN IF NOT EXISTS affiliate_markup BIGINT DEFAULT 0;
+      ADD COLUMN IF NOT EXISTS affiliate_markup BIGINT DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS customer_name VARCHAR(100),
+      ADD COLUMN IF NOT EXISTS pangkalan_name VARCHAR(150),
+      ADD COLUMN IF NOT EXISTS customer_type VARCHAR(50);
     `;
 
     // 2. Buat tabel affiliates

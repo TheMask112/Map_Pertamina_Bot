@@ -91,7 +91,7 @@ export async function POST(request: Request) {
             voucher_code = ${voucherCode}
         WHERE id = ${order.id} 
           AND (status = 'PENDING' OR status = 'EXPIRED')
-        RETURNING id, paket, whatsapp, amount, base_amount, hwid, affiliate_code, affiliate_markup
+        RETURNING id, paket, whatsapp, amount, base_amount, hwid, affiliate_code, affiliate_markup, customer_name, pangkalan_name, customer_type
       `;
 
       if (updateResult.length === 0) {
@@ -197,11 +197,16 @@ export async function POST(request: Request) {
           : getVoucherMessageTemplate(paketNama, kuota, updatedOrder.amount, voucherCode);
         await sendWhatsApp(updatedOrder.whatsapp, customerMsg);
 
+        const profileLines: string[] = [];
+        if (updatedOrder.customer_name) profileLines.push(`👤 Nama: *${updatedOrder.customer_name}*`);
+        if (updatedOrder.pangkalan_name) profileLines.push(`🏢 Usaha: *${updatedOrder.pangkalan_name}* (${updatedOrder.customer_type || 'Pangkalan'})`);
+
         const adminMsg = 
           `*🔔 MIDTRANS: PENJUALAN MASUK* 🔔\n\n` +
           `📦 Paket: *${paketNama}* (${kuota.toLocaleString('id-ID')} Tabung)\n` +
           `💰 Nominal: *Rp ${updatedOrder.amount.toLocaleString('id-ID')}*\n` +
           `📱 HP Pembeli: *${updatedOrder.whatsapp}*\n` +
+          (profileLines.length > 0 ? `${profileLines.join('\n')}\n` : '') +
           `🎟️ Voucher: \`${voucherCode}\`\n` +
           (autoLicenseKey ? `🔑 Auto-Activated HWID: \`${updatedOrder.hwid}\`\n` : '') +
           (updatedOrder.affiliate_code ? `🤝 Mitra Referral: *${updatedOrder.affiliate_code}*\n` : '') +

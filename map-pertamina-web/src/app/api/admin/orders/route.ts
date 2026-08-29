@@ -41,7 +41,7 @@ export async function GET(request: Request) {
 
     // Ambil data semua order dari database Neon (termasuk hwid dan license_key)
     const orders = await sql`
-      SELECT id, paket, base_amount, amount, whatsapp, status, voucher_code, hwid, license_key, affiliate_code, created_at, expires_at, paid_at 
+      SELECT id, paket, base_amount, amount, whatsapp, status, voucher_code, hwid, license_key, affiliate_code, customer_name, pangkalan_name, customer_type, created_at, expires_at, paid_at 
       FROM orders 
       ORDER BY created_at DESC;
     `;
@@ -134,7 +134,7 @@ export async function POST(request: Request) {
           paid_at = CURRENT_TIMESTAMP,
           voucher_code = ${voucherCode} 
       WHERE id = ${orderId}
-      RETURNING id, paket, whatsapp, amount, hwid;
+      RETURNING id, paket, whatsapp, amount, hwid, customer_name, pangkalan_name, customer_type;
     `;
 
     if (updateResult.length === 0) {
@@ -171,11 +171,16 @@ export async function POST(request: Request) {
         : getVoucherMessageTemplate(paketNama, kuota, updatedOrder.amount, voucherCode);
       sendWhatsApp(updatedOrder.whatsapp, customerMsg).catch(e => console.warn('[Fonnte Background] Customer WA error:', e));
 
+      const profileLines: string[] = [];
+      if (updatedOrder.customer_name) profileLines.push(`👤 Nama: *${updatedOrder.customer_name}*`);
+      if (updatedOrder.pangkalan_name) profileLines.push(`🏢 Usaha: *${updatedOrder.pangkalan_name}* (${updatedOrder.customer_type || 'Pangkalan'})`);
+
       const adminMsg = 
         `*✅ MANUAL APPROVE: TRANSAKSI LUNAS*\n\n` +
         `📦 Paket: *${paketNama}* (${kuota.toLocaleString('id-ID')} Tabung)\n` +
         `💰 Nominal: *Rp ${updatedOrder.amount.toLocaleString('id-ID')}*\n` +
         `📱 HP Pembeli: *${updatedOrder.whatsapp}*\n` +
+        (profileLines.length > 0 ? `${profileLines.join('\n')}\n` : '') +
         `🎟️ Voucher: \`${voucherCode}\`\n` +
         (autoLicenseKey ? `🔑 Auto-Activated HWID: \`${updatedOrder.hwid}\`\n` : '');
       sendTelegramToAdmin(adminMsg).catch(e => console.warn('[Telegram Admin] Error:', e));

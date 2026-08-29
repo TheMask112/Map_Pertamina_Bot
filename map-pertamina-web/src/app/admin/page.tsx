@@ -8,6 +8,9 @@ interface Order {
   base_amount: number;
   amount: number;
   whatsapp: string;
+  customer_name?: string | null;
+  pangkalan_name?: string | null;
+  customer_type?: string | null;
   status: string;
   voucher_code: string | null;
   hwid: string | null;
@@ -197,6 +200,8 @@ export default function AdminPortal() {
       const matchesSearch = 
         o.whatsapp.toLowerCase().includes(searchQuery.toLowerCase()) ||
         o.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (o.customer_name && o.customer_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (o.pangkalan_name && o.pangkalan_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (o.affiliate_code && o.affiliate_code.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (o.voucher_code && o.voucher_code.toLowerCase().includes(searchQuery.toLowerCase()));
       
@@ -459,15 +464,21 @@ export default function AdminPortal() {
                           minute: '2-digit'
                         })}
                       </td>
-                      <td style={{ padding: '18px 24px', fontWeight: 600 }}>
+                      <td style={{ padding: '18px 24px' }}>
                         <a 
                           href={`https://wa.me/${o.whatsapp.replace(/\D/g, '')}`} 
                           target="_blank" 
                           rel="noopener noreferrer"
-                          style={{ color: 'hsl(var(--secondary))', textDecoration: 'underline' }}
+                          style={{ color: 'hsl(var(--secondary))', textDecoration: 'underline', fontWeight: 600 }}
                         >
                           {o.whatsapp}
                         </a>
+                        {(o.customer_name || o.pangkalan_name) && (
+                          <div style={{ fontSize: '0.78rem', color: '#cbd5e1', marginTop: '4px', lineHeight: 1.3 }}>
+                            {o.customer_name && <div style={{ fontWeight: 600, color: '#f1f5f9' }}>👤 {o.customer_name}</div>}
+                            {o.pangkalan_name && <div style={{ color: '#94a3b8' }}>🏢 {o.pangkalan_name} {o.customer_type ? `(${o.customer_type})` : ''}</div>}
+                          </div>
+                        )}
                       </td>
                       <td style={{ padding: '18px 24px' }}>
                         <span style={{
