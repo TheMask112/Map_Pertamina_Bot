@@ -1,14 +1,14 @@
 {
-  "versionCode": 11,
-  "apkUrl": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.1/MAP_Pertamina_Bot_v1.1.1.apk",
-  "latestVersion": "1.1.1",
-  "latestVersionCode": 11,
-  "url": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.1/MAP_Pertamina_Bot_v1.1.1.apk",
+  "versionCode": 12,
+  "apkUrl": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.2/MAP_Pertamina_Bot_v1.1.2.apk",
+  "latestVersion": "1.1.2",
+  "latestVersionCode": 12,
+  "url": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.2/MAP_Pertamina_Bot_v1.1.2.apk",
   "releaseNotes": [
-    "Multi-Pangkalan Tanpa Batas: Simpan & kelola banyak akun di semua paket lisensi",
-    "Bypass Form Login Pertamina: Langsung masuk dashboard pangkalan aktif tanpa webview lambat",
-    "Silent Auto-Relogin: Otomatis login ulang di background saat sesi terputus/expired",
-    "Antrean Otomatis Berurutan (Batch Queue): Khusus Enterprise 5.000 Tabung",
-    "Penanganan Edge Cases Sempurna: First-time setup modal & auto-sync data login"
+    "Ultra-Reliable Background Execution: Mesin Ghoib Floating Overlay memastikan bot tetap berjalan saat HP di-minimize atau membuka aplikasi lain",
+    "Partial WakeLock 6 Jam Non-Stop: Layar terkunci / Screen Off tetap memproses transaksi lancar tanpa tertidur (Sleep/Doze safe)",
+    "Battery Optimization Protection: Bebas dari pemutusan proses agresif OEM Android",
+    "Multi-Pangkalan Tanpa Batas: Simpan banyak akun pangkalan di semua paket lisensi",
+    "Silent Auto-Relogin: Otomatis login ulang jika sesi Pertamina expired di tengah jalan"
   ]
 }
