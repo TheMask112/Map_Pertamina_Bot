@@ -352,10 +352,12 @@ export default function AdminPortal() {
     };
   }, [orders, affiliates, payouts]);
 
+  const [telemetryStatusFilter, setTelemetryStatusFilter] = useState<'ALL' | 'ACTIVE' | 'DORMANT' | 'LOW_QUOTA'>('ALL');
+
   const filteredTelemetry = useMemo(() => {
+    const nowTime = new Date().getTime();
     return telemetryPangkalans.filter(p => {
       const q = telemetrySearch.toLowerCase().trim();
-      if (!q) return true;
       const mName = (p.merchant_name || '').toLowerCase();
       const mId = (p.merchant_id || '').toLowerCase();
       const oName = (p.owner_name || '').toLowerCase();
@@ -365,9 +367,22 @@ export default function AdminPortal() {
       const phone = (p.phone || '').toLowerCase();
       const dev = (p.device_model || '').toLowerCase();
       const os = (p.device_os || '').toLowerCase();
-      return mName.includes(q) || mId.includes(q) || oName.includes(q) || aName.includes(q) || city.includes(q) || prov.includes(q) || phone.includes(q) || dev.includes(q) || os.includes(q);
+      const matchQuery = !q || mName.includes(q) || mId.includes(q) || oName.includes(q) || aName.includes(q) || city.includes(q) || prov.includes(q) || phone.includes(q) || dev.includes(q) || os.includes(q);
+      
+      if (!matchQuery) return false;
+
+      if (telemetryStatusFilter === 'ALL') return true;
+
+      const lastSync = p.last_sync_at ? new Date(p.last_sync_at).getTime() : 0;
+      const days = lastSync > 0 ? Math.floor((nowTime - lastSync) / (1000 * 60 * 60 * 24)) : 999;
+
+      if (telemetryStatusFilter === 'ACTIVE') return days < 3;
+      if (telemetryStatusFilter === 'DORMANT') return days >= 7;
+      if (telemetryStatusFilter === 'LOW_QUOTA') return (Number(p.sisa_kuota_pertamina) || 0) <= 150;
+
+      return true;
     });
-  }, [telemetryPangkalans, telemetrySearch]);
+  }, [telemetryPangkalans, telemetrySearch, telemetryStatusFilter]);
 
   if (!isAuthorized) {
     return (
@@ -1158,6 +1173,200 @@ export default function AdminPortal() {
             </div>
           </div>
 
+          {/* DUA MODUL AKSI SALES & RETENSI (Churn Alert & Top-Up Priority) */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+            gap: '20px'
+          }}>
+            {/* 1. 🚨 Retensi Klien & Peringatan Churn (Dormant) */}
+            <div className="glass-card" style={{ padding: '24px', borderRadius: '18px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '1.4rem' }}>🚨</span>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#f87171' }}>
+                    Retensi Klien & Churn Alert
+                  </h3>
+                </div>
+                <span style={{ padding: '4px 10px', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', fontSize: '0.75rem', fontWeight: 700 }}>
+                  {telemetryMetrics?.dormantCount || 0} Pangkalan Dormant
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '16px', textAlign: 'center' }}>
+                <div style={{ background: 'rgba(52, 211, 153, 0.1)', padding: '10px', borderRadius: '10px' }}>
+                  <div style={{ fontSize: '0.72rem', color: '#34d399', fontWeight: 700 }}>🟢 AKTIF (&lt;3 hr)</div>
+                  <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#34d399' }}>{telemetryMetrics?.activeCount || 0}</div>
+                </div>
+                <div style={{ background: 'rgba(251, 191, 36, 0.1)', padding: '10px', borderRadius: '10px' }}>
+                  <div style={{ fontSize: '0.72rem', color: '#fbbf24', fontWeight: 700 }}>🟡 WASPADA (3-7 hr)</div>
+                  <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#fbbf24' }}>{telemetryMetrics?.warningCount || 0}</div>
+                </div>
+                <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '10px', borderRadius: '10px' }}>
+                  <div style={{ fontSize: '0.72rem', color: '#f87171', fontWeight: 700 }}>🔴 DORMANT (&gt;7 hr)</div>
+                  <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#f87171' }}>{telemetryMetrics?.dormantCount || 0}</div>
+                </div>
+              </div>
+
+              <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '10px' }}>
+                Pangkalan tidak aktif &gt;7 hari yang memerlukan follow-up CS:
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {!telemetryMetrics?.dormantPangkalans || telemetryMetrics.dormantPangkalans.length === 0 ? (
+                  <div style={{ fontSize: '0.8rem', color: '#34d399', padding: '10px', background: 'rgba(52, 211, 153, 0.05)', borderRadius: '8px', textAlign: 'center' }}>
+                    ✨ Semua pangkalan aktif dan rutin bertransaksi!
+                  </div>
+                ) : (
+                  telemetryMetrics.dormantPangkalans.map((dp: any, idx: number) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.03)', padding: '8px 12px', borderRadius: '8px', fontSize: '0.82rem' }}>
+                      <div>
+                        <strong style={{ color: '#ffffff' }}>{dp.merchant_name || 'Pangkalan'}</strong>
+                        <div style={{ fontSize: '0.72rem', color: '#f87171' }}>Tidak aktif {dp.daysInactive} hari lalu</div>
+                      </div>
+                      {dp.phone && (
+                        <a
+                          href={formatWaUrl(dp.phone, `Halo Bapak/Ibu ${dp.owner_name || dp.merchant_name || ''}, kami dari tim teknis Bot MAP Pertamina. Apakah sistem bot berjalan lancar atau ada kendala yang bisa kami bantu?`)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: '6px',
+                            background: 'rgba(56, 189, 248, 0.2)',
+                            color: '#38bdf8',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            textDecoration: 'none'
+                          }}
+                        >
+                          💬 Sapa CS WA
+                        </a>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* 2. 🔔 Prioritas Follow-Up Top-Up (Sisa Kuota Menipis) */}
+            <div className="glass-card" style={{ padding: '24px', borderRadius: '18px', border: '1px solid rgba(251, 191, 36, 0.3)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '1.4rem' }}>🔔</span>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fbbf24' }}>
+                    Prioritas Top-Up Kuota Lisensi
+                  </h3>
+                </div>
+                <span style={{ padding: '4px 10px', borderRadius: '12px', background: 'rgba(251, 191, 36, 0.15)', color: '#fbbf24', fontSize: '0.75rem', fontWeight: 700 }}>
+                  {telemetryMetrics?.lowQuotaCount || 0} Kuota Kritis (&le;150 tb)
+                </span>
+              </div>
+
+              <p style={{ fontSize: '0.82rem', color: '#94a3b8', marginBottom: '14px' }}>
+                Pangkalan yang sisa kuotanya menipis dan siap ditawarkan perpanjangan / top-up lisensi baru:
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {!telemetryMetrics?.lowQuotaPangkalans || telemetryMetrics.lowQuotaPangkalans.length === 0 ? (
+                  <div style={{ fontSize: '0.8rem', color: '#34d399', padding: '10px', background: 'rgba(52, 211, 153, 0.05)', borderRadius: '8px', textAlign: 'center' }}>
+                    ✨ Seluruh pangkalan memiliki cadangan kuota yang cukup.
+                  </div>
+                ) : (
+                  telemetryMetrics.lowQuotaPangkalans.map((lq: any, idx: number) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.03)', padding: '8px 12px', borderRadius: '8px', fontSize: '0.82rem' }}>
+                      <div>
+                        <strong style={{ color: '#ffffff' }}>{lq.merchant_name || 'Pangkalan'}</strong>
+                        <div style={{ fontSize: '0.72rem', color: '#fbbf24', fontWeight: 700 }}>
+                          Sisa: {lq.sisa_kuota} Tabung lagi
+                        </div>
+                      </div>
+                      {lq.phone && (
+                        <a
+                          href={formatWaUrl(lq.phone, `Halo Bapak/Ibu ${lq.owner_name || lq.merchant_name || ''}, kuota bot MAP Pertamina Anda tersisa ${lq.sisa_kuota} tabung lagi. Apakah ingin melakukan top-up kuota hari ini agar proses input harian tetap lancar tanpa jeda?`)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: '6px',
+                            background: 'rgba(52, 211, 153, 0.2)',
+                            color: '#34d399',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            textDecoration: 'none'
+                          }}
+                        >
+                          💬 Tawaran Top-Up
+                        </a>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 3. 🗺️ HEATMAP SEBARAN PETA WILAYAH INDONESIA (Provinsi) */}
+          {telemetryMetrics?.topProvinces && telemetryMetrics.topProvinces.length > 0 && (
+            <div className="glass-card" style={{ padding: '24px', borderRadius: '18px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' }}>
+                <div>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    🗺️ Heatmap Sebaran Pangkalan Per Provinsi di Indonesia
+                  </h3>
+                  <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px' }}>
+                    Konsentrasi sebaran pangkalan klien dan perputaran volume tabung per wilayah provinsi
+                  </p>
+                </div>
+                <span style={{ fontSize: '0.8rem', color: '#a78bfa', background: 'rgba(167, 139, 250, 0.15)', padding: '4px 10px', borderRadius: '8px', fontWeight: 700 }}>
+                  {telemetryMetrics.topProvinces.length} Provinsi Terpetakan
+                </span>
+              </div>
+
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Ranking</th>
+                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Nama Provinsi</th>
+                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Jumlah Pangkalan</th>
+                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Sebaran (%)</th>
+                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Total Tabung / Bln</th>
+                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Estimasi Omset Regional</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {telemetryMetrics.topProvinces.map((prov: any, idx: number) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '12px 10px', fontWeight: 800, color: idx === 0 ? '#fbbf24' : '#94a3b8' }}>
+                          #{idx + 1}
+                        </td>
+                        <td style={{ padding: '12px 10px', fontWeight: 700, color: '#ffffff' }}>
+                          📍 {prov.name}
+                        </td>
+                        <td style={{ padding: '12px 10px', fontWeight: 800, color: '#38bdf8' }}>
+                          {prov.count} Pangkalan
+                        </td>
+                        <td style={{ padding: '12px 10px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ width: '80px', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                              <div style={{ width: `${prov.persenPangkalan || 10}%`, height: '100%', background: '#a78bfa', borderRadius: '3px' }} />
+                            </div>
+                            <span style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: 700 }}>{prov.persenPangkalan || 0}%</span>
+                          </div>
+                        </td>
+                        <td style={{ padding: '12px 10px', fontWeight: 700 }}>
+                          {(prov.tabung || 0).toLocaleString('id-ID')} Tabung
+                        </td>
+                        <td style={{ padding: '12px 10px', fontWeight: 800, color: '#34d399' }}>
+                          {formatRupiah(prov.omset || 0)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* Ranking & Peta Penetrasi PT Agen Penyalur Terbesar */}
           {telemetryMetrics?.topAgents && telemetryMetrics.topAgents.length > 0 && (
             <div className="glass-card" style={{ padding: '24px', borderRadius: '16px' }}>
@@ -1224,36 +1433,102 @@ export default function AdminPortal() {
             </div>
           )}
 
-          {/* Search & Export CSV Toolbar */}
-          <div className="glass-card" style={{ padding: '16px 24px', display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <input
-              type="text"
-              className="form-input"
-              placeholder="🔍 Cari pangkalan, nama pemilik, PT Agen, kota/provinsi, nomor HP, atau tipe HP/PC..."
-              value={telemetrySearch}
-              onChange={(e) => setTelemetrySearch(e.target.value)}
-              style={{ flex: 1, minWidth: '280px', fontSize: '0.95rem' }}
-            />
-            <button
-              onClick={exportTelemetryToCsv}
-              className="btn btn-secondary"
-              style={{
-                padding: '10px 18px',
-                borderRadius: '10px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                fontWeight: 700,
-                fontSize: '0.9rem',
-                borderColor: 'rgba(52, 211, 153, 0.4)',
-                color: '#34d399'
-              }}
-            >
-              📥 Export CSV / Excel
-            </button>
-            <span style={{ fontSize: '0.85rem', color: 'hsl(var(--text-muted))' }}>
-              Menampilkan {filteredTelemetry.length} dari {telemetryPangkalans.length} pangkalan
-            </span>
+          {/* Search, Filter Tabs & Export CSV Toolbar */}
+          <div className="glass-card" style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.82rem', color: '#94a3b8', fontWeight: 700 }}>Filter Status:</span>
+              <button
+                onClick={() => setTelemetryStatusFilter('ALL')}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: telemetryStatusFilter === 'ALL' ? '#38bdf8' : 'rgba(255,255,255,0.05)',
+                  color: telemetryStatusFilter === 'ALL' ? '#0f172a' : '#cbd5e1',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  cursor: 'pointer'
+                }}
+              >
+                🏢 Semua ({telemetryPangkalans.length})
+              </button>
+              <button
+                onClick={() => setTelemetryStatusFilter('ACTIVE')}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: telemetryStatusFilter === 'ACTIVE' ? '#34d399' : 'rgba(255,255,255,0.05)',
+                  color: telemetryStatusFilter === 'ACTIVE' ? '#0f172a' : '#cbd5e1',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  cursor: 'pointer'
+                }}
+              >
+                🟢 Aktif ({telemetryMetrics?.activeCount || 0})
+              </button>
+              <button
+                onClick={() => setTelemetryStatusFilter('DORMANT')}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: telemetryStatusFilter === 'DORMANT' ? '#f87171' : 'rgba(255,255,255,0.05)',
+                  color: telemetryStatusFilter === 'DORMANT' ? '#0f172a' : '#cbd5e1',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  cursor: 'pointer'
+                }}
+              >
+                🔴 Dormant ({telemetryMetrics?.dormantCount || 0})
+              </button>
+              <button
+                onClick={() => setTelemetryStatusFilter('LOW_QUOTA')}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: telemetryStatusFilter === 'LOW_QUOTA' ? '#fbbf24' : 'rgba(255,255,255,0.05)',
+                  color: telemetryStatusFilter === 'LOW_QUOTA' ? '#0f172a' : '#cbd5e1',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  cursor: 'pointer'
+                }}
+              >
+                🔔 Kuota Tipis ({telemetryMetrics?.lowQuotaCount || 0})
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="🔍 Cari nama pangkalan, pemilik, PT Agen, kota/provinsi, no HP, atau tipe HP/PC..."
+                value={telemetrySearch}
+                onChange={(e) => setTelemetrySearch(e.target.value)}
+                style={{ flex: 1, minWidth: '280px', fontSize: '0.95rem' }}
+              />
+              <button
+                onClick={exportTelemetryToCsv}
+                className="btn btn-secondary"
+                style={{
+                  padding: '10px 18px',
+                  borderRadius: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontWeight: 700,
+                  fontSize: '0.9rem',
+                  borderColor: 'rgba(52, 211, 153, 0.4)',
+                  color: '#34d399'
+                }}
+              >
+                📥 Export CSV / Excel
+              </button>
+              <span style={{ fontSize: '0.85rem', color: 'hsl(var(--text-muted))' }}>
+                Menampilkan {filteredTelemetry.length} dari {telemetryPangkalans.length} pangkalan
+              </span>
+            </div>
           </div>
 
           {/* Tabel Intelijen Pangkalan Lengkap */}
