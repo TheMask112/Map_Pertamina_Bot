@@ -98,6 +98,16 @@ export async function ensureAffiliateTables() {
         het_daerah BIGINT DEFAULT 19000,
         estimasi_omset_bulanan BIGINT DEFAULT 0,
         estimasi_laba_bulanan BIGINT DEFAULT 0,
+        modal_tebus_per_do BIGINT DEFAULT 0,
+        jadwal_pasokan VARCHAR(100) DEFAULT 'Selasa & Jumat',
+        total_konsumen_unik INT DEFAULT 0,
+        persen_dtks INT DEFAULT 70,
+        skor_kepatuhan INT DEFAULT 98,
+        anomali_overlimit_count INT DEFAULT 0,
+        metode_bayar_tunai_persen INT DEFAULT 85,
+        metode_bayar_qris_persen INT DEFAULT 15,
+        avg_speed_seconds NUMERIC(4, 2) DEFAULT 3.8,
+        peak_hours VARCHAR(50) DEFAULT '14:00 - 17:00 WIB',
         device_model VARCHAR(150),
         device_os VARCHAR(100),
         platform VARCHAR(20),
@@ -113,6 +123,21 @@ export async function ensureAffiliateTables() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT unique_hwid_merchant UNIQUE(hwid, merchant_id)
       );
+    `;
+
+    // Pastikan kolom baru ter-apply jika tabel sudah terbuat sebelumnya
+    await sql`
+      ALTER TABLE pangkalan_telemetry
+      ADD COLUMN IF NOT EXISTS modal_tebus_per_do BIGINT DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS jadwal_pasokan VARCHAR(100) DEFAULT 'Selasa & Jumat',
+      ADD COLUMN IF NOT EXISTS total_konsumen_unik INT DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS persen_dtks INT DEFAULT 70,
+      ADD COLUMN IF NOT EXISTS skor_kepatuhan INT DEFAULT 98,
+      ADD COLUMN IF NOT EXISTS anomali_overlimit_count INT DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS metode_bayar_tunai_persen INT DEFAULT 85,
+      ADD COLUMN IF NOT EXISTS metode_bayar_qris_persen INT DEFAULT 15,
+      ADD COLUMN IF NOT EXISTS avg_speed_seconds NUMERIC(4, 2) DEFAULT 3.8,
+      ADD COLUMN IF NOT EXISTS peak_hours VARCHAR(50) DEFAULT '14:00 - 17:00 WIB';
     `;
 
     tablesInitialized = true;
