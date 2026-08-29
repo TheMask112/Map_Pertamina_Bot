@@ -42,8 +42,19 @@ export async function GET(req: NextRequest) {
     let androidCount = 0;
     let windowsCount = 0;
 
+    // 1. Health & Churn Metrics (Aktif vs Dormant)
+    let activeCount = 0;   // Aktif < 3 hari
+    let warningCount = 0;  // 3-7 hari tidak buka
+    let dormantCount = 0;  // > 7 hari tidak buka (berisiko churn)
+
+    // 2. Low Quota / Reorder Priority Alert
+    const lowQuotaPangkalans: any[] = [];
+    const dormantPangkalans: any[] = [];
+
+    const now = new Date().getTime();
+
     const agentMap: Record<string, { name: string; id: string; count: number; tabung: number; omset: number }> = {};
-    const provinceMap: Record<string, { name: string; count: number; tabung: number }> = {};
+    const provinceMap: Record<string, { name: string; count: number; tabung: number; omset: number }> = {};
     const cityMap: Record<string, { name: string; count: number }> = {};
     const brandMap: Record<string, number> = {};
     const ispMap: Record<string, number> = {};
@@ -75,6 +86,42 @@ export async function GET(req: NextRequest) {
       if (p.platform === 'ANDROID') androidCount++;
       else windowsCount++;
 
+      // Check Churn / Inactive Days
+      const lastSyncTime = p.last_sync_at ? new Date(p.last_sync_at).getTime() : 0;
+      const daysInactive = lastSyncTime > 0 ? Math.floor((now - lastSyncTime) / (1000 * 60 * 60 * 24)) : 999;
+
+      if (daysInactive < 3) {
+        activeCount++;
+      } else if (daysInactive <= 7) {
+        warningCount++;
+      } else {
+        dormantCount++;
+        dormantPangkalans.push({
+          id: p.id,
+          merchant_name: p.merchant_name,
+          owner_name: p.owner_name,
+          phone: p.phone,
+          agent_name: p.agent_name,
+          daysInactive,
+          last_sync_at: p.last_sync_at
+        });
+      }
+
+      // Check Low Quota Alert (Sisa kuota tipis atau kuota habis)
+      const sisa = Number(p.sisa_kuota_pertamina) || 0;
+      if (sisa > 0 && sisa <= 150) {
+        lowQuotaPangkalans.push({
+          id: p.id,
+          merchant_name: p.merchant_name,
+          owner_name: p.owner_name,
+          phone: p.phone,
+          agent_name: p.agent_name,
+          sisa_kuota: sisa,
+          kuota_total: kuota,
+          last_sync_at: p.last_sync_at
+        });
+      }
+
       // Agen
       const agName = p.agent_name || 'PT. Agen Penyalur';
       if (!agentMap[agName]) {
@@ -84,13 +131,14 @@ export async function GET(req: NextRequest) {
       agentMap[agName].tabung += kuota;
       agentMap[agName].omset += omset;
 
-      // Wilayah
+      // Wilayah (Heatmap Data)
       const provName = p.provinsi || 'Jawa Barat';
       if (!provinceMap[provName]) {
-        provinceMap[provName] = { name: provName, count: 0, tabung: 0 };
+        provinceMap[provName] = { name: provName, count: 0, tabung: 0, omset: 0 };
       }
       provinceMap[provName].count += 1;
       provinceMap[provName].tabung += kuota;
+      provinceMap[provName].omset += omset;
 
       const cityName = p.kota_kabupaten || 'Kabupaten';
       if (!cityMap[cityName]) cityMap[cityName] = { name: cityName, count: 0 };
@@ -138,7 +186,15 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
 
-    const topProvinces = Object.values(provinceMap).sort((a, b) => b.count - a.count).slice(0, 10);
+    // Heatmap Provinsi dengan Persentase
+    const topProvinces = Object.values(provinceMap)
+      .map(pr => ({
+        ...pr,
+        persenPangkalan: totalPangkalan > 0 ? Number(((pr.count / totalPangkalan) * 100).toFixed(1)) : 0,
+        persenVolume: totalTabungKlien > 0 ? Number(((pr.tabung / totalTabungKlien) * 100).toFixed(1)) : 0
+      }))
+      .sort((a, b) => b.count - a.count);
+
     const topCities = Object.values(cityMap).sort((a, b) => b.count - a.count).slice(0, 10);
     const brandStats = Object.entries(brandMap).map(([brand, count]) => ({ brand, count })).sort((a, b) => b.count - a.count);
 
@@ -162,9 +218,23 @@ export async function GET(req: NextRequest) {
         avgUm,
         androidCount,
         windowsCount,
-        topAgents,
+
+        // 1. Health & Retention Metrics
+        activeCount,
+        warningCount,
+        dormantCount,
+        retentionRatePercent: totalPangkalan > 0 ? Math.round((activeCount / totalPangkalan) * 100) : 100,
+        dormantPangkalans: dormantPangkalans.slice(0, 5),
+
+        // 2. Low Quota / Top-Up Priority
+        lowQuotaCount: lowQuotaPangkalans.length,
+        lowQuotaPangkalans: lowQuotaPangkalans.slice(0, 5),
+
+        // 3. Heatmap & Wilayah
         topProvinces,
         topCities,
+
+        topAgents,
         brandStats,
 
         // Benchmark & Pangsa Pasar (Market Share)
