@@ -54,6 +54,19 @@ fun BotScreen(onNavigateBack: () -> Unit) {
         }
     }
 
+    // Auto-start bot saat mode batch queue aktif
+    LaunchedEffect(SessionData.isBatchQueueActive) {
+        if (SessionData.isBatchQueueActive && !uiState.isRunning && SessionData.loadedNikList.isNotEmpty()) {
+            val phoneToUse = SessionData.phone
+            val passToUse = SessionData.pass
+            com.mapbot.pertamina.engine.BotManager.botEngine?.start(
+                phoneToUse,
+                passToUse,
+                SessionData.loadedNikList
+            )
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(

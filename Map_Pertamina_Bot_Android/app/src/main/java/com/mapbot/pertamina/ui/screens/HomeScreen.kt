@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mapbot.pertamina.data.ExcelReader
 import com.mapbot.pertamina.data.SessionData
+import com.mapbot.pertamina.data.QueuePangkalanItem
 import com.mapbot.pertamina.util.LicenseManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -32,6 +33,7 @@ import kotlinx.coroutines.withContext
 
 import com.mapbot.pertamina.security.CredentialStore
 import com.mapbot.pertamina.ui.components.PangkalanSelectorDialog
+import com.mapbot.pertamina.ui.components.BatchQueuePangkalanDialog
 
 @Composable
 fun HomeScreen(onNavigateToBot: () -> Unit, onNavigateToSettings: () -> Unit) {
@@ -63,6 +65,8 @@ fun HomeScreen(onNavigateToBot: () -> Unit, onNavigateToSettings: () -> Unit) {
         }
     }
 
+    var showBatchQueueDialog by remember { mutableStateOf(false) }
+
     if (showPangkalanDialog) {
         PangkalanSelectorDialog(
             context = context,
@@ -73,6 +77,26 @@ fun HomeScreen(onNavigateToBot: () -> Unit, onNavigateToSettings: () -> Unit) {
                     SessionData.phone = activeProfile!!.phone
                     SessionData.pass = activeProfile!!.pass
                 }
+            }
+        )
+    }
+
+    if (showBatchQueueDialog) {
+        BatchQueuePangkalanDialog(
+            context = context,
+            onDismiss = { showBatchQueueDialog = false },
+            onStartBatch = { queue ->
+                showBatchQueueDialog = false
+                SessionData.batchQueue = queue
+                SessionData.currentQueueIndex = 0
+                SessionData.isBatchQueueActive = true
+
+                val first = queue[0]
+                SessionData.phone = first.profile.phone
+                SessionData.pass = first.profile.pass
+                SessionData.loadedNikList = first.nikList
+
+                onNavigateToBot()
             }
         )
     }
@@ -216,7 +240,7 @@ fun HomeScreen(onNavigateToBot: () -> Unit, onNavigateToSettings: () -> Unit) {
                 onClick = onNavigateToBot,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
+                    .height(52.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(accentBrush),
                 colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
@@ -227,7 +251,26 @@ fun HomeScreen(onNavigateToBot: () -> Unit, onNavigateToSettings: () -> Unit) {
                 Text("BUKA LAYAR BOT", color = Color(0xFF0F172A), fontWeight = FontWeight.Bold)
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Batch Queue Button (Enterprise 5000)
+            val purpleGradient = Brush.horizontalGradient(
+                colors = listOf(Color(0xFF8B5CF6), Color(0xFF6D28D9))
+            )
+            Button(
+                onClick = { showBatchQueueDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(purpleGradient),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                contentPadding = PaddingValues()
+            ) {
+                Text("🏢 JALANKAN SEMUA PANGKALAN (AUTO BATCH)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Settings Button
             TextButton(

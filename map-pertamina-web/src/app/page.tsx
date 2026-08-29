@@ -49,16 +49,21 @@ function LandingPageContent() {
             <span>
               🤝 Direkomendasikan oleh Mitra Resmi: <strong>{affiliateInfo.name}</strong> (Kode: <code>{affiliateInfo.code}</code>)
             </span>
-            {affiliateInfo.whatsapp && (
-              <a
-                href={`https://wa.me/${affiliateInfo.whatsapp}?text=Halo%20Pak%20${encodeURIComponent(affiliateInfo.name)},%20saya%20tertarik%20dengan%20Bot%20MAP%20Pertamina`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={styles.affiliateWaBtn}
-              >
-                💬 Butuh Bantuan Pasang? Chat WA ({affiliateInfo.whatsapp})
-              </a>
-            )}
+            {affiliateInfo.whatsapp && (() => {
+              let cleanWa = String(affiliateInfo.whatsapp).replace(/\D/g, '');
+              if (cleanWa.startsWith('0')) cleanWa = '62' + cleanWa.slice(1);
+              else if (cleanWa.startsWith('8')) cleanWa = '62' + cleanWa;
+              return (
+                <a
+                  href={`https://wa.me/${cleanWa}?text=Halo%20Pak%20${encodeURIComponent(affiliateInfo.name)},%20saya%20tertarik%20dengan%20Bot%20MAP%20Pertamina`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={styles.affiliateWaBtn}
+                >
+                  💬 Butuh Bantuan Pasang? Chat WA ({affiliateInfo.whatsapp})
+                </a>
+              );
+            })()}
           </div>
         </div>
       )}

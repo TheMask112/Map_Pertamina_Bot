@@ -413,6 +413,31 @@ class BotEngine(
         }
 
         log("Selesai memproses semua NIK.")
+
+        // === AUTO-BATCH QUEUE PROGRESSION (ENTERPRISE) ===
+        if (com.mapbot.pertamina.data.SessionData.isBatchQueueActive &&
+            com.mapbot.pertamina.data.SessionData.currentQueueIndex + 1 < com.mapbot.pertamina.data.SessionData.batchQueue.size) {
+            com.mapbot.pertamina.data.SessionData.currentQueueIndex++
+            val nextItem = com.mapbot.pertamina.data.SessionData.batchQueue[com.mapbot.pertamina.data.SessionData.currentQueueIndex]
+            val totalQueue = com.mapbot.pertamina.data.SessionData.batchQueue.size
+            val currentIdx = com.mapbot.pertamina.data.SessionData.currentQueueIndex + 1
+
+            log("🎉 [ANTREAN BATCH $currentIdx/$totalQueue] Beralih otomatis ke Pangkalan: ${nextItem.profile.name}...")
+            uiState.value = uiState.value.copy(statusMessage = "Beralih ke ${nextItem.profile.name} ($currentIdx/$totalQueue)")
+            delay(4000)
+
+            com.mapbot.pertamina.data.SessionData.phone = nextItem.profile.phone
+            com.mapbot.pertamina.data.SessionData.pass = nextItem.profile.pass
+            com.mapbot.pertamina.data.SessionData.loadedNikList = nextItem.nikList
+
+            processAll(nextItem.profile.phone, nextItem.profile.pass, nextItem.nikList)
+        } else {
+            if (com.mapbot.pertamina.data.SessionData.isBatchQueueActive) {
+                log("🎉 SELURUH ANTREAN BATCH PANGKALAN BERHASIL DISELESAIKAN!")
+                uiState.value = uiState.value.copy(statusMessage = "Semua Pangkalan Selesai!")
+                com.mapbot.pertamina.data.SessionData.isBatchQueueActive = false
+            }
+        }
     }
 
     private fun log(message: String) {

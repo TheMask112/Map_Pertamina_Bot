@@ -55,6 +55,18 @@ interface PayoutItem {
   processed_at?: string;
 }
 
+function formatWaUrl(phone: string, text?: string): string {
+  if (!phone) return '#';
+  let clean = phone.replace(/\D/g, '');
+  if (clean.startsWith('0')) {
+    clean = '62' + clean.slice(1);
+  } else if (clean.startsWith('8')) {
+    clean = '62' + clean;
+  }
+  const textParam = text ? `?text=${encodeURIComponent(text)}` : '';
+  return `https://wa.me/${clean}${textParam}`;
+}
+
 export default function AdminPortal() {
   const [passcode, setPasscode] = useState('');
   const [isAuthorized, setIsAuthorized] = useState(false);
@@ -470,12 +482,13 @@ export default function AdminPortal() {
                       </td>
                       <td style={{ padding: '18px 24px' }}>
                         <a 
-                          href={`https://wa.me/${o.whatsapp.replace(/\D/g, '')}`} 
+                          href={formatWaUrl(o.whatsapp, (o.sisa_kuota !== undefined && o.sisa_kuota <= 50) ? `Halo Kak ${o.customer_name || ''}, kuota bot MAP Pertamina Anda tersisa ${o.sisa_kuota} NIK. Apakah ingin melakukan perpanjangan/top-up kuota?` : undefined)} 
                           target="_blank" 
                           rel="noopener noreferrer"
                           style={{ color: 'hsl(var(--secondary))', textDecoration: 'underline', fontWeight: 600 }}
+                          title="Klik untuk chat WhatsApp pelanggan (+62)"
                         >
-                          {o.whatsapp}
+                          💬 {o.whatsapp}
                         </a>
                         {(o.customer_name || o.pangkalan_name) && (
                           <div style={{ fontSize: '0.78rem', color: '#cbd5e1', marginTop: '4px', lineHeight: 1.3 }}>
@@ -683,7 +696,14 @@ export default function AdminPortal() {
                         <td style={{ padding: '14px 12px' }}>{new Date(p.created_at).toLocaleDateString('id-ID')}</td>
                         <td style={{ padding: '14px 12px' }}>
                           <strong>{p.affiliate_name}</strong> (<code>{p.affiliate_code}</code>)<br />
-                          <span style={{ fontSize: '0.8rem', color: '#38bdf8' }}>{p.affiliate_whatsapp}</span>
+                          <a 
+                            href={formatWaUrl(p.affiliate_whatsapp, `Halo Kak ${p.affiliate_name}, mengenai permohonan penarikan komisi affiliate Anda sebesar ${formatRupiah(p.amount)}.`)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ fontSize: '0.8rem', color: '#38bdf8', textDecoration: 'underline' }}
+                          >
+                            💬 {p.affiliate_whatsapp}
+                          </a>
                         </td>
                         <td style={{ padding: '14px 12px', fontWeight: 800, color: '#34d399' }}>{formatRupiah(p.amount)}</td>
                         <td style={{ padding: '14px 12px' }}>
@@ -755,8 +775,8 @@ export default function AdminPortal() {
                         </td>
                         <td style={{ padding: '14px 12px', fontWeight: 700 }}>{a.name}</td>
                         <td style={{ padding: '14px 12px' }}>
-                          <a href={`https://wa.me/${a.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" style={{ color: '#34d399', textDecoration: 'underline' }}>
-                            {a.whatsapp}
+                          <a href={formatWaUrl(a.whatsapp, `Halo Mitra ${a.name} (${a.code}), ada informasi terbaru mengenai program affiliate MAP Pertamina.`)} target="_blank" rel="noopener noreferrer" style={{ color: '#34d399', textDecoration: 'underline' }}>
+                            💬 {a.whatsapp}
                           </a>
                         </td>
                         <td style={{ padding: '14px 12px', fontWeight: 800, color: '#fbbf24' }}>+{a.markup_percent}%</td>
