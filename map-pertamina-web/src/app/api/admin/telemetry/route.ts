@@ -54,10 +54,31 @@ export async function GET(req: NextRequest) {
     const now = new Date().getTime();
 
     const agentMap: Record<string, { name: string; id: string; count: number; tabung: number; omset: number }> = {};
-    const provinceMap: Record<string, { name: string; count: number; tabung: number; omset: number }> = {};
+    const provinceMap: Record<string, { name: string; count: number; tabung: number; omset: number; island: string }> = {};
     const cityMap: Record<string, { name: string; count: number }> = {};
     const brandMap: Record<string, number> = {};
     const ispMap: Record<string, number> = {};
+
+    // 6 Island Clusters Map
+    const islandClusters: Record<string, { name: string; key: string; icon: string; count: number; tabung: number; omset: number }> = {
+      JAWA: { name: 'Pulau Jawa & Banten', key: 'JAWA', icon: '🏝️', count: 0, tabung: 0, omset: 0 },
+      SUMATERA: { name: 'Pulau Sumatera', key: 'SUMATERA', icon: '🏝️', count: 0, tabung: 0, omset: 0 },
+      KALIMANTAN: { name: 'Pulau Kalimantan', key: 'KALIMANTAN', icon: '🏝️', count: 0, tabung: 0, omset: 0 },
+      SULAWESI: { name: 'Pulau Sulawesi', key: 'SULAWESI', icon: '🏝️', count: 0, tabung: 0, omset: 0 },
+      BALI_NT: { name: 'Bali & Nusa Tenggara', key: 'BALI_NT', icon: '🏝️', count: 0, tabung: 0, omset: 0 },
+      MALUKU_PAPUA: { name: 'Maluku & Papua', key: 'MALUKU_PAPUA', icon: '🏝️', count: 0, tabung: 0, omset: 0 }
+    };
+
+    const getIslandKey = (provName: string): string => {
+      const p = provName.toUpperCase();
+      if (p.includes('JAWA') || p.includes('JAKARTA') || p.includes('BANTEN') || p.includes('YOGYA')) return 'JAWA';
+      if (p.includes('SUMATERA') || p.includes('ACEH') || p.includes('RIAU') || p.includes('JAMBI') || p.includes('LAMPUNG') || p.includes('BANGKA') || p.includes('BENGKULU')) return 'SUMATERA';
+      if (p.includes('KALIMANTAN')) return 'KALIMANTAN';
+      if (p.includes('SULAWESI') || p.includes('GORONTALO')) return 'SULAWESI';
+      if (p.includes('BALI') || p.includes('NUSA TENGGARA') || p.includes('NTB') || p.includes('NTT')) return 'BALI_NT';
+      if (p.includes('PAPUA') || p.includes('MALUKU')) return 'MALUKU_PAPUA';
+      return 'JAWA';
+    };
 
     for (const p of pangkalans) {
       const kuota = Number(p.kuota_pertamina_bulanan) || 0;
@@ -131,14 +152,22 @@ export async function GET(req: NextRequest) {
       agentMap[agName].tabung += kuota;
       agentMap[agName].omset += omset;
 
-      // Wilayah (Heatmap Data)
+      // Wilayah (Heatmap & Island Data)
       const provName = p.provinsi || 'Jawa Barat';
+      const islandKey = getIslandKey(provName);
+
       if (!provinceMap[provName]) {
-        provinceMap[provName] = { name: provName, count: 0, tabung: 0, omset: 0 };
+        provinceMap[provName] = { name: provName, count: 0, tabung: 0, omset: 0, island: islandKey };
       }
       provinceMap[provName].count += 1;
       provinceMap[provName].tabung += kuota;
       provinceMap[provName].omset += omset;
+
+      if (islandClusters[islandKey]) {
+        islandClusters[islandKey].count += 1;
+        islandClusters[islandKey].tabung += kuota;
+        islandClusters[islandKey].omset += omset;
+      }
 
       const cityName = p.kota_kabupaten || 'Kabupaten';
       if (!cityMap[cityName]) cityMap[cityName] = { name: cityName, count: 0 };
@@ -172,6 +201,12 @@ export async function GET(req: NextRequest) {
     const marketShareTabungPercent = totalTabungKlien > 0 ? Number(((totalTabungKlien / BENCHMARK_NASIONAL.totalTabungNasionalBulanan) * 100).toFixed(4)) : 0;
     const penetrasiPangkalanPercent = totalPangkalan > 0 ? Number(((totalPangkalan / BENCHMARK_NASIONAL.totalPangkalanNasional) * 100).toFixed(3)) : 0;
     const penetrasiAgenPercent = totalAgenKita > 0 ? Number(((totalAgenKita / BENCHMARK_NASIONAL.totalAgenNasional) * 100).toFixed(2)) : 0;
+
+    // Proyeksi Monetisasi MRR SaaS Bot
+    const mrrAt50 = totalTabungKlien * 50;
+    const mrrAt100 = totalTabungKlien * 100;
+    const mrrFlat = totalPangkalan * 100000;
+    const arrValuation = mrrAt100 * 12;
 
     const topAgents = Object.values(agentMap)
       .map(ag => {
@@ -233,6 +268,13 @@ export async function GET(req: NextRequest) {
         // 3. Heatmap & Wilayah
         topProvinces,
         topCities,
+        islandClusters: Object.values(islandClusters),
+
+        // 4. Proyeksi Monetisasi MRR
+        mrrAt50,
+        mrrAt100,
+        mrrFlat,
+        arrValuation,
 
         topAgents,
         brandStats,
