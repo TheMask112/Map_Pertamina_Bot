@@ -4,8 +4,8 @@
 import { sendWhatsApp } from './fonnte';
 
 export async function sendTelegramToAdmin(message: string): Promise<boolean> {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID || process.env.ADMIN_CHAT_ID;
+  const token = process.env.TELEGRAM_KEYGEN_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || '8760670116:AAG6bj_wGZdKZbEnHDHMMB3bQZtMR9_LJt0';
+  const adminChatId = process.env.ADMIN_TELEGRAM_ID || process.env.TELEGRAM_ADMIN_CHAT_ID || process.env.ADMIN_CHAT_ID || '1203246492';
 
   if (!token || !adminChatId) {
     console.warn('[Telegram Admin] TELEGRAM_BOT_TOKEN atau TELEGRAM_ADMIN_CHAT_ID belum diatur.');
