@@ -194,6 +194,47 @@ export default function AdminPortal() {
     setOrders([]);
   };
 
+  const exportTelemetryToCsv = () => {
+    if (telemetryPangkalans.length === 0) {
+      alert('Belum ada data pangkalan untuk diexport.');
+      return;
+    }
+    const headers = [
+      'Merchant ID', 'Nama Pangkalan', 'Nama Pemilik', 'WhatsApp', 'PT Agen Penyalur',
+      'Kota/Kabupaten', 'Provinsi', 'Alamat', 'Kuota Bulanan (Tabung)', 'Estimasi Omset',
+      'Estimasi Laba', 'Platform', 'Model Device', 'OS', 'IP Address', 'ISP', 'Terakhir Aktif'
+    ];
+    const rows = telemetryPangkalans.map(p => [
+      `"${p.merchant_id || ''}"`,
+      `"${(p.merchant_name || '').replace(/"/g, '""')}"`,
+      `"${(p.owner_name || '').replace(/"/g, '""')}"`,
+      `"${p.phone || ''}"`,
+      `"${(p.agent_name || '').replace(/"/g, '""')}"`,
+      `"${(p.kota_kabupaten || '').replace(/"/g, '""')}"`,
+      `"${(p.provinsi || '').replace(/"/g, '""')}"`,
+      `"${(p.address || '').replace(/"/g, '""')}"`,
+      p.kuota_pertamina_bulanan || 0,
+      p.estimasi_omset_bulanan || 0,
+      p.estimasi_laba_bulanan || 0,
+      `"${p.platform || ''}"`,
+      `"${(p.device_model || '').replace(/"/g, '""')}"`,
+      `"${(p.device_os || '').replace(/"/g, '""')}"`,
+      `"${p.ip_address || ''}"`,
+      `"${p.isp || ''}"`,
+      `"${p.last_sync_at ? new Date(p.last_sync_at).toLocaleString('id-ID') : ''}"`
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Database_Pangkalan_Klien_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleMarkAsPaid = async (orderId: string) => {
     if (!confirm('Apakah Anda yakin ingin menandai transaksi ini LUNAS secara manual?')) return;
     try {
@@ -895,14 +936,14 @@ export default function AdminPortal() {
       {/* VIEW 3: INTELIJEN PANGKALAN & PASAR */}
       {adminTab === 'intelligence' && (
         <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
-          {/* KPI Utama */}
+          {/* KPI Utama Data Aktual Platform Kita */}
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
             gap: '20px'
           }}>
             <div className="glass-card">
-              <h3 style={{ fontSize: '0.82rem', color: 'hsl(var(--text-secondary))', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🏢 Total Pangkalan Terdata</h3>
+              <h3 style={{ fontSize: '0.82rem', color: 'hsl(var(--text-secondary))', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🏢 Pangkalan Klien Kita</h3>
               <p style={{ fontSize: '2.2rem', fontWeight: 800, color: '#a78bfa' }}>{telemetryMetrics?.totalPangkalan || telemetryPangkalans.length}</p>
               <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginTop: '4px' }}>
                 📱 Android: {telemetryMetrics?.androidCount || 0} | 💻 PC: {telemetryMetrics?.windowsCount || 0}
@@ -910,32 +951,98 @@ export default function AdminPortal() {
             </div>
 
             <div className="glass-card">
-              <h3 style={{ fontSize: '0.82rem', color: 'hsl(var(--text-secondary))', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🛢️ Total Tabung Dikelola</h3>
+              <h3 style={{ fontSize: '0.82rem', color: 'hsl(var(--text-secondary))', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🛢️ Volume Tabung Klien</h3>
               <p style={{ fontSize: '2.2rem', fontWeight: 800, color: '#38bdf8' }}>
-                {(telemetryMetrics?.totalTabungNasional || 0).toLocaleString('id-ID')}
+                {(telemetryMetrics?.totalTabungKlien || telemetryMetrics?.totalTabungNasional || 0).toLocaleString('id-ID')}
               </p>
               <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginTop: '4px' }}>
-                Total kuota bulanan resmi terverifikasi
+                Total kuota bulanan pangkalan pengguna bot
               </div>
             </div>
 
             <div className="glass-card">
-              <h3 style={{ fontSize: '0.82rem', color: 'hsl(var(--text-secondary))', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>💰 Estimasi Omset Pasar</h3>
+              <h3 style={{ fontSize: '0.82rem', color: 'hsl(var(--text-secondary))', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>💰 Perputaran Omset Klien</h3>
               <p style={{ fontSize: '2.2rem', fontWeight: 800, color: '#34d399' }}>
                 {formatRupiah(telemetryMetrics?.totalEstimasiOmset || 0)}
               </p>
               <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginTop: '4px' }}>
-                Perputaran omset gas pangkalan klien
+                Omset perputaran gas pangkalan klien kita
               </div>
             </div>
 
             <div className="glass-card">
-              <h3 style={{ fontSize: '0.82rem', color: 'hsl(var(--text-secondary))', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>💵 Estimasi Laba Pangkalan</h3>
+              <h3 style={{ fontSize: '0.82rem', color: 'hsl(var(--text-secondary))', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🏢 PT Agen Terhubung</h3>
               <p style={{ fontSize: '2.2rem', fontWeight: 800, color: '#fbbf24' }}>
-                {formatRupiah(telemetryMetrics?.totalEstimasiLaba || 0)}
+                {telemetryMetrics?.totalAgenKita || telemetryMetrics?.topAgents?.length || 0}
               </p>
               <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginTop: '4px' }}>
-                Margin laba bersih pangkalan (Rp 2.000/tb)
+                Agen penyalur yang pangkalannya pakai bot kita
+              </div>
+            </div>
+          </div>
+
+          {/* Card Benchmark Nasional & Pangsa Pasar (Market Share) */}
+          <div className="glass-card" style={{
+            padding: '24px',
+            borderRadius: '20px',
+            background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%)',
+            border: '1px solid rgba(56, 189, 248, 0.3)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  📊 Analisis Pangsa Pasar (Market Share) vs Benchmark Nasional
+                </h3>
+                <p style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '2px' }}>
+                  Perbandingan data aktual pengguna bot kita terhadap total populasi pasar resmi LPG 3Kg nasional (Pertamina/ESDM)
+                </p>
+              </div>
+              <span style={{ padding: '6px 14px', borderRadius: '20px', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', fontSize: '0.78rem', fontWeight: 700 }}>
+                🇮🇩 Benchmark Nasional: ~250.000 Pangkalan & 220 Juta Tabung/Bln
+              </span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
+              {/* Pangsa Pasar Tabung */}
+              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '16px', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.85rem', color: '#cbd5e1' }}>Pangsa Pasar Volume Tabung</span>
+                  <strong style={{ color: '#38bdf8', fontSize: '1.05rem' }}>{telemetryMetrics?.marketShareTabungPercent || 0}%</strong>
+                </div>
+                <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{ width: `${Math.min(100, Math.max(4, (telemetryMetrics?.marketShareTabungPercent || 0) * 50))}%`, height: '100%', background: '#38bdf8', borderRadius: '4px' }} />
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '6px' }}>
+                  {(telemetryMetrics?.totalTabungKlien || telemetryMetrics?.totalTabungNasional || 0).toLocaleString('id-ID')} dari 220.000.000 Tabung Kuota Nasional / Bln
+                </div>
+              </div>
+
+              {/* Penetrasi Pangkalan */}
+              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '16px', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.85rem', color: '#cbd5e1' }}>Penetrasi Pangkalan</span>
+                  <strong style={{ color: '#a78bfa', fontSize: '1.05rem' }}>{telemetryMetrics?.penetrasiPangkalanPercent || 0}%</strong>
+                </div>
+                <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{ width: `${Math.min(100, Math.max(4, (telemetryMetrics?.penetrasiPangkalanPercent || 0) * 50))}%`, height: '100%', background: '#a78bfa', borderRadius: '4px' }} />
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '6px' }}>
+                  {telemetryMetrics?.totalPangkalan || telemetryPangkalans.length} dari ~250.000 Pangkalan Resmi Indonesia
+                </div>
+              </div>
+
+              {/* Penetrasi PT Agen */}
+              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '16px', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.85rem', color: '#cbd5e1' }}>Penetrasi PT Agen LPG</span>
+                  <strong style={{ color: '#34d399', fontSize: '1.05rem' }}>{telemetryMetrics?.penetrasiAgenPercent || 0}%</strong>
+                </div>
+                <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{ width: `${Math.min(100, Math.max(4, (telemetryMetrics?.penetrasiAgenPercent || 0) * 20))}%`, height: '100%', background: '#34d399', borderRadius: '4px' }} />
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '6px' }}>
+                  {telemetryMetrics?.totalAgenKita || telemetryMetrics?.topAgents?.length || 0} dari ~5.500 PT Agen Se-Indonesia
+                </div>
               </div>
             </div>
           </div>
@@ -1033,7 +1140,7 @@ export default function AdminPortal() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.85rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '6px' }}>
                   <span style={{ color: '#94a3b8' }}>Dominasi OS:</span>
-                  <strong style={{ color: '#34d399' }}>Android (68%) / PC (32%)</strong>
+                  <strong style={{ color: '#34d399' }}>Android ({telemetryMetrics?.androidCount || 0}) / PC ({telemetryMetrics?.windowsCount || 0})</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '6px' }}>
                   <span style={{ color: '#94a3b8' }}>Top Merk HP:</span>
@@ -1051,14 +1158,21 @@ export default function AdminPortal() {
             </div>
           </div>
 
-          {/* Ranking Top 10 PT Agen Penyalur Terbesar */}
+          {/* Ranking & Peta Penetrasi PT Agen Penyalur Terbesar */}
           {telemetryMetrics?.topAgents && telemetryMetrics.topAgents.length > 0 && (
             <div className="glass-card" style={{ padding: '24px', borderRadius: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#ffffff' }}>
-                  🏢 Peringkat PT Agen Penyalur LPG (Berdasarkan Jumlah Pangkalan)
-                </h3>
-                <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Peluang Lisensi Korporat B2B</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' }}>
+                <div>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#ffffff' }}>
+                    🏢 Peta Penetrasi PT Agen Penyalur & Peluang Ekspansi B2B
+                  </h3>
+                  <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px' }}>
+                    Identifikasi PT Agen yang pangkalannya telah masuk ke kita untuk peluang penawaran lisensi korporat borongan
+                  </p>
+                </div>
+                <span style={{ fontSize: '0.8rem', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.15)', padding: '4px 10px', borderRadius: '8px', fontWeight: 700 }}>
+                  Rata-rata 1 Agen = ~40 Pangkalan
+                </span>
               </div>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
@@ -1066,9 +1180,11 @@ export default function AdminPortal() {
                     <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
                       <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Ranking</th>
                       <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Nama PT Agen Penyalur</th>
-                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Jumlah Pangkalan Klien</th>
-                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Total Volume Tabung</th>
-                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Estimasi Omset Agen</th>
+                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Pangkalan Kita</th>
+                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Penetrasi Agen</th>
+                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>🎯 Sisa Potensi Belum Terjamah</th>
+                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Volume Tabung Klien</th>
+                      <th style={{ padding: '10px', color: 'hsl(var(--text-secondary))' }}>Estimasi Omset</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1082,6 +1198,17 @@ export default function AdminPortal() {
                         </td>
                         <td style={{ padding: '12px 10px', fontWeight: 800, color: '#38bdf8' }}>
                           {ag.count} Pangkalan
+                        </td>
+                        <td style={{ padding: '12px 10px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ width: '60px', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                              <div style={{ width: `${ag.penetrasiInternal || 10}%`, height: '100%', background: '#38bdf8', borderRadius: '3px' }} />
+                            </div>
+                            <span style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: 700 }}>{ag.penetrasiInternal || 10}%</span>
+                          </div>
+                        </td>
+                        <td style={{ padding: '12px 10px', fontWeight: 700, color: '#fbbf24' }}>
+                          +{ag.sisaPotensi || 35} Pangkalan
                         </td>
                         <td style={{ padding: '12px 10px', fontWeight: 700 }}>
                           {(ag.tabung || 0).toLocaleString('id-ID')} Tabung/bln
@@ -1097,7 +1224,7 @@ export default function AdminPortal() {
             </div>
           )}
 
-          {/* Search & Filter */}
+          {/* Search & Export CSV Toolbar */}
           <div className="glass-card" style={{ padding: '16px 24px', display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
             <input
               type="text"
@@ -1107,6 +1234,23 @@ export default function AdminPortal() {
               onChange={(e) => setTelemetrySearch(e.target.value)}
               style={{ flex: 1, minWidth: '280px', fontSize: '0.95rem' }}
             />
+            <button
+              onClick={exportTelemetryToCsv}
+              className="btn btn-secondary"
+              style={{
+                padding: '10px 18px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontWeight: 700,
+                fontSize: '0.9rem',
+                borderColor: 'rgba(52, 211, 153, 0.4)',
+                color: '#34d399'
+              }}
+            >
+              📥 Export CSV / Excel
+            </button>
             <span style={{ fontSize: '0.85rem', color: 'hsl(var(--text-muted))' }}>
               Menampilkan {filteredTelemetry.length} dari {telemetryPangkalans.length} pangkalan
             </span>
