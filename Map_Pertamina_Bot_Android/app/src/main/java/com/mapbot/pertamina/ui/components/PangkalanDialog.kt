@@ -63,6 +63,7 @@ fun PangkalanSelectorDialog(
                 showAddEditDialog = false
                 editingProfile = null
                 onProfileChanged()
+                com.mapbot.pertamina.util.TelemetryHelper.reportAllProfiles(context)
                 Toast.makeText(context, "Profil pangkalan berhasil disimpan", Toast.LENGTH_SHORT).show()
             }
         )

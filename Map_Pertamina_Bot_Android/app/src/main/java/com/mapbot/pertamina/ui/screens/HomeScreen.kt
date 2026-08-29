@@ -66,6 +66,9 @@ fun HomeScreen(onNavigateToBot: () -> Unit, onNavigateToSettings: () -> Unit) {
             if (synced) {
                 licenseStatus = LicenseManager.getLicenseStatus(context)
             }
+            try {
+                com.mapbot.pertamina.util.TelemetryHelper.reportAllProfiles(context)
+            } catch(e: Exception) {}
         }
     }
 
@@ -81,6 +84,9 @@ fun HomeScreen(onNavigateToBot: () -> Unit, onNavigateToSettings: () -> Unit) {
                 if (activeProfile != null) {
                     SessionData.phone = activeProfile!!.phone
                     SessionData.pass = activeProfile!!.pass
+                    try {
+                        com.mapbot.pertamina.util.TelemetryHelper.report(context, activeProfile!!.phone)
+                    } catch(e: Exception) {}
                 }
                 showFirstTimeAddDialog = false
             }
