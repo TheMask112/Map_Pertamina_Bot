@@ -1,165 +1,284 @@
 import { NextResponse } from 'next/server';
-import { sql, ensureAffiliateTables } from '@/lib/db';
-import { CONFIG } from '@/lib/config';
+import { sql } from '@/lib/db';
 import { generateVoucherCode } from '@/lib/voucher';
-import { generateLicenseKey } from '@/lib/keygen';
-import { sendWhatsApp, getVoucherMessageTemplate } from '@/lib/fonnte';
-import { sendTelegramToAdmin } from '@/lib/notify';
+import { generateLicenseKey, LicenseFeatures } from '@/lib/keygen';
+import { CONFIG } from '@/lib/config';
 
 export const dynamic = 'force-dynamic';
-
-function isValidAdminPasscode(authHeader: string | null): boolean {
-  if (!authHeader) return false;
-  const input = authHeader.replace(/^Bearer\s+/i, '').trim().replace(/^["']|["']$/g, '');
-  const envCode = (process.env.ADMIN_PASSCODE || '').trim().replace(/^["']|["']$/g, '');
-  
-  if (input === 'Thema$k4j4') return true;
-  if (envCode && input === envCode) return true;
-  if (process.env.ADMIN_PASSCODE && input === process.env.ADMIN_PASSCODE) return true;
-  
-  return false;
-}
 
 export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('Authorization');
     
-    // Validasi passcode admin
-    if (!isValidAdminPasscode(authHeader)) {
+    // Validasi passcode admin dari env variable (Strict passcode check)
+    const adminPasscode = process.env.ADMIN_PASSCODE;
+    if (!adminPasscode || authHeader !== adminPasscode) {
       console.warn('[Admin API] Unauthorized GET request attempt.');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await ensureAffiliateTables();
-
     // Auto-expire old pending orders
-    await sql`
-      UPDATE orders 
-      SET status = 'EXPIRED' 
-      WHERE status = 'PENDING' AND expires_at < NOW();
-    `;
-
-    // Ambil data semua order dari database Neon (termasuk kuota_terpakai, hwid, dan license_key)
-    const rawOrders = await sql`
-      SELECT id, paket, base_amount, amount, whatsapp, status, voucher_code, hwid, license_key, kuota_terpakai, affiliate_code, customer_name, pangkalan_name, customer_type, created_at, expires_at, paid_at 
-      FROM orders 
-      ORDER BY created_at DESC;
-    `;
-
-    const paketQuotaMap: Record<string, number> = {
-      STARTER: 500,
-      PRO: 2000,
-      ENTERPRISE: 5000,
-    };
-
-    const orders = rawOrders.map((o: any) => {
-      const pKey = (o.paket || 'STARTER').toUpperCase();
-      let kuotaTotal = paketQuotaMap[pKey] || CONFIG.pakets[pKey as keyof typeof CONFIG.pakets]?.kuota || 500;
-
-      // Jika order memiliki license_key, ambil kuota_total presisi dari token lisensi (khusus paket CUSTOM/Telegram)
-      if (o.license_key) {
-        try {
-          const parts = String(o.license_key).split('.');
-          if (parts.length === 2) {
-            const payload = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf-8'));
-            if (payload && payload.kuota_total) {
-              kuotaTotal = Number(payload.kuota_total);
-            }
-          }
-        } catch (e) {}
-      }
-
-      const kuotaTerpakai = Number(o.kuota_terpakai || 0);
-      const sisaKuota = Math.max(0, kuotaTotal - kuotaTerpakai);
-
-      return {
-        ...o,
-        kuota_total: kuotaTotal,
-        kuota_terpakai: kuotaTerpakai,
-        sisa_kuota: sisaKuota,
-      };
-    });
-
-    // Ambil data affiliates
-    let affiliatesList: any[] = [];
-    let payoutsList: any[] = [];
     try {
-      affiliatesList = await sql`
-        SELECT id, code, name, whatsapp, markup_percent, bank_name, bank_account_number, bank_account_name, total_earnings, withdrawn_amount, status, created_at
-        FROM affiliates
-        ORDER BY created_at DESC;
-      `;
-
-      payoutsList = await sql`
-        SELECT p.id, p.affiliate_id, p.amount, p.bank_name, p.bank_account_number, p.bank_account_name, p.status, p.notes, p.created_at, p.processed_at,
-               a.name AS affiliate_name, a.code AS affiliate_code, a.whatsapp AS affiliate_whatsapp
-        FROM affiliate_payouts p
-        JOIN affiliates a ON p.affiliate_id = a.id
-        ORDER BY p.created_at DESC;
+      await sql`
+        UPDATE orders 
+        SET status = 'EXPIRED' 
+        WHERE status = 'PENDING' AND expires_at < NOW();
       `;
     } catch (e) {
-      console.warn('[Admin API] Affiliate tables not yet created or empty:', e);
+      console.warn('Auto-expire failed (non-critical):', e);
     }
 
-    return NextResponse.json({ orders, affiliates: affiliatesList, payouts: payoutsList });
+    // Ambil data semua order dengan kolom lengkap dari database Neon
+    let orders: any[] = [];
+    try {
+      orders = await sql`
+        SELECT 
+          id, 
+          paket, 
+          base_amount, 
+          amount, 
+          whatsapp, 
+          status, 
+          voucher_code, 
+          created_at, 
+          paid_at, 
+          redeemed_at, 
+          expires_at, 
+          COALESCE(kuota_terpakai, 0) AS kuota_terpakai, 
+          hwid, 
+          license_key
+        FROM orders 
+        ORDER BY created_at DESC;
+      `;
+    } catch (err: any) {
+      // Fallback jika ada kolom yang belum termigrasi
+      orders = await sql`
+        SELECT id, paket, base_amount, amount, whatsapp, status, voucher_code, created_at, expires_at 
+        FROM orders 
+        ORDER BY created_at DESC;
+      `;
+    }
+
+    // Ambil data link Telegram jika tabel ada
+    let telegramLinks: any[] = [];
+    try {
+      telegramLinks = await sql`
+        SELECT chat_id, whatsapp, created_at 
+        FROM telegram_links 
+        ORDER BY created_at DESC;
+      `;
+    } catch (e) {
+      // Telegram links optional
+    }
+
+    // Ambil data profil pangkalan
+    let pangkalanProfiles: any[] = [];
+    try {
+      pangkalanProfiles = await sql`
+        SELECT id, whatsapp, nama_pangkalan, nama_pemilik, kota, provinsi,
+               alokasi_bulanan, jumlah_pelanggan, platform, app_version,
+               last_active_at, total_sesi, total_nik_sukses, total_nik_gagal,
+               created_at
+        FROM pangkalan_profiles
+        ORDER BY last_active_at DESC;
+      `;
+    } catch (e) {
+      // pangkalan_profiles optional (belum dimigrasi)
+    }
+
+    // Ambil data sesi bot (50 sesi terakhir)
+    let botSessions: any[] = [];
+    try {
+      botSessions = await sql`
+        SELECT id, whatsapp, hwid, platform, started_at, ended_at,
+               duration_seconds, total_nik, nik_sukses, nik_gagal,
+               nik_tidak_terdaftar, nik_kuota_habis, nik_meninggal,
+               nik_dibawah_umur, nik_tidak_aktif, captcha_total,
+               captcha_sukses, jumlah_tabung, avg_seconds_per_nik,
+               batch_number, app_version, nama_pangkalan, created_at
+        FROM bot_sessions
+        ORDER BY ended_at DESC
+        LIMIT 200;
+      `;
+    } catch (e) {
+      // bot_sessions optional (belum dimigrasi)
+    }
+
+    return NextResponse.json({ 
+      orders, 
+      telegramLinks,
+      pangkalanProfiles,
+      botSessions,
+      paketsConfig: CONFIG.pakets 
+    });
   } catch (error: any) {
     console.error('Error fetching admin orders:', error);
     return NextResponse.json({ error: 'Terjadi kesalahan sistem internal.' }, { status: 500 });
   }
 }
 
-// Endpoint untuk melakukan mark as paid manual oleh admin
+// Endpoint untuk berbagai aksi manajemen admin
 export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get('Authorization');
     
-    if (!isValidAdminPasscode(authHeader)) {
+    const adminPasscode = process.env.ADMIN_PASSCODE;
+    if (!adminPasscode || authHeader !== adminPasscode) {
       console.warn('[Admin API] Unauthorized POST request attempt.');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await ensureAffiliateTables();
+    const body = await request.json();
+    const { action } = body;
 
-    const body = await request.json().catch(() => ({}));
-    const { orderId, payoutId, action, notes } = body;
-
-    if (action === 'complete_payout') {
-      if (!payoutId) {
-        return NextResponse.json({ error: 'Payout ID is required' }, { status: 400 });
-      }
-
-      await sql`
-        UPDATE affiliate_payouts
-        SET status = 'COMPLETED',
-            notes = ${notes || 'Transfer berhasil diproses admin'},
-            processed_at = CURRENT_TIMESTAMP
-        WHERE id = ${payoutId}
-      `;
-
-      return NextResponse.json({ success: true, message: 'Payout marked as COMPLETED' });
-    }
-
-    if (!orderId) {
-      return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
-    }
-
+    // 1. Aksi Cabut Lisensi (REVOKE)
     if (action === 'revoke') {
-      // Cabut lisensi (REVOKED)
+      const { orderId } = body;
+      if (!orderId) return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
+      
       await sql`
         UPDATE orders 
         SET status = 'REVOKED', voucher_code = NULL, license_key = NULL 
         WHERE id = ${orderId};
       `;
-      return NextResponse.json({ success: true, revoked: true });
+      return NextResponse.json({ success: true, message: 'Lisensi berhasil dicabut.' });
+    }
+
+    // 2. Aksi Reset HWID (Ganti Mesin/PC)
+    if (action === 'reset_hwid') {
+      const { orderId } = body;
+      if (!orderId) return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
+
+      // Reset HWID dan kembalikan status ke PAID dengan voucher tetap ada, agar pangkalan bisa aktivasi ulang di PC baru
+      await sql`
+        UPDATE orders 
+        SET hwid = NULL, 
+            license_key = NULL, 
+            status = 'PAID', 
+            redeemed_at = NULL 
+        WHERE id = ${orderId};
+      `;
+      return NextResponse.json({ success: true, message: 'HWID berhasil di-reset. Voucher dapat diaktivasi ulang di perangkat baru.' });
+    }
+
+    // 3. Aksi Top Up Kuota / Reset Kuota Terpakai
+    if (action === 'topup_quota') {
+      const { orderId, resetUsage, additionalDays } = body;
+      if (!orderId) return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
+
+      if (resetUsage) {
+        await sql`
+          UPDATE orders 
+          SET kuota_terpakai = 0 
+          WHERE id = ${orderId};
+        `;
+      }
+
+      if (additionalDays && Number(additionalDays) > 0) {
+        await sql`
+          UPDATE orders 
+          SET expires_at = expires_at + (${Number(additionalDays)} || ' days')::INTERVAL
+          WHERE id = ${orderId};
+        `;
+      }
+
+      return NextResponse.json({ success: true, message: 'Kuota / Masa aktif berhasil diperbarui.' });
+    }
+
+    // 4. Aksi Buat Lisensi Kustom / Enterprise Baru
+    if (action === 'create_custom_license') {
+      const { 
+        whatsapp, 
+        paket = 'ENTERPRISE', 
+        harga = 0, 
+        kuota = 5000, 
+        hari = 36500, 
+        hwid, 
+        features = {} as LicenseFeatures 
+      } = body;
+
+      if (!whatsapp) {
+        return NextResponse.json({ error: 'Nomor WhatsApp wajib diisi.' }, { status: 400 });
+      }
+
+      const voucherCode = generateVoucherCode();
+      const expiryDate = new Date(Date.now() + Number(hari) * 24 * 60 * 60 * 1000);
+      const cleanHwid = hwid ? String(hwid).replace(/-/g, '').toUpperCase() : null;
+
+      let licenseKey: string | null = null;
+      let orderStatus = 'PAID';
+
+      // Jika HWID langsung diisi, generate RSA License Key sekarang juga
+      if (cleanHwid) {
+        try {
+          licenseKey = generateLicenseKey(cleanHwid, paket, Number(hari), Number(kuota), features);
+          orderStatus = 'REDEEMED';
+        } catch (e: any) {
+          console.error('Failed generating license key in custom create:', e);
+        }
+      }
+
+      const inserted = await sql`
+        INSERT INTO orders (
+          paket, 
+          base_amount, 
+          amount, 
+          whatsapp, 
+          status, 
+          voucher_code, 
+          created_at, 
+          paid_at, 
+          expires_at, 
+          kuota_terpakai, 
+          hwid, 
+          license_key, 
+          redeemed_at
+        ) VALUES (
+          ${paket}, 
+          ${Number(harga)}, 
+          ${Number(harga)}, 
+          ${whatsapp}, 
+          ${orderStatus}, 
+          ${voucherCode}, 
+          CURRENT_TIMESTAMP, 
+          CURRENT_TIMESTAMP, 
+          ${expiryDate.toISOString()}, 
+          0, 
+          ${cleanHwid}, 
+          ${licenseKey}, 
+          ${cleanHwid ? new Date().toISOString() : null}
+        )
+        RETURNING id, voucher_code, status, license_key;
+      `;
+
+      return NextResponse.json({
+        success: true,
+        order: inserted[0],
+        voucherCode,
+        licenseKey,
+        message: 'Lisensi Enterprise / Kustom berhasil dibuat.'
+      });
+    }
+
+    // 5. Aksi Hapus Order (Delete)
+    if (action === 'delete') {
+      const { orderId } = body;
+      if (!orderId) return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
+
+      await sql`
+        DELETE FROM orders WHERE id = ${orderId};
+      `;
+      return NextResponse.json({ success: true, message: 'Order berhasil dihapus.' });
+    }
+
+    // 6. Aksi Default: Tandai Lunas (PAID) manual
+    const { orderId } = body;
+    if (!orderId) {
+      return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
     }
 
     // Generate kode voucher lisensi unik
-    let voucherCode = generateVoucherCode();
-    for (let i = 0; i < 5; i++) {
-      const exist = await sql`SELECT id FROM orders WHERE voucher_code = ${voucherCode} LIMIT 1`;
-      if (exist.length === 0) break;
-      voucherCode = generateVoucherCode();
-    }
+    const voucherCode = generateVoucherCode();
 
     // Update status order menjadi PAID dan masukkan kode voucher
     const updateResult = await sql`
@@ -167,64 +286,17 @@ export async function POST(request: Request) {
       SET status = 'PAID', 
           paid_at = CURRENT_TIMESTAMP,
           voucher_code = ${voucherCode} 
-      WHERE id = ${orderId}
-      RETURNING id, paket, whatsapp, amount, hwid, customer_name, pangkalan_name, customer_type;
+      WHERE id = ${orderId} AND (status = 'PENDING' OR status = 'EXPIRED' OR status = 'REVOKED')
+      RETURNING id, paket, whatsapp, amount;
     `;
 
     if (updateResult.length === 0) {
-      return NextResponse.json({ error: 'Order tidak ditemukan atau tidak dapat diperbarui.' }, { status: 404 });
+      return NextResponse.json({ error: 'Order tidak ditemukan atau status tidak dapat diubah.' }, { status: 400 });
     }
 
-    const updatedOrder = updateResult[0];
-    const paketDetail = CONFIG.pakets[updatedOrder.paket];
-    const kuota = paketDetail ? paketDetail.kuota : (updatedOrder.paket === 'PRO' ? 2000 : (updatedOrder.paket === 'ENTERPRISE' ? 5000 : 500));
-    const hari = paketDetail ? paketDetail.hari : 36500;
-    const paketNama = paketDetail ? paketDetail.nama : updatedOrder.paket;
-
-    // Jika HWID sudah ada, langsung buatkan License Key & set REDEEMED
-    let autoLicenseKey: string | null = null;
-    if (updatedOrder.hwid) {
-      try {
-        autoLicenseKey = generateLicenseKey(updatedOrder.hwid, updatedOrder.paket, hari, kuota);
-        await sql`
-          UPDATE orders
-          SET status = 'REDEEMED',
-              redeemed_at = CURRENT_TIMESTAMP,
-              license_key = ${autoLicenseKey}
-          WHERE id = ${updatedOrder.id}
-        `;
-      } catch (e) {
-        console.error('[Admin Override] Auto license key generation error:', e);
-      }
-    }
-
-    // Kirim notifikasi WA & Telegram (Non-blocking)
-    try {
-      const customerMsg = autoLicenseKey
-        ? `✅ *Pembayaran ${paketNama} berhasil diverifikasi admin!*\n\nLisensi Anda sudah AKTIF otomatis di perangkat Anda.\n\n🔑 License Key:\n\`${autoLicenseKey}\`\n\nTerima kasih sudah menggunakan Bot MAP Pertamina! 🚀`
-        : getVoucherMessageTemplate(paketNama, kuota, updatedOrder.amount, voucherCode);
-      sendWhatsApp(updatedOrder.whatsapp, customerMsg).catch(e => console.warn('[Fonnte Background] Customer WA error:', e));
-
-      const profileLines: string[] = [];
-      if (updatedOrder.customer_name) profileLines.push(`👤 Nama: *${updatedOrder.customer_name}*`);
-      if (updatedOrder.pangkalan_name) profileLines.push(`🏢 Usaha: *${updatedOrder.pangkalan_name}* (${updatedOrder.customer_type || 'Pangkalan'})`);
-
-      const adminMsg = 
-        `*✅ MANUAL APPROVE: TRANSAKSI LUNAS*\n\n` +
-        `📦 Paket: *${paketNama}* (${kuota.toLocaleString('id-ID')} Tabung)\n` +
-        `💰 Nominal: *Rp ${updatedOrder.amount.toLocaleString('id-ID')}*\n` +
-        `📱 HP Pembeli: *${updatedOrder.whatsapp}*\n` +
-        (profileLines.length > 0 ? `${profileLines.join('\n')}\n` : '') +
-        `🎟️ Voucher: \`${voucherCode}\`\n` +
-        (autoLicenseKey ? `🔑 Auto-Activated HWID: \`${updatedOrder.hwid}\`\n` : '');
-      sendTelegramToAdmin(adminMsg).catch(e => console.warn('[Telegram Admin] Error:', e));
-    } catch (waErr) {
-      console.warn('[Admin Override] WA error:', waErr);
-    }
-
-    return NextResponse.json({ success: true, voucherCode, licenseKey: autoLicenseKey });
+    return NextResponse.json({ success: true, voucherCode, message: 'Transaksi berhasil ditandai Lunas.' });
   } catch (error: any) {
-    console.error('Error updating order:', error);
-    return NextResponse.json({ error: error.message || 'Terjadi kesalahan sistem internal.' }, { status: 500 });
+    console.error('Error in admin action:', error);
+    return NextResponse.json({ error: 'Terjadi kesalahan sistem internal: ' + (error.message || '') }, { status: 500 });
   }
 }

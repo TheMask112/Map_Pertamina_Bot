@@ -43,8 +43,7 @@ function generateLicenseKey(hwid: string, paket: string, hari: number, kuota: nu
 }
 
 async function sendMessage(chatId: number, text: string, replyToMessageId?: number) {
-  const token = process.env.TELEGRAM_KEYGEN_BOT_TOKEN || '';
-  if (!token) return;
+  const token = process.env.TELEGRAM_KEYGEN_BOT_TOKEN || '8760670116:AAG6bj_wGZdKZbEnHDHMMB3bQZtMR9_LJt0';
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
 
   try {

@@ -82,24 +82,4 @@ class TouchSimulator(private val webView: WebView) {
         webView.dispatchTouchEvent(upEvent)
         upEvent.recycle()
     }
-
-    suspend fun tapHumanLike(x: Float, y: Float) {
-        val downTime = SystemClock.uptimeMillis()
-        val eventTime = downTime
-
-        val downEvent = MotionEvent.obtain(downTime, eventTime, MotionEvent.ACTION_DOWN, x, y, 0).apply {
-            source = InputDevice.SOURCE_TOUCHSCREEN
-        }
-        webView.dispatchTouchEvent(downEvent)
-        downEvent.recycle()
-
-        delay(Random.nextLong(60, 120))
-
-        val upTime = SystemClock.uptimeMillis()
-        val upEvent = MotionEvent.obtain(downTime, upTime, MotionEvent.ACTION_UP, x, y, 0).apply {
-            source = InputDevice.SOURCE_TOUCHSCREEN
-        }
-        webView.dispatchTouchEvent(upEvent)
-        upEvent.recycle()
-    }
 }

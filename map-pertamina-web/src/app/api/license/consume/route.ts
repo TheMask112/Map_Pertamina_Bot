@@ -12,28 +12,21 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}));
     const amount = parseInt(body.amount, 10) || 1;
 
-    // Verifikasi keaslian kriptografi RSA lisensi
-    const { isValid, payload } = verifyLicenseKey(licenseKey);
-    if (!isValid || !payload) {
-      return NextResponse.json({ error: 'Lisensi tidak sah atau tanda tangan digital tidak valid.' }, { status: 403 });
-    }
-
-    const paketQuotaMap: Record<string, number> = {
-      STARTER: 500,
-      PRO: 2000,
-      ENTERPRISE: 5000,
-    };
-    const maxQuota = Number(payload.kuota_total) || paketQuotaMap[(payload.paket || '').toUpperCase()] || 500;
-
     const result = await sql`
       SELECT id, kuota_terpakai, status 
       FROM orders 
-      WHERE license_key = ${licenseKey} AND status IN ('REDEEMED', 'PAID')
+      WHERE license_key = ${licenseKey} AND status = 'REDEEMED' 
       LIMIT 1
     `;
 
     let order;
     if (result.length === 0) {
+      // Fallback: Verifikasi keaslian lisensi secara manual (untuk lisensi manual/lama yang belum terdaftar di DB)
+      const { isValid, payload } = verifyLicenseKey(licenseKey);
+      if (!isValid || !payload) {
+        return NextResponse.json({ error: 'Lisensi tidak aktif atau tidak ditemukan.' }, { status: 404 });
+      }
+
       // Daftarkan lisensi valid ini ke database orders
       const expiryDate = new Date(payload.expiry);
       const insertResult = await sql`
@@ -47,24 +40,12 @@ export async function POST(request: Request) {
         RETURNING id, kuota_terpakai, status
       `;
       order = insertResult[0];
+      console.log(`[API License Consume] Auto-registered legacy/manual license key for HWID: ${payload.hwid}`);
     } else {
       order = result[0];
     }
 
-    if (order.status === 'REVOKED') {
-      return NextResponse.json({ error: 'Lisensi telah dinonaktifkan (REVOKED).' }, { status: 403 });
-    }
-
-    const currentUsed = order.kuota_terpakai || 0;
-    if (currentUsed >= maxQuota) {
-      return NextResponse.json({ 
-        error: `Kuota lisensi telah habis (${currentUsed}/${maxQuota} tabung). Silakan top-up atau perpanjang lisensi.`,
-        kuota_terpakai: currentUsed,
-        kuota_total: maxQuota
-      }, { status: 403 });
-    }
-
-    const newUsed = Math.min(maxQuota, currentUsed + amount);
+    const newUsed = (order.kuota_terpakai || 0) + amount;
 
     await sql`
       UPDATE orders 
@@ -74,8 +55,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      kuota_terpakai: newUsed,
-      kuota_total: maxQuota
+      kuota_terpakai: newUsed
     });
   } catch (error) {
     console.error('[API License Consume Error]', error);

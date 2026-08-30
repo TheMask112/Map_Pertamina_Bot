@@ -9,6 +9,17 @@ import { createSign, createVerify, createPublicKey } from 'crypto';
 // RSA Private Key (hanya ada di server — JANGAN bocorkan ke client)
 const PRIVATE_KEY_PEM = process.env.RSA_PRIVATE_KEY as string;
 
+export interface LicenseFeatures {
+  can_submit_sales?: boolean;
+  can_update_customer?: boolean;
+  can_auto_captcha?: boolean;
+  can_multi_batch?: boolean;
+  max_devices?: number;
+  unlimited_quota?: boolean;
+  is_lifetime?: boolean;
+  [key: string]: any;
+}
+
 /**
  * Men-generate License Key bertanda tangan digital RSA-2048.
  * Format: base64url(JSON_payload).base64url(RSA_signature)
@@ -18,18 +29,28 @@ const PRIVATE_KEY_PEM = process.env.RSA_PRIVATE_KEY as string;
  * - license_generator.py   :: generate_license_key()
  * - Android LicenseManager :: verifyLicenseKeySignature() (verifier)
  */
-export function generateLicenseKey(hwid: string, paket: string, hari: number, kuota: number): string {
+export function generateLicenseKey(
+  hwid: string, 
+  paket: string, 
+  hari: number, 
+  kuota: number,
+  features?: LicenseFeatures
+): string {
   if (!PRIVATE_KEY_PEM) {
     throw new Error('RSA_PRIVATE_KEY environment variable is not defined!');
   }
   const expiry = new Date(Date.now() + hari * 24 * 60 * 60 * 1000).toISOString();
 
-  const payload = {
+  const payload: Record<string, any> = {
     hwid: hwid.replace(/-/g, '').toUpperCase(),
     paket: paket.toUpperCase(),
     expiry,
     kuota_total: kuota,
   };
+
+  if (features && Object.keys(features).length > 0) {
+    payload.features = features;
+  }
 
   const jsonBytes = Buffer.from(JSON.stringify(payload), 'utf-8');
   const jsonB64 = jsonBytes.toString('base64url');

@@ -22,22 +22,14 @@ export const CONFIG = {
   // Midtrans Client-safe settings
   midtrans: {
     clientKey: process.env.MIDTRANS_CLIENT_KEY || '',
-    isProduction: process.env.MIDTRANS_IS_PRODUCTION === 'true' || 
-                  Boolean(process.env.MIDTRANS_SERVER_KEY?.startsWith('Mid-server-')) ||
-                  Boolean(process.env.MIDTRANS_CLIENT_KEY?.startsWith('Mid-client-')),
-    apiUrl: (process.env.MIDTRANS_IS_PRODUCTION === 'true' || 
-             Boolean(process.env.MIDTRANS_SERVER_KEY?.startsWith('Mid-server-')) ||
-             Boolean(process.env.MIDTRANS_CLIENT_KEY?.startsWith('Mid-client-')))
+    isProduction: process.env.MIDTRANS_IS_PRODUCTION === 'true',
+    apiUrl: process.env.MIDTRANS_IS_PRODUCTION === 'true'
       ? 'https://api.midtrans.com/v2'
       : 'https://api.sandbox.midtrans.com/v2',
-    snapUrl: (process.env.MIDTRANS_IS_PRODUCTION === 'true' || 
-              Boolean(process.env.MIDTRANS_SERVER_KEY?.startsWith('Mid-server-')) ||
-              Boolean(process.env.MIDTRANS_CLIENT_KEY?.startsWith('Mid-client-')))
+    snapUrl: process.env.MIDTRANS_IS_PRODUCTION === 'true'
       ? 'https://app.midtrans.com/snap/v1/transactions'
       : 'https://app.sandbox.midtrans.com/snap/v1/transactions',
-    snapJsUrl: (process.env.MIDTRANS_IS_PRODUCTION === 'true' || 
-                Boolean(process.env.MIDTRANS_SERVER_KEY?.startsWith('Mid-server-')) ||
-                Boolean(process.env.MIDTRANS_CLIENT_KEY?.startsWith('Mid-client-')))
+    snapJsUrl: process.env.MIDTRANS_IS_PRODUCTION === 'true'
       ? 'https://app.midtrans.com/snap/snap.js'
       : 'https://app.sandbox.midtrans.com/snap/snap.js',
   },
@@ -56,7 +48,6 @@ export const CONFIG = {
       fitur: [
         '✔ Kuota 500 Tabung NIK',
         '✔ Masa Aktif Lifetime (Tanpa Batas)',
-        '✔ Simpan & Ganti Profil Pangkalan Bebas',
         '✔ Bypass Captcha Otomatis',
         '✔ Dukungan Multi-Batch Excel',
         '✔ Lisensi Terkunci per HWID'
@@ -73,7 +64,6 @@ export const CONFIG = {
       fitur: [
         '✔ Kuota 2.000 Tabung NIK',
         '✔ Masa Aktif Lifetime (Tanpa Batas)',
-        '✔ Simpan & Ganti Profil Pangkalan Bebas',
         '✔ Bypass Captcha Otomatis',
         '✔ Dukungan Multi-Batch Excel',
         '✔ Lisensi Terkunci per HWID',
@@ -91,8 +81,6 @@ export const CONFIG = {
       fitur: [
         '✔ Kuota 5.000 Tabung NIK',
         '✔ Masa Aktif Lifetime (Tanpa Batas)',
-        '✔ 🏢 Auto-Batch Semua Pangkalan (Proses Otomatis Sekali Klik)',
-        '✔ Bebas Simpan & Ganti Profil Pangkalan',
         '✔ Bypass Captcha Otomatis',
         '✔ Dukungan Multi-Batch Excel',
         '✔ Lisensi Terkunci per HWID',

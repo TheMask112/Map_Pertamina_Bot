@@ -1,12 +1,12 @@
 {
-  "versionCode": 19,
-  "apkUrl": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.9/MAP_Pertamina_Bot_v1.1.9.apk",
-  "latestVersion": "1.1.9",
-  "latestVersionCode": 19,
-  "url": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.9/MAP_Pertamina_Bot_v1.1.9.apk",
+  "versionCode": 12,
+  "apkUrl": "https://drive.google.com/file/d/13WFppMMlsSMm278Sjt8HacUkHPuAABd3/view?usp=drive_link",
+  "latestVersion": "1.2.0",
+  "latestVersionCode": 12,
+  "url": "https://drive.google.com/file/d/13WFppMMlsSMm278Sjt8HacUkHPuAABd3/view?usp=drive_link",
   "releaseNotes": [
-    "Penyempurnaan aplikasi dan perbaikan bugs",
-    "Optimasi performa dan kestabilan sistem",
-    "Peningkatan kompatibilitas perangkat"
+    "Fitur Baru: Pelaporan statistik sesi bot ke Dashboard Admin",
+    "Fitur Baru: Deteksi & sinkronisasi otomatis nama pangkalan",
+    "Peningkatan: Stabilitas transaksi & sinkronisasi kuota real-time"
   ]
 }

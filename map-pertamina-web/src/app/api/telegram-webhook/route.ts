@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8675950415:AAGNM0X-nmOn-FQCZGAFIHZ2Sd9JIq6oVyk'; // fallback or placeholder
 
 async function sendTelegramMessage(chatId: number | string, text: string, replyMarkup?: any) {
-  if (!TELEGRAM_BOT_TOKEN) return;
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
   const body: any = {
     chat_id: chatId,

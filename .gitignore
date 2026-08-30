@@ -1,9 +1,8 @@
-# Python
+﻿# Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.spec
-*.zip
 build/
 dist/
 *.dat
@@ -31,21 +30,6 @@ gradle-8.5/
 local.properties
 .idea/
 *.iml
-
-# Debug & Temporary files
-*.png
-*.jpg
-*.jpeg
-*.txt
-*.json
-!package.json
-!tsconfig.json
-!web-admin/package.json
-!map-pertamina-web/package.json
-!map-pertamina-web/public/update.json
-browser_data/
-.tempmediaStorage/
-scratch/
 
 # OS
 Thumbs.db
