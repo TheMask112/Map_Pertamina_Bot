@@ -121,7 +121,7 @@ export async function ensureAffiliateTables() {
         persen_usaha_mikro INT DEFAULT 0,
         last_sync_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT unique_hwid UNIQUE(hwid)
+        CONSTRAINT unique_merchant_id UNIQUE(merchant_id)
       );
     `;
 
