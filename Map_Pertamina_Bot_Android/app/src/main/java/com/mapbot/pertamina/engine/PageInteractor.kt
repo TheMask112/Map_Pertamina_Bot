@@ -456,30 +456,52 @@ class PageInteractor(private val wvManager: WebViewManager) {
         val safeTempat = tempat.replace("\"", "\\\"").uppercase()
         wvManager.executeJs("""
             (function() {
-                var allInputs = document.querySelectorAll("input");
+                var allInputs = document.querySelectorAll("input:not([type='hidden']):not([type='checkbox']):not([type='radio'])");
+                var tempatInp = null;
+
                 for (var i = 0; i < allInputs.length; i++) {
                     var inp = allInputs[i];
                     var ph = (inp.placeholder || inp.name || inp.id || inp.getAttribute('data-testid') || '').toLowerCase();
-                    
-                    // Hindari mencocokkan input tanggal lahir
-                    if (ph.includes('tgl') || ph.includes('tanggal') || ph.includes('date') || ph.includes('hari') || ph.includes('bulan') || ph.includes('tahun') || ph.includes('day') || ph.includes('month') || ph.includes('year')) {
+                    var label = inp.id ? document.querySelector('label[for="' + inp.id + '"]') : null;
+                    var labelText = label ? (label.innerText || label.textContent || '').toLowerCase() : '';
+                    var parentText = (inp.parentElement?.parentElement?.innerText || inp.parentElement?.parentElement?.textContent || '').toLowerCase();
+
+                    // Abaikan input tanggal lahir
+                    if (ph.includes('tgl') || ph.includes('tanggal') || ph.includes('date') || ph.includes('hari') || ph.includes('bulan') || ph.includes('tahun') || ph.includes('day') || ph.includes('month') || ph.includes('year') || labelText.includes('tanggal') || labelText.includes('tgl') || labelText.includes('hari')) {
                         continue;
                     }
 
-                    var isTempat = ph.includes('tempat') || ph.includes('kota') || ph.includes('birthplace') || ph.includes('city') || ph.includes('ketik tempat');
-                    if (!isTempat && ph.includes('lahir') && !ph.includes('tanggal') && !ph.includes('tgl')) {
-                        isTempat = true;
-                    }
-
+                    var isTempat = ph.includes('tempat') || ph.includes('kota') || ph.includes('birthplace') || ph.includes('city') || ph.includes('ketik') || labelText.includes('tempat') || labelText.includes('kota') || parentText.includes('tempat lahir');
                     if (isTempat) {
-                        inp.focus();
-                        var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-                        nativeSetter.call(inp, "$safeTempat");
-                        inp.dispatchEvent(new Event('input', { bubbles: true }));
-                        inp.dispatchEvent(new Event('change', { bubbles: true }));
-                        inp.dispatchEvent(new Event('blur', { bubbles: true }));
-                        return 'true';
+                        tempatInp = inp;
+                        break;
                     }
+                }
+
+                // Fallback: Jika tidak ketemu dari label, ambil text input pertama yang bukan select
+                if (!tempatInp) {
+                    for (var j = 0; j < allInputs.length; j++) {
+                        var inp2 = allInputs[j];
+                        var p2 = (inp2.placeholder || '').toLowerCase();
+                        if (!inp2.readOnly && !inp2.classList.contains('mantine-Select-input') && !p2.includes('tgl') && !p2.includes('thn') && !p2.includes('bln')) {
+                            tempatInp = inp2;
+                            break;
+                        }
+                    }
+                }
+
+                if (tempatInp) {
+                    tempatInp.focus();
+                    try {
+                        var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                        nativeSetter.call(tempatInp, "$safeTempat");
+                    } catch(e) {
+                        tempatInp.value = "$safeTempat";
+                    }
+                    tempatInp.dispatchEvent(new Event('input', { bubbles: true }));
+                    tempatInp.dispatchEvent(new Event('change', { bubbles: true }));
+                    tempatInp.dispatchEvent(new Event('blur', { bubbles: true }));
+                    return 'true';
                 }
                 return 'false';
             })()
@@ -489,13 +511,18 @@ class PageInteractor(private val wvManager: WebViewManager) {
     }
 
     suspend fun selectMantineDropdown(fieldHint: String, targetVal: String): Boolean {
+        val safeHint = fieldHint.replace("\"", "\\\"").lowercase()
+        val safeVal = targetVal.replace("\"", "\\\"").trim()
+
         // 1. Focus dan klik input select untuk memunculkan dropdown popup
         val opened = suspendCoroutine<Boolean> { cont ->
-            val safeHint = fieldHint.replace("\"", "\\\"").lowercase()
             wvManager.executeJs("""
                 (function() {
                     function simulateHumanTouch(el) {
                         if (!el) return false;
+                        try {
+                            el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
+                        } catch(e) {}
                         var rect = el.getBoundingClientRect();
                         var x = rect.left + rect.width / 2;
                         var y = rect.top + rect.height / 2;
@@ -523,16 +550,39 @@ class PageInteractor(private val wvManager: WebViewManager) {
 
                     var hint = "$safeHint";
                     var inps = document.querySelectorAll("input, .mantine-Select-input, [data-testid*='Select'], [data-testid*='select']");
+                    var targetInput = null;
+
                     for (var i = 0; i < inps.length; i++) {
                         var ph = (inps[i].placeholder || inps[i].getAttribute('data-testid') || inps[i].name || inps[i].id || '').toLowerCase();
-                        var isMatch = ph.includes(hint);
-                        if (!isMatch && (hint === 'tgl' || hint === 'dayselect') && (ph.includes('tgl') || ph.includes('day') || ph.includes('tanggal') || ph.includes('hari'))) isMatch = true;
-                        if (!isMatch && (hint === 'bln' || hint === 'monthselect') && (ph.includes('bln') || ph.includes('month') || ph.includes('bulan'))) isMatch = true;
-                        if (!isMatch && (hint === 'thn' || hint === 'yearselect') && (ph.includes('thn') || ph.includes('year') || ph.includes('tahun'))) isMatch = true;
+                        var label = inps[i].id ? document.querySelector('label[for="' + inps[i].id + '"]') : null;
+                        var labelText = label ? (label.innerText || label.textContent || '').toLowerCase() : '';
+
+                        var isMatch = ph.includes(hint) || labelText.includes(hint);
+                        if (!isMatch && (hint === 'tgl' || hint === 'dayselect') && (ph.includes('tgl') || ph.includes('day') || ph.includes('tanggal') || ph.includes('hari') || labelText.includes('hari') || labelText.includes('tanggal'))) isMatch = true;
+                        if (!isMatch && (hint === 'bln' || hint === 'monthselect') && (ph.includes('bln') || ph.includes('month') || ph.includes('bulan') || labelText.includes('bulan'))) isMatch = true;
+                        if (!isMatch && (hint === 'thn' || hint === 'yearselect') && (ph.includes('thn') || ph.includes('year') || ph.includes('tahun') || labelText.includes('tahun'))) isMatch = true;
 
                         if (isMatch) {
-                            return simulateHumanTouch(inps[i]) ? 'true' : 'false';
+                            targetInput = inps[i];
+                            break;
                         }
+                    }
+
+                    // Fallback berdasar urutan dropdown pada form (0=Tgl, 1=Bln, 2=Thn)
+                    if (!targetInput) {
+                        var selectInps = [];
+                        for (var k = 0; k < inps.length; k++) {
+                            if (inps[k].classList.contains('mantine-Select-input') || inps[k].readOnly || inps[k].getAttribute('data-testid')?.toLowerCase().includes('select')) {
+                                selectInps.push(inps[k]);
+                            }
+                        }
+                        if (hint.includes('tgl') || hint.includes('day')) targetInput = selectInps[0];
+                        else if (hint.includes('bln') || hint.includes('month')) targetInput = selectInps[1];
+                        else if (hint.includes('thn') || hint.includes('year')) targetInput = selectInps[2];
+                    }
+
+                    if (targetInput) {
+                        return simulateHumanTouch(targetInput) ? 'true' : 'false';
                     }
                     return 'false';
                 })()
@@ -540,16 +590,18 @@ class PageInteractor(private val wvManager: WebViewManager) {
                 cont.resume(res.replace("\"", "") == "true")
             }
         }
-        if (!opened) return false
+
         delay(400)
 
         // 2. Cari dan klik item target dari list dropdown
         val selected = suspendCoroutine<Boolean> { cont ->
-            val safeVal = targetVal.replace("\"", "\\\"").trim()
             wvManager.executeJs("""
                 (function() {
                     function simulateHumanTouch(el) {
                         if (!el) return false;
+                        try {
+                            el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
+                        } catch(e) {}
                         var rect = el.getBoundingClientRect();
                         var x = rect.left + rect.width / 2;
                         var y = rect.top + rect.height / 2;
@@ -584,7 +636,7 @@ class PageInteractor(private val wvManager: WebViewManager) {
                     var targetMonthIdx = monthNames.indexOf(targetLower);
                     if (targetMonthIdx === -1) targetMonthIdx = monthNamesEn.indexOf(targetLower);
 
-                    var items = document.querySelectorAll('.mantine-Select-item, [role="option"], [data-combobox-option="true"], .mantine-Combobox-option, li');
+                    var items = document.querySelectorAll('.mantine-Select-item, [role="option"], [data-combobox-option="true"], .mantine-Combobox-option, .mantine-Select-option, li');
                     for (var m = 0; m < items.length; m++) {
                         var itTxt = (items[m].innerText || items[m].textContent || '').trim();
                         var itLower = itTxt.toLowerCase();
@@ -606,7 +658,6 @@ class PageInteractor(private val wvManager: WebViewManager) {
                         }
 
                         if (isOptionMatch) {
-                            items[m].scrollIntoView({ block: 'center', inline: 'center' });
                             return simulateHumanTouch(items[m]) ? 'true' : 'false';
                         }
                     }
@@ -791,9 +842,13 @@ class PageInteractor(private val wvManager: WebViewManager) {
             val isFormTtl = bText.contains("lengkapi data pelanggan") || 
                             bText.contains("tempat lahir") || 
                             bText.contains("tanggal lahir") || 
+                            bText.contains("update data pelanggan") || 
+                            bText.contains("perbarui data pelanggan") || 
                             isElementVisible("input[placeholder*='tempat lahir' i]") ||
                             isElementVisible("input[placeholder*='Tempat' i]") ||
-                            isElementVisible("input[placeholder*='Ketik' i]")
+                            isElementVisible("input[placeholder*='Ketik' i]") ||
+                            isElementVisible("input[data-testid*='Select' i]") ||
+                            isElementVisible(".mantine-Select-input")
 
             if (isFormTtl) {
                 fillTempatLahir(tempatLahir)
