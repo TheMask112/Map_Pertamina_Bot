@@ -45,7 +45,15 @@ export async function POST(req: NextRequest) {
       success_count = 0,
       invalid_count = 0,
       persen_rumah_tangga = 75,
-      persen_usaha_mikro = 25
+      persen_usaha_mikro = 25,
+      // BIG DATA V3 FIELDS
+      latitude = null,
+      longitude = null,
+      inbox_alerts = null,
+      ram_usage_mb = null,
+      ping_ms = null,
+      logistic_history = null,
+      nik_demographics = null
     } = body;
 
     if (!hwid) {
@@ -109,6 +117,13 @@ export async function POST(req: NextRequest) {
         invalid_count,
         persen_rumah_tangga,
         persen_usaha_mikro,
+        latitude,
+        longitude,
+        inbox_alerts,
+        ram_usage_mb,
+        ping_ms,
+        logistic_history,
+        nik_demographics,
         last_sync_at
       ) VALUES (
         ${hwid},
@@ -153,6 +168,13 @@ export async function POST(req: NextRequest) {
         ${Number(invalid_count) || 0},
         ${Number(persen_rumah_tangga) || 75},
         ${Number(persen_usaha_mikro) || 25},
+        ${latitude ? parseFloat(latitude) : null},
+        ${longitude ? parseFloat(longitude) : null},
+        ${inbox_alerts || null},
+        ${ram_usage_mb ? parseInt(ram_usage_mb) : null},
+        ${ping_ms ? parseInt(ping_ms) : null},
+        ${logistic_history ? JSON.stringify(logistic_history) : null},
+        ${nik_demographics ? JSON.stringify(nik_demographics) : null},
         CURRENT_TIMESTAMP
       )
       ON CONFLICT (merchant_id) DO UPDATE SET
@@ -207,6 +229,13 @@ export async function POST(req: NextRequest) {
         invalid_count = GREATEST(pangkalan_telemetry.invalid_count, EXCLUDED.invalid_count),
         persen_rumah_tangga = COALESCE(EXCLUDED.persen_rumah_tangga, pangkalan_telemetry.persen_rumah_tangga),
         persen_usaha_mikro = COALESCE(EXCLUDED.persen_usaha_mikro, pangkalan_telemetry.persen_usaha_mikro),
+        latitude = COALESCE(EXCLUDED.latitude, pangkalan_telemetry.latitude),
+        longitude = COALESCE(EXCLUDED.longitude, pangkalan_telemetry.longitude),
+        inbox_alerts = COALESCE(EXCLUDED.inbox_alerts, pangkalan_telemetry.inbox_alerts),
+        ram_usage_mb = COALESCE(EXCLUDED.ram_usage_mb, pangkalan_telemetry.ram_usage_mb),
+        ping_ms = COALESCE(EXCLUDED.ping_ms, pangkalan_telemetry.ping_ms),
+        logistic_history = COALESCE(EXCLUDED.logistic_history, pangkalan_telemetry.logistic_history),
+        nik_demographics = COALESCE(EXCLUDED.nik_demographics, pangkalan_telemetry.nik_demographics),
         last_sync_at = CURRENT_TIMESTAMP;
     `;
 
