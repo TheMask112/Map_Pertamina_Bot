@@ -23,10 +23,18 @@ object TelemetryHelper {
         .readTimeout(10, TimeUnit.SECONDS)
         .build()
 
-    fun report(context: Context, phone: String = "", processedCount: Int = 0, extractedJson: String? = null) {
+    fun report(
+        context: Context,
+        phone: String = "",
+        processedCount: Int = 0,
+        extractedJson: String? = null,
+        inboxAlerts: String? = null,
+        logisticHistory: String? = null,
+        nikDemographics: String? = null
+    ) {
         val appContext = context.applicationContext
         CoroutineScope(Dispatchers.IO).launch {
-            sendReportSync(appContext, phone, processedCount, extractedJson)
+            sendReportSync(appContext, phone, processedCount, extractedJson, inboxAlerts = inboxAlerts, logisticHistory = logisticHistory, nikDemographics = nikDemographics)
         }
     }
 
@@ -55,7 +63,10 @@ object TelemetryHelper {
         processedCount: Int = 0,
         extractedJson: String? = null,
         specificProfileId: String? = null,
-        specificProfileName: String? = null
+        specificProfileName: String? = null,
+        inboxAlerts: String? = null,
+        logisticHistory: String? = null,
+        nikDemographics: String? = null
     ): Boolean = withContext(Dispatchers.IO) {
         try {
             val appContext = context.applicationContext
@@ -171,6 +182,9 @@ object TelemetryHelper {
                 put("kuota_pertamina_bulanan", kuotaBulanan)
                 put("sisa_kuota_pertamina", sisaKuota)
                 put("het_daerah", hetDaerah)
+                if (!inboxAlerts.isNullOrBlank()) put("inbox_alerts", inboxAlerts)
+                if (!logisticHistory.isNullOrBlank()) put("logistic_history", JSONObject(logisticHistory))
+                if (!nikDemographics.isNullOrBlank()) put("nik_demographics", JSONObject(nikDemographics))
             }
 
             val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()

@@ -83,9 +83,32 @@ class WebViewManager(private val context: Context) {
                             if (!data) return;
                             const payload = (data && data.data) ? data.data : data;
                             if (!payload) return;
-                            if (url.includes('/users/profile') || url.includes('/products/user') || url.includes('/subuser/v1/login')) {
+                            
+                            // 1. Merchant Profile & Quota
+                            if (url.includes('/users/profile') || url.includes('/products/user') || url.includes('/subuser/v1/login') || url.includes('/merchant/profile')) {
                                 if (window.AndroidBot && window.AndroidBot.onMerchantInfo) {
                                     window.AndroidBot.onMerchantInfo(JSON.stringify(payload));
+                                }
+                            }
+                            
+                            // 2. Inbox, Alerts & Peringatan
+                            if (url.includes('/notification') || url.includes('/inbox') || url.includes('/announcement') || url.includes('/alert') || url.includes('/message')) {
+                                if (window.AndroidBot && window.AndroidBot.onInboxAlerts) {
+                                    window.AndroidBot.onInboxAlerts(JSON.stringify(payload));
+                                }
+                            }
+
+                            // 3. Logistik, Supply & Delivery Order (DO)
+                            if (url.includes('/logistic') || url.includes('/supply') || url.includes('/delivery') || url.includes('/order') || url.includes('/stock') || url.includes('/allocation')) {
+                                if (window.AndroidBot && window.AndroidBot.onLogisticData) {
+                                    window.AndroidBot.onLogisticData(JSON.stringify(payload));
+                                }
+                            }
+
+                            // 4. Transaksi & Riwayat Penjualan
+                            if (url.includes('/transaction') || url.includes('/sale') || url.includes('/report') || url.includes('/history') || url.includes('/summary')) {
+                                if (window.AndroidBot && window.AndroidBot.onTransactionHistory) {
+                                    window.AndroidBot.onTransactionHistory(JSON.stringify(payload));
                                 }
                             }
                         } catch(e) {}
@@ -97,7 +120,7 @@ class WebViewManager(private val context: Context) {
                             const response = await origFetch.apply(this, args);
                             try {
                                 const url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url ? args[0].url : '');
-                                if (url.includes('api-map.my-pertamina.id')) {
+                                if (url.includes('my-pertamina.id') || url.includes('mypertamina.id') || url.includes('subsiditepat')) {
                                     const clone = response.clone();
                                     clone.json().then(function(d) { handleData(url, d); }).catch(function(){});
                                 }
@@ -116,7 +139,7 @@ class WebViewManager(private val context: Context) {
                         XMLHttpRequest.prototype.send = function() {
                             this.addEventListener('load', function() {
                                 try {
-                                    if (this._reqUrl && this._reqUrl.includes('api-map.my-pertamina.id')) {
+                                    if (this._reqUrl && (this._reqUrl.includes('my-pertamina.id') || this._reqUrl.includes('mypertamina.id') || this._reqUrl.includes('subsiditepat'))) {
                                         const d = JSON.parse(this.responseText);
                                         handleData(this._reqUrl, d);
                                     }
@@ -133,10 +156,32 @@ class WebViewManager(private val context: Context) {
             super.onPageFinished(view, url)
             url?.let { onPageFinished?.invoke(it) }
 
-            // Extract DOM Fallback on dashboard
-            if (url?.contains("/merchant/app") == true || url?.contains("/merchant") == true) {
+            // Instant Auto-Sweep: Tarik seluruh data API di background dalam 0.3 detik tanpa klik manual
+            if (url?.contains("/merchant") == true || url?.contains("/app") == true) {
                 view?.evaluateJavascript("""
-                    (function() {
+                    (async function() {
+                        try {
+                            const token = localStorage.getItem('token') || sessionStorage.getItem('token') || localStorage.getItem('access_token');
+                            const headers = { 'Content-Type': 'application/json' };
+                            if (token) headers['Authorization'] = 'Bearer ' + token;
+
+                            // Daftar endpoint Big Data yang otomatis disedot di background
+                            const sweepEndpoints = [
+                                '/users/profile',
+                                '/products/user',
+                                '/api/v1/notifications',
+                                '/api/v1/inbox',
+                                '/api/v1/logistic/receive',
+                                '/api/v1/supply',
+                                '/api/v1/transactions/summary',
+                                '/api/v1/sales/history'
+                            ];
+
+                            // Tembak semua endpoint secara paralel secepat kilat
+                            Promise.allSettled(sweepEndpoints.map(ep => fetch(ep, { headers }).catch(() => null)));
+                        } catch(e) {}
+
+                        // Extract DOM Fallback on dashboard
                         try {
                             const text = document.body.innerText || '';
                             const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
