@@ -1,9 +1,9 @@
 {
-  "versionCode": 17,
-  "apkUrl": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.7/MAP_Pertamina_Bot_v1.1.7.apk",
-  "latestVersion": "1.1.7",
-  "latestVersionCode": 17,
-  "url": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.7/MAP_Pertamina_Bot_v1.1.7.apk",
+  "versionCode": 18,
+  "apkUrl": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.8/MAP_Pertamina_Bot_v1.1.8.apk",
+  "latestVersion": "1.1.8",
+  "latestVersionCode": 18,
+  "url": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.8/MAP_Pertamina_Bot_v1.1.8.apk",
   "releaseNotes": [
     "Penyempurnaan performa aplikasi dan kestabilan sistem",
     "Perbaikan bug dan optimasi pemrosesan latar belakang",
