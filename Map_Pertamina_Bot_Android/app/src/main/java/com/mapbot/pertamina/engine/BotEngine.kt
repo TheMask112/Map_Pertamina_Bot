@@ -94,9 +94,28 @@ class BotEngine(
         val startTime = System.currentTimeMillis()
         var captchaTotal = 0
         var captchaSukses = 0
+
+        // === [BETA] FAST API PRE-CHECK ===
+        try {
+            log("⚡ [BETA] Menjalankan Fast API Pre-Filter...")
+            uiState.value = uiState.value.copy(statusMessage = "[BETA] Menyaring NIK Cepat...")
+            val checker = FastNikChecker(wvManager)
+            checker.batchPreCheck(nikList) { current, total, n ->
+                uiState.value = uiState.value.copy(statusMessage = "[BETA] Cek NIK ($current/$total)")
+            }
+            log("⚡ [BETA] Penyaringan cepat selesai.")
+        } catch (e: Exception) {
+            log("[BETA] Pre-check fallback ke mode normal: ${e.message}")
+        }
         
         for ((i, nikData) in nikList.withIndex()) {
             if (!isActive) break
+
+            // Skip jika sudah terfilter oleh FastNikChecker (Kuota 0 / Invalid)
+            if (nikData.status == Constants.STATUS_SKIP || nikData.status == Constants.STATUS_NIK_INVALID) {
+                log("⏩ [FAST-SKIP ${i+1}/${nikList.size}]: ${nikData.nik} (${nikData.keterangan})")
+                continue
+            }
 
             // === CEK KUOTA SEBELUM SETIAP NIK ===
             val currentLicenseStatus = LicenseManager.getLicenseStatus(appContext)
