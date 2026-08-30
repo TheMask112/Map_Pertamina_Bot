@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 import { generateVoucherCode } from '@/lib/voucher';
+import { generateLicenseKey, LicenseFeatures } from '@/lib/keygen';
+import { CONFIG } from '@/lib/config';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,27 +18,71 @@ export async function GET(request: Request) {
     }
 
     // Auto-expire old pending orders
-    await sql`
-      UPDATE orders 
-      SET status = 'EXPIRED' 
-      WHERE status = 'PENDING' AND expires_at < NOW();
-    `;
+    try {
+      await sql`
+        UPDATE orders 
+        SET status = 'EXPIRED' 
+        WHERE status = 'PENDING' AND expires_at < NOW();
+      `;
+    } catch (e) {
+      console.warn('Auto-expire failed (non-critical):', e);
+    }
 
-    // Ambil data semua order dari database Neon
-    const orders = await sql`
-      SELECT id, paket, base_amount, amount, whatsapp, status, voucher_code, created_at, expires_at 
-      FROM orders 
-      ORDER BY created_at DESC;
-    `;
+    // Ambil data semua order dengan kolom lengkap dari database Neon
+    let orders: any[] = [];
+    try {
+      orders = await sql`
+        SELECT 
+          id, 
+          paket, 
+          base_amount, 
+          amount, 
+          whatsapp, 
+          status, 
+          voucher_code, 
+          created_at, 
+          paid_at, 
+          redeemed_at, 
+          expires_at, 
+          COALESCE(kuota_terpakai, 0) AS kuota_terpakai, 
+          hwid, 
+          license_key
+        FROM orders 
+        ORDER BY created_at DESC;
+      `;
+    } catch (err: any) {
+      // Fallback jika ada kolom yang belum termigrasi
+      orders = await sql`
+        SELECT id, paket, base_amount, amount, whatsapp, status, voucher_code, created_at, expires_at 
+        FROM orders 
+        ORDER BY created_at DESC;
+      `;
+    }
 
-    return NextResponse.json({ orders });
+    // Ambil data link Telegram jika tabel ada
+    let telegramLinks: any[] = [];
+    try {
+      telegramLinks = await sql`
+        SELECT chat_id, whatsapp, created_at 
+        FROM telegram_links 
+        ORDER BY created_at DESC;
+      `;
+    } catch (e) {
+      // Telegram links optional
+    }
+
+    return NextResponse.json({ 
+      orders, 
+      telegramLinks,
+      paketsConfig: CONFIG.pakets 
+    });
   } catch (error: any) {
     console.error('Error fetching admin orders:', error);
     return NextResponse.json({ error: 'Terjadi kesalahan sistem internal.' }, { status: 500 });
   }
 }
 
-// Endpoint untuk melakukan mark as paid manual oleh admin
+// Endpoint untuk berbagai aksi manajemen admin
 export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get('Authorization');
@@ -47,25 +93,159 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { orderId, action } = await request.json();
-    if (!orderId) {
-      return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
-    }
+    const body = await request.json();
+    const { action } = body;
 
+    // 1. Aksi Cabut Lisensi (REVOKE)
     if (action === 'revoke') {
-      // Cabut lisensi (REVOKED)
+      const { orderId } = body;
+      if (!orderId) return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
+      
       await sql`
         UPDATE orders 
         SET status = 'REVOKED', voucher_code = NULL, license_key = NULL 
         WHERE id = ${orderId};
       `;
-      return NextResponse.json({ success: true, revoked: true });
+      return NextResponse.json({ success: true, message: 'Lisensi berhasil dicabut.' });
+    }
+
+    // 2. Aksi Reset HWID (Ganti Mesin/PC)
+    if (action === 'reset_hwid') {
+      const { orderId } = body;
+      if (!orderId) return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
+
+      // Reset HWID dan kembalikan status ke PAID dengan voucher tetap ada, agar pangkalan bisa aktivasi ulang di PC baru
+      await sql`
+        UPDATE orders 
+        SET hwid = NULL, 
+            license_key = NULL, 
+            status = 'PAID', 
+            redeemed_at = NULL 
+        WHERE id = ${orderId};
+      `;
+      return NextResponse.json({ success: true, message: 'HWID berhasil di-reset. Voucher dapat diaktivasi ulang di perangkat baru.' });
+    }
+
+    // 3. Aksi Top Up Kuota / Reset Kuota Terpakai
+    if (action === 'topup_quota') {
+      const { orderId, resetUsage, additionalDays } = body;
+      if (!orderId) return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
+
+      if (resetUsage) {
+        await sql`
+          UPDATE orders 
+          SET kuota_terpakai = 0 
+          WHERE id = ${orderId};
+        `;
+      }
+
+      if (additionalDays && Number(additionalDays) > 0) {
+        await sql`
+          UPDATE orders 
+          SET expires_at = expires_at + (${Number(additionalDays)} || ' days')::INTERVAL
+          WHERE id = ${orderId};
+        `;
+      }
+
+      return NextResponse.json({ success: true, message: 'Kuota / Masa aktif berhasil diperbarui.' });
+    }
+
+    // 4. Aksi Buat Lisensi Kustom / Enterprise Baru
+    if (action === 'create_custom_license') {
+      const { 
+        whatsapp, 
+        paket = 'ENTERPRISE', 
+        harga = 0, 
+        kuota = 5000, 
+        hari = 36500, 
+        hwid, 
+        features = {} as LicenseFeatures 
+      } = body;
+
+      if (!whatsapp) {
+        return NextResponse.json({ error: 'Nomor WhatsApp wajib diisi.' }, { status: 400 });
+      }
+
+      const voucherCode = generateVoucherCode();
+      const expiryDate = new Date(Date.now() + Number(hari) * 24 * 60 * 60 * 1000);
+      const cleanHwid = hwid ? String(hwid).replace(/-/g, '').toUpperCase() : null;
+
+      let licenseKey: string | null = null;
+      let orderStatus = 'PAID';
+
+      // Jika HWID langsung diisi, generate RSA License Key sekarang juga
+      if (cleanHwid) {
+        try {
+          licenseKey = generateLicenseKey(cleanHwid, paket, Number(hari), Number(kuota), features);
+          orderStatus = 'REDEEMED';
+        } catch (e: any) {
+          console.error('Failed generating license key in custom create:', e);
+        }
+      }
+
+      const inserted = await sql`
+        INSERT INTO orders (
+          paket, 
+          base_amount, 
+          amount, 
+          whatsapp, 
+          status, 
+          voucher_code, 
+          created_at, 
+          paid_at, 
+          expires_at, 
+          kuota_terpakai, 
+          hwid, 
+          license_key, 
+          redeemed_at
+        ) VALUES (
+          ${paket}, 
+          ${Number(harga)}, 
+          ${Number(harga)}, 
+          ${whatsapp}, 
+          ${orderStatus}, 
+          ${voucherCode}, 
+          CURRENT_TIMESTAMP, 
+          CURRENT_TIMESTAMP, 
+          ${expiryDate.toISOString()}, 
+          0, 
+          ${cleanHwid}, 
+          ${licenseKey}, 
+          ${cleanHwid ? new Date().toISOString() : null}
+        )
+        RETURNING id, voucher_code, status, license_key;
+      `;
+
+      return NextResponse.json({
+        success: true,
+        order: inserted[0],
+        voucherCode,
+        licenseKey,
+        message: 'Lisensi Enterprise / Kustom berhasil dibuat.'
+      });
+    }
+
+    // 5. Aksi Hapus Order (Delete)
+    if (action === 'delete') {
+      const { orderId } = body;
+      if (!orderId) return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
+
+      await sql`
+        DELETE FROM orders WHERE id = ${orderId};
+      `;
+      return NextResponse.json({ success: true, message: 'Order berhasil dihapus.' });
+    }
+
+    // 6. Aksi Default: Tandai Lunas (PAID) manual
+    const { orderId } = body;
+    if (!orderId) {
+      return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
     }
 
     // Generate kode voucher lisensi unik
     const voucherCode = generateVoucherCode();
 
-    // Update status order menjadi PAID dan masukkan kode voucher (untuk PENDING atau EXPIRED)
+    // Update status order menjadi PAID dan masukkan kode voucher
     const updateResult = await sql`
       UPDATE orders 
       SET status = 'PAID', 
@@ -76,12 +256,12 @@ export async function POST(request: Request) {
     `;
 
     if (updateResult.length === 0) {
-      return NextResponse.json({ error: 'Order tidak ditemukan atau tidak dapat diperbarui.' }, { status: 400 });
+      return NextResponse.json({ error: 'Order tidak ditemukan atau status tidak dapat diubah.' }, { status: 400 });
     }
 
-    return NextResponse.json({ success: true, voucherCode });
+    return NextResponse.json({ success: true, voucherCode, message: 'Transaksi berhasil ditandai Lunas.' });
   } catch (error: any) {
-    console.error('Error updating order:', error);
-    return NextResponse.json({ error: 'Terjadi kesalahan sistem internal.' }, { status: 500 });
+    console.error('Error in admin action:', error);
+    return NextResponse.json({ error: 'Terjadi kesalahan sistem internal: ' + (error.message || '') }, { status: 500 });
   }
 }
