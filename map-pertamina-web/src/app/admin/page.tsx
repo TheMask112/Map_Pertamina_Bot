@@ -1,7 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
+
+const MapPangkalan = dynamic(() => import('@/components/MapPangkalan'), {
+  ssr: false,
+  loading: () => <p>Memuat Peta Spasial...</p>
+});
 
 interface PangkalanProfile {
   id: number;
@@ -127,6 +133,13 @@ interface PangkalanTelemetry {
   persen_usaha_mikro: number;
   last_sync_at: string;
   created_at: string;
+  latitude?: number;
+  longitude?: number;
+  inbox_alerts?: string;
+  ram_usage_mb?: number;
+  ping_ms?: number;
+  logistic_history?: any;
+  nik_demographics?: any;
 }
 
 export default function AdminPortal() {
@@ -147,7 +160,7 @@ export default function AdminPortal() {
   const [selectedPangkalan, setSelectedPangkalan] = useState<PangkalanProfile | null>(null);
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'COMMAND' | 'INTEL' | 'FINANCE' | 'RADAR' | 'ORDERS' | 'LICENSES' | 'PACKAGES' | 'MONITORING'>('COMMAND');
+  const [activeTab, setActiveTab] = useState<'COMMAND' | 'INTEL' | 'FINANCE' | 'RADAR' | 'MAP' | 'COMPLIANCE' | 'LOGISTIC' | 'HARDWARE' | 'ORDERS' | 'LICENSES' | 'PACKAGES' | 'MONITORING'>('COMMAND');
 
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -781,6 +794,10 @@ export default function AdminPortal() {
           { id: 'INTEL', label: '🔍 Intelijen Pangkalan', badge: null },
           { id: 'FINANCE', label: '💰 Analisa Keuangan', badge: null },
           { id: 'RADAR', label: '🎯 Radar Peluang', badge: null },
+          { id: 'MAP', label: '🗺️ Peta Monopoli', badge: 'V2', badgeColor: '#10b981' },
+          { id: 'COMPLIANCE', label: '🛡️ Kepatuhan', badge: null },
+          { id: 'LOGISTIC', label: '🚚 Logistik', badge: null },
+          { id: 'HARDWARE', label: '⚙️ Hardware', badge: null },
           { id: 'ORDERS', label: '💳 Transaksi', badge: metrics.pendingCount > 0 ? `${metrics.pendingCount} Pending` : null, badgeColor: 'hsl(var(--warning))' },
           { id: 'LICENSES', label: '🔑 Lisensi & HWID', badge: `${metrics.activeLicenses} Aktif`, badgeColor: 'hsl(var(--success))' },
           { id: 'PACKAGES', label: '📦 Katalog & Enterprise', badge: 'VIP' },
@@ -1229,6 +1246,92 @@ export default function AdminPortal() {
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB: PETA MONOPOLI WILAYAH (MAP) */}
+      {/* ========================================================================= */}
+      {activeTab === 'MAP' && (
+        <div className="animate-fade-in glass-card" style={{ padding: '24px' }}>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '8px' }}>🗺️ Peta Monopoli Distribusi</h2>
+          <p style={{ color: 'hsl(var(--text-secondary))', marginBottom: '20px' }}>Sebaran pangkalan klien MAP Pertamina Bot berdasarkan koordinat GPS perangkat.</p>
+          <MapPangkalan telemetryData={pangkalanTelemetry} />
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB: RADAR KEPATUHAN (COMPLIANCE) */}
+      {/* ========================================================================= */}
+      {activeTab === 'COMPLIANCE' && (
+        <div className="animate-fade-in glass-card" style={{ padding: '24px' }}>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '8px' }}>🛡️ Radar Kepatuhan & Risiko (V3)</h2>
+          <p style={{ color: 'hsl(var(--text-secondary))', marginBottom: '20px' }}>Pangkalan yang terindikasi melanggar aturan atau mendapat peringatan dari Pertamina.</p>
+          {pangkalanTelemetry.filter(p => p.inbox_alerts).length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px' }}>
+              <p style={{ fontSize: '1.1rem', color: '#10b981' }}>✅ Semua pangkalan dalam status aman dan patuh.</p>
+            </div>
+          ) : (
+            <div className="table-container">
+              <table className="glass-table">
+                <thead><tr><th>Pangkalan</th><th>Pesan Peringatan</th><th>Aksi Jasa Resolusi</th></tr></thead>
+                <tbody>
+                  {pangkalanTelemetry.filter(p => p.inbox_alerts).map(p => (
+                    <tr key={p.id}>
+                      <td><strong>{p.merchant_name}</strong><br/><small>{p.agent_name}</small></td>
+                      <td style={{ color: '#facc15' }}>{p.inbox_alerts}</td>
+                      <td><button className="btn btn-primary" onClick={() => window.open(`https://wa.me/${p.phone?.replace(/\D/g, '')}?text=Halo%20Bapak/Ibu,%20kami%20lihat%20ada%20kendala%20di%20akun%20Anda.`, '_blank')}>Tawarkan Solusi</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB: LOGISTIK (LOGISTIC) */}
+      {/* ========================================================================= */}
+      {activeTab === 'LOGISTIC' && (
+        <div className="animate-fade-in glass-card" style={{ padding: '24px' }}>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '8px' }}>🚚 Analisa Logistik & Ketepatan Agen</h2>
+          <p style={{ color: 'hsl(var(--text-secondary))', marginBottom: '20px' }}>Menampilkan jadwal dan riwayat penerimaan DO dari PT Agen Penyalur.</p>
+          <div style={{ textAlign: 'center', padding: '40px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px' }}>
+            <p>Data riwayat pengiriman DO sedang dikumpulkan oleh bot klien...</p>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB: HARDWARE TELEMETRY */}
+      {/* ========================================================================= */}
+      {activeTab === 'HARDWARE' && (
+        <div className="animate-fade-in glass-card" style={{ padding: '24px' }}>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '8px' }}>⚙️ Kualitas Hardware & Jaringan Klien</h2>
+          <p style={{ color: 'hsl(var(--text-secondary))', marginBottom: '20px' }}>Pantau spesifikasi perangkat dan tawarkan upgrade jika performa buruk.</p>
+          <div className="table-container">
+            <table className="glass-table">
+              <thead><tr><th>Pangkalan</th><th>Platform / OS</th><th>Sisa RAM</th><th>Ping (Latensi)</th><th>Status Hardware</th></tr></thead>
+              <tbody>
+                {pangkalanTelemetry.filter(p => p.ram_usage_mb).map(p => (
+                  <tr key={p.id}>
+                    <td><strong>{p.merchant_name}</strong></td>
+                    <td>{p.platform} / {p.device_os}</td>
+                    <td>{p.ram_usage_mb} MB</td>
+                    <td>{p.ping_ms} ms</td>
+                    <td>
+                      {(p.ping_ms || 0) > 60 ? (
+                        <span style={{ color: '#f87171' }}>Koneksi Lambat</span>
+                      ) : (
+                        <span style={{ color: '#10b981' }}>Optimal</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
