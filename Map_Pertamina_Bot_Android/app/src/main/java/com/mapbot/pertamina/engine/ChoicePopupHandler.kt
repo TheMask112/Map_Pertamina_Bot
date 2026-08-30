@@ -5,31 +5,7 @@ import kotlinx.coroutines.delay
 
 object ChoicePopupHandler {
     suspend fun handle(pageInteractor: PageInteractor) {
-        // 1. Pastikan BUKAN modal update data pelanggan sebelum menangani popup NIB
-        val isUpdateModal = pageInteractor.isElementVisibleByText("UPDATE DATA PELANGGAN") || 
-                            pageInteractor.isElementVisibleByText("UPDATE DATA") ||
-                            pageInteractor.isElementVisibleByText("PERBARUI DATA PELANGGAN") ||
-                            pageInteractor.pageContainsText("data pelanggan belum lengkap") ||
-                            pageInteractor.pageContainsText("lengkapi data pelanggan")
-
-        if (!isUpdateModal) {
-            val isNibModal = pageInteractor.pageContainsText("Segera Lengkapi NIB") || 
-                             pageInteractor.pageContainsText("Lengkapi NIB") ||
-                             pageInteractor.isElementVisibleByText("NANTI SAJA, LANJUT PENJUALAN") ||
-                             pageInteractor.isElementVisibleByText("NANTI SAJA, LANJUTKAN PENJUALAN")
-
-            if (isNibModal) {
-                Log.d("ChoicePopup", "Modal 'Segera Lengkapi NIB' terdeteksi. Mengklik NANTI SAJA, LANJUT PENJUALAN...")
-                pageInteractor.dismissKeyboard()
-                val clicked = pageInteractor.clickButtonByText("NANTI SAJA, LANJUT PENJUALAN") ||
-                              pageInteractor.clickButtonByText("NANTI SAJA, LANJUTKAN PENJUALAN")
-                if (clicked) {
-                    delay(1200)
-                }
-            }
-        }
-
-        // 2. Cek Modal "Pelanggan Terdaftar" / Pilihan Jenis Pelanggan
+        // Cek Modal "Pelanggan Terdaftar" / Pilihan Jenis Pelanggan
         val popupTexts = listOf("Pelanggan Terdaftar", "pilihan jenis pelanggan", "TEKAN pilihan jenis")
         var isPopup = false
 
@@ -62,7 +38,7 @@ object ChoicePopupHandler {
                         val optionSelectors = listOf("div[role='option']", "li[role='option']", "[class*='option']")
                         for (optSel in optionSelectors) {
                             if (pageInteractor.clickElementBySelector(optSel)) {
-                                delay(500)
+                                delay(600)
                                 break
                             }
                         }
@@ -71,12 +47,8 @@ object ChoicePopupHandler {
                 }
             }
 
-            for (btn in listOf("LANJUTKAN TRANSAKSI", "LANJUTKAN PENJUALAN", "Lanjutkan")) {
-                if (pageInteractor.clickButtonByText(btn)) {
-                    delay(500)
-                    break
-                }
-            }
+            pageInteractor.clickButtonByText("LANJUTKAN")
+            delay(1000)
         }
     }
 }
