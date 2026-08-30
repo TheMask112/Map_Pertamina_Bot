@@ -159,7 +159,8 @@ export async function POST(request: Request) {
           '1.1.4',
           CURRENT_TIMESTAMP
         )
-        ON CONFLICT (hwid) DO UPDATE SET
+        ON CONFLICT (merchant_id) DO UPDATE SET
+          hwid = COALESCE(EXCLUDED.hwid, pangkalan_telemetry.hwid),
           license_key = COALESCE(EXCLUDED.license_key, pangkalan_telemetry.license_key),
           merchant_id = CASE 
             WHEN EXCLUDED.merchant_id IS NOT NULL AND EXCLUDED.merchant_id NOT LIKE 'MERCHANT-%' AND EXCLUDED.merchant_id NOT LIKE '%-%-%-%-%' THEN EXCLUDED.merchant_id 
