@@ -92,6 +92,8 @@ class BotEngine(
         }
         
         val startTime = System.currentTimeMillis()
+        var captchaTotal = 0
+        var captchaSukses = 0
         
         for ((i, nikData) in nikList.withIndex()) {
             if (!isActive) break
@@ -232,9 +234,11 @@ class BotEngine(
                 // Step 6: Solve Captcha (Jika muncul)
                 var solved = !captchaMuncul // Kalau tidak muncul, anggap sudah selesai/tidak ada captcha
                 if (captchaMuncul) {
+                    captchaTotal++
                     for (attempt in 1..Constants.MAX_RETRY_CAPTCHA) {
                         if (!pageInteractor.isElementVisibleByText(Constants.CAPTCHA_POPUP_TEXT)) {
                             solved = true
+                            captchaSukses++
                             break // Captcha sudah hilang atau sukses
                         }
                         
@@ -369,6 +373,55 @@ class BotEngine(
         }
 
         log("Selesai memproses semua NIK.")
+        
+        // Report Session
+        try {
+            val endTime = System.currentTimeMillis()
+            val durationSeconds = (endTime - startTime) / 1000
+            val startedAtStr = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.getDefault()).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(java.util.Date(startTime))
+            val endedAtStr = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.getDefault()).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(java.util.Date(endTime))
+            
+            val namaPangkalan = pageInteractor.getNamaPangkalan()
+            
+            val totalNik = nikList.size
+            val nikSukses = nikList.count { it.status == Constants.STATUS_SUKSES }
+            val nikGagalCapt = nikList.count { it.status == Constants.STATUS_GAGAL_CAPTCHA }
+            val nikGagalError = nikList.count { it.status == Constants.STATUS_ERROR }
+            val nikTidakTerdaftar = nikList.count { it.status == Constants.STATUS_NIK_INVALID }
+            
+            // For others, if we have specific statuses, count them, else 0
+            // Since we don't track all specific statuses, we can just pass 0 or guess
+            val nikKuotaHabis = 0
+            val nikMeninggal = 0
+            val nikDibawahUmur = 0
+            val nikTidakAktif = 0
+            
+            val avgSecondsPerNik = if (totalNik > 0) durationSeconds.toDouble() / totalNik else 0.0
+            
+            com.mapbot.pertamina.util.SessionReporter.reportSession(
+                context = appContext,
+                whatsapp = phone,
+                namaPangkalan = namaPangkalan,
+                startedAt = startedAtStr,
+                endedAt = endedAtStr,
+                durationSeconds = durationSeconds,
+                totalNik = totalNik,
+                nikSukses = nikSukses,
+                nikGagal = nikGagalCapt + nikGagalError,
+                nikTidakTerdaftar = nikTidakTerdaftar,
+                nikKuotaHabis = nikKuotaHabis,
+                nikMeninggal = nikMeninggal,
+                nikDibawahUmur = nikDibawahUmur,
+                nikTidakAktif = nikTidakAktif,
+                captchaTotal = captchaTotal,
+                captchaSukses = captchaSukses,
+                jumlahTabung = uiState.value.jumlahTabung,
+                avgSecondsPerNik = avgSecondsPerNik,
+                batchNumber = 1 // or take from uiState/sessionData if available
+            )
+        } catch (e: Exception) {
+            log("Gagal melaporkan sesi: ${e.message}")
+        }
     }
 
     private fun log(message: String) {

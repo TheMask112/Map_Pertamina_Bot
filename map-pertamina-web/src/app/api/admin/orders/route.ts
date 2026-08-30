@@ -71,9 +71,44 @@ export async function GET(request: Request) {
       // Telegram links optional
     }
 
+    // Ambil data profil pangkalan
+    let pangkalanProfiles: any[] = [];
+    try {
+      pangkalanProfiles = await sql`
+        SELECT id, whatsapp, nama_pangkalan, nama_pemilik, kota, provinsi,
+               alokasi_bulanan, jumlah_pelanggan, platform, app_version,
+               last_active_at, total_sesi, total_nik_sukses, total_nik_gagal,
+               created_at
+        FROM pangkalan_profiles
+        ORDER BY last_active_at DESC;
+      `;
+    } catch (e) {
+      // pangkalan_profiles optional (belum dimigrasi)
+    }
+
+    // Ambil data sesi bot (50 sesi terakhir)
+    let botSessions: any[] = [];
+    try {
+      botSessions = await sql`
+        SELECT id, whatsapp, hwid, platform, started_at, ended_at,
+               duration_seconds, total_nik, nik_sukses, nik_gagal,
+               nik_tidak_terdaftar, nik_kuota_habis, nik_meninggal,
+               nik_dibawah_umur, nik_tidak_aktif, captcha_total,
+               captcha_sukses, jumlah_tabung, avg_seconds_per_nik,
+               batch_number, app_version, nama_pangkalan, created_at
+        FROM bot_sessions
+        ORDER BY ended_at DESC
+        LIMIT 200;
+      `;
+    } catch (e) {
+      // bot_sessions optional (belum dimigrasi)
+    }
+
     return NextResponse.json({ 
       orders, 
       telegramLinks,
+      pangkalanProfiles,
+      botSessions,
       paketsConfig: CONFIG.pakets 
     });
   } catch (error: any) {

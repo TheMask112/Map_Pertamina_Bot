@@ -1,6 +1,51 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
+
+interface PangkalanProfile {
+  id: number;
+  whatsapp: string;
+  nama_pangkalan: string | null;
+  nama_pemilik: string | null;
+  kota: string | null;
+  provinsi: string | null;
+  alokasi_bulanan: number;
+  jumlah_pelanggan: number;
+  platform: string;
+  app_version: string | null;
+  last_active_at: string;
+  total_sesi: number;
+  total_nik_sukses: number;
+  total_nik_gagal: number;
+  created_at: string;
+}
+
+interface BotSession {
+  id: string;
+  whatsapp: string;
+  hwid: string | null;
+  platform: string;
+  started_at: string | null;
+  ended_at: string;
+  duration_seconds: number;
+  total_nik: number;
+  nik_sukses: number;
+  nik_gagal: number;
+  nik_tidak_terdaftar: number;
+  nik_kuota_habis: number;
+  nik_meninggal: number;
+  nik_dibawah_umur: number;
+  nik_tidak_aktif: number;
+  captcha_total: number;
+  captcha_sukses: number;
+  jumlah_tabung: number;
+  avg_seconds_per_nik: number;
+  batch_number: number;
+  app_version: string | null;
+  nama_pangkalan: string | null;
+  created_at: string;
+}
 
 interface Order {
   id: string;
@@ -47,8 +92,13 @@ export default function AdminPortal() {
   const [error, setError] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // New States
+  const [pangkalanProfiles, setPangkalanProfiles] = useState<PangkalanProfile[]>([]);
+  const [botSessions, setBotSessions] = useState<BotSession[]>([]);
+  const [selectedPangkalan, setSelectedPangkalan] = useState<PangkalanProfile | null>(null);
+
   // Tab State
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'ORDERS' | 'LICENSES' | 'PACKAGES' | 'MONITORING'>('OVERVIEW');
+  const [activeTab, setActiveTab] = useState<'COMMAND' | 'INTEL' | 'FINANCE' | 'RADAR' | 'ORDERS' | 'LICENSES' | 'PACKAGES' | 'MONITORING'>('COMMAND');
 
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -119,6 +169,8 @@ export default function AdminPortal() {
         const data = await res.json();
         setOrders(data.orders || []);
         setTelegramLinks(data.telegramLinks || []);
+        setPangkalanProfiles(data.pangkalanProfiles || []);
+        setBotSessions(data.botSessions || []);
         if (data.paketsConfig) setPaketsConfig(data.paketsConfig);
         setIsAuthorized(true);
         localStorage.setItem('gorillaz_admin_passcode', codeToTest);
@@ -619,11 +671,14 @@ export default function AdminPortal() {
         paddingBottom: '6px'
       }}>
         {[
-          { id: 'OVERVIEW', label: '📊 Ringkasan & Metrik', badge: null },
-          { id: 'ORDERS', label: '💳 Transaksi Pembayaran', badge: metrics.pendingCount > 0 ? `${metrics.pendingCount} Pending` : null, badgeColor: 'hsl(var(--warning))' },
-          { id: 'LICENSES', label: '🔑 Lisensi & HWID Mesin', badge: `${metrics.activeLicenses} Aktif`, badgeColor: 'hsl(var(--success))' },
-          { id: 'PACKAGES', label: '📦 Katalog & Enterprise Kustom', badge: 'VIP' },
-          { id: 'MONITORING', label: '🤖 Pangkalan & Telegram', badge: telegramLinks.length > 0 ? `${telegramLinks.length}` : null },
+          { id: 'COMMAND', label: '📊 Pusat Komando', badge: null },
+          { id: 'INTEL', label: '🔍 Intelijen Pangkalan', badge: null },
+          { id: 'FINANCE', label: '💰 Analisa Keuangan', badge: null },
+          { id: 'RADAR', label: '🎯 Radar Peluang', badge: null },
+          { id: 'ORDERS', label: '💳 Transaksi', badge: metrics.pendingCount > 0 ? `${metrics.pendingCount} Pending` : null, badgeColor: 'hsl(var(--warning))' },
+          { id: 'LICENSES', label: '🔑 Lisensi & HWID', badge: `${metrics.activeLicenses} Aktif`, badgeColor: 'hsl(var(--success))' },
+          { id: 'PACKAGES', label: '📦 Katalog & Enterprise', badge: 'VIP' },
+          { id: 'MONITORING', label: '🤖 Monitoring', badge: telegramLinks.length > 0 ? `${telegramLinks.length}` : null },
         ].map(tab => (
           <button
             key={tab.id}
@@ -662,74 +717,84 @@ export default function AdminPortal() {
       </div>
 
       {/* ========================================================================= */}
-      {/* TAB 1: RINGKASAN & METRIK (OVERVIEW) */}
+      {/* TAB 1: PUSAT KOMANDO (COMMAND) */}
       {/* ========================================================================= */}
-      {activeTab === 'OVERVIEW' && (
+      {activeTab === 'COMMAND' && (
         <div className="animate-fade-in">
-          {/* KPI Grid */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-            gap: '20px',
-            marginBottom: '28px'
-          }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '28px' }}>
             <div className="glass-card">
               <h3 style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', marginBottom: '8px' }}>Total Omset Lunas</h3>
-              <p style={{ fontSize: '2rem', fontWeight: 800, color: 'hsl(var(--success))' }}>{formatRupiah(metrics.revenue)}</p>
-              <p style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginTop: '6px' }}>
-                Hari Ini: <strong style={{ color: '#38bdf8' }}>{formatRupiah(metrics.todayRevenue)}</strong>
-              </p>
+              <p style={{ fontSize: '2rem', fontWeight: 800, color: 'hsl(var(--success))' }}>{formatRupiah(orders.filter(o => o.status === 'PAID' || o.status === 'REDEEMED').reduce((a, b) => a + b.amount, 0))}</p>
             </div>
-
             <div className="glass-card">
-              <h3 style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', marginBottom: '8px' }}>Lisensi & Perangkat</h3>
-              <p style={{ fontSize: '2rem', fontWeight: 800, color: 'hsl(var(--secondary))' }}>{metrics.activeLicenses}</p>
-              <p style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginTop: '6px' }}>
-                {metrics.unusedVouchers} voucher siap redeem | {metrics.paidCount} total terbit
-              </p>
+              <h3 style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', marginBottom: '8px' }}>Omset Bulan Ini</h3>
+              <p style={{ fontSize: '2rem', fontWeight: 800, color: '#38bdf8' }}>{formatRupiah(orders.filter(o => (o.status === 'PAID' || o.status === 'REDEEMED') && o.paid_at && new Date(o.paid_at).getMonth() === new Date().getMonth()).reduce((a, b) => a + b.amount, 0))}</p>
             </div>
-
             <div className="glass-card">
-              <h3 style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', marginBottom: '8px' }}>Status Orderan</h3>
-              <p style={{ fontSize: '2rem', fontWeight: 800 }}>{metrics.totalCount}</p>
-              <p style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginTop: '6px' }}>
-                <span style={{ color: metrics.pendingCount > 0 ? 'hsl(var(--warning))' : 'inherit' }}>
-                  {metrics.pendingCount} Pending
-                </span> | Rasio Sukses: {metrics.successRate}%
-              </p>
+              <h3 style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', marginBottom: '8px' }}>Pangkalan Aktif</h3>
+              <p style={{ fontSize: '2rem', fontWeight: 800 }}>{pangkalanProfiles.filter(p => p.last_active_at && new Date(p.last_active_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length}</p>
             </div>
-
-            <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '10px' }}>
-              <h3 style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase' }}>Aksi Cepat Admin</h3>
-              <button 
-                className="btn btn-primary" 
-                onClick={() => { setActiveTab('PACKAGES'); setModalType('CUSTOM_CREATE'); }}
-                style={{ padding: '8px 12px', fontSize: '0.85rem' }}
-              >
-                + Buat Lisensi Enterprise Baru
-              </button>
-              <button 
-                className="btn btn-secondary" 
-                onClick={() => exportToCSV(orders)}
-                style={{ padding: '8px 12px', fontSize: '0.85rem' }}
-              >
-                📥 Export Seluruh Data (.csv)
-              </button>
+            <div className="glass-card">
+              <h3 style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', marginBottom: '8px' }}>Total Tabung Diproses</h3>
+              <p style={{ fontSize: '2rem', fontWeight: 800 }}>{botSessions.reduce((a, b) => a + (b.nik_sukses * b.jumlah_tabung), 0).toLocaleString()}</p>
+            </div>
+            <div className="glass-card">
+              <h3 style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', marginBottom: '8px' }}>Tingkat Keberhasilan</h3>
+              <p style={{ fontSize: '2rem', fontWeight: 800, color: 'hsl(var(--warning))' }}>{botSessions.length > 0 ? Math.round(botSessions.reduce((a, b) => a + (b.nik_sukses / (b.total_nik || 1)), 0) / botSessions.length * 100) : 0}%</p>
+            </div>
+            <div className="glass-card">
+              <h3 style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', marginBottom: '8px' }}>Sesi Hari Ini</h3>
+              <p style={{ fontSize: '2rem', fontWeight: 800 }}>{botSessions.filter(s => new Date(s.ended_at).toDateString() === new Date().toDateString()).length}</p>
             </div>
           </div>
-
-          {/* Recent Orders Overview */}
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px', marginBottom: '28px' }}>
+            <div className="glass-card" style={{ padding: '24px' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '16px' }}>Trend Omset (6 Bulan Terakhir)</h3>
+              <div style={{ height: '300px' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={(() => {
+                    const months: any = {};
+                    for(let i=5; i>=0; i--) {
+                      const d = new Date();
+                      d.setMonth(d.getMonth() - i);
+                      months[`${d.getFullYear()}-${d.getMonth()}`] = { name: d.toLocaleString('id-ID', {month: 'short'}), total: 0 };
+                    }
+                    orders.filter(o => o.status === 'PAID' || o.status === 'REDEEMED').forEach(o => {
+                      if(!o.paid_at) return;
+                      const d = new Date(o.paid_at);
+                      const key = `${d.getFullYear()}-${d.getMonth()}`;
+                      if(months[key]) months[key].total += o.amount;
+                    });
+                    return Object.values(months);
+                  })()}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                    <XAxis dataKey="name" stroke="#cbd5e1" />
+                    <YAxis stroke="#cbd5e1" tickFormatter={(val) => `Rp${val/1000}k`} />
+                    <Tooltip formatter={(val: any) => formatRupiah(Number(val))} contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155' }} />
+                    <Bar dataKey="total" fill="#38bdf8" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className="glass-card" style={{ padding: '24px' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '16px' }}>5 Pangkalan Paling Aktif</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {pangkalanProfiles.sort((a,b) => b.total_sesi - a.total_sesi).slice(0, 5).map(p => (
+                  <div key={p.id} style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontWeight: 'bold' }}>{p.nama_pangkalan || p.whatsapp}</div>
+                    <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>{p.total_sesi} Sesi | {p.total_nik_sukses} NIK Sukses</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          
           <div className="glass-card" style={{ padding: '24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>5 Transaksi Terakhir</h3>
-              <button 
-                onClick={() => setActiveTab('ORDERS')} 
-                style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}
-              >
-                Lihat Semua Transaksi →
-              </button>
+              <button onClick={() => setActiveTab('ORDERS')} style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>Lihat Semua Transaksi →</button>
             </div>
-
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                 <thead>
@@ -747,31 +812,152 @@ export default function AdminPortal() {
                     <tr key={o.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)' }}>
                       <td style={{ padding: '12px' }}>{formatDate(o.created_at)}</td>
                       <td style={{ padding: '12px', fontWeight: 600 }}>{o.whatsapp}</td>
-                      <td style={{ padding: '12px' }}>
-                        <span style={{ padding: '3px 8px', borderRadius: '6px', fontSize: '0.8rem', background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8' }}>
-                          {o.paket}
-                        </span>
-                      </td>
+                      <td style={{ padding: '12px' }}><span style={{ padding: '3px 8px', borderRadius: '6px', fontSize: '0.8rem', background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8' }}>{o.paket}</span></td>
                       <td style={{ padding: '12px', fontWeight: 700 }}>{formatRupiah(o.amount)}</td>
-                      <td style={{ padding: '12px' }}>
-                        <span style={{
-                          padding: '3px 8px',
-                          borderRadius: '12px',
-                          fontSize: '0.75rem',
-                          fontWeight: 700,
-                          background: o.status === 'PAID' || o.status === 'REDEEMED' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
-                          color: o.status === 'PAID' || o.status === 'REDEEMED' ? '#4ade80' : '#facc15'
-                        }}>
-                          {o.status}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px', fontFamily: 'monospace', fontWeight: 700, color: '#38bdf8' }}>
-                        {o.voucher_code || '-'}
-                      </td>
+                      <td style={{ padding: '12px' }}><span style={{ padding: '3px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 700, background: o.status === 'PAID' || o.status === 'REDEEMED' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)', color: o.status === 'PAID' || o.status === 'REDEEMED' ? '#4ade80' : '#facc15' }}>{o.status}</span></td>
+                      <td style={{ padding: '12px', fontFamily: 'monospace', fontWeight: 700, color: '#38bdf8' }}>{o.voucher_code || '-'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'INTEL' && (
+        <div className="animate-fade-in">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '20px' }}>
+            <div className="glass-card">
+              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Total Pangkalan Terdaftar</h3>
+              <p style={{ fontSize: '2rem', fontWeight: 800 }}>{pangkalanProfiles.length}</p>
+            </div>
+            <div className="glass-card">
+              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Pangkalan Aktif (7 hari)</h3>
+              <p style={{ fontSize: '2rem', fontWeight: 800, color: '#4ade80' }}>{pangkalanProfiles.filter(p => p.last_active_at && new Date(p.last_active_at) > new Date(Date.now() - 7*86400000)).length}</p>
+            </div>
+            <div className="glass-card">
+              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Rata-rata NIK/Sesi</h3>
+              <p style={{ fontSize: '2rem', fontWeight: 800 }}>{botSessions.length > 0 ? Math.round(botSessions.reduce((a,b)=>a+b.total_nik,0)/botSessions.length) : 0}</p>
+            </div>
+            <div className="glass-card">
+              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Pangkalan Baru Minggu Ini</h3>
+              <p style={{ fontSize: '2rem', fontWeight: 800, color: '#facc15' }}>{pangkalanProfiles.filter(p => p.created_at && new Date(p.created_at) > new Date(Date.now() - 7*86400000)).length}</p>
+            </div>
+          </div>
+          <div className="glass-card" style={{ padding: '0', overflowX: 'auto', borderRadius: '16px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.015)' }}>
+                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Nama Pangkalan</th>
+                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>WhatsApp</th>
+                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Kota</th>
+                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Paket</th>
+                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Total NIK Diproses</th>
+                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pangkalanProfiles.map(p => {
+                  const pOrder = orders.find(o => o.whatsapp === p.whatsapp);
+                  const isAktif = p.last_active_at && new Date(p.last_active_at) > new Date(Date.now() - 3*86400000);
+                  const isTidur = p.last_active_at && !isAktif && new Date(p.last_active_at) > new Date(Date.now() - 14*86400000);
+                  const statusLabel = isAktif ? '🟢 Aktif' : isTidur ? '🟡 Tidur' : '🔴 Hilang';
+                  return (
+                    <tr key={p.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                      <td style={{ padding: '14px 18px', fontWeight: 600 }}>{p.nama_pangkalan || 'Belum Diketahui'} {p.platform === 'android' ? '📱' : '💻'}</td>
+                      <td style={{ padding: '14px 18px' }}><a href={`https://wa.me/${p.whatsapp.replace(/\D/g,'')}`} target="_blank" style={{ color: '#38bdf8' }}>{p.whatsapp}</a></td>
+                      <td style={{ padding: '14px 18px' }}>{p.kota || '-'}</td>
+                      <td style={{ padding: '14px 18px' }}>{pOrder?.paket || '-'}</td>
+                      <td style={{ padding: '14px 18px' }}>{p.total_nik_sukses}</td>
+                      <td style={{ padding: '14px 18px' }}>{statusLabel}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'FINANCE' && (
+        <div className="animate-fade-in">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '20px' }}>
+            <div className="glass-card">
+              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Total Omset Sepanjang Masa</h3>
+              <p style={{ fontSize: '2rem', fontWeight: 800 }}>{formatRupiah(orders.filter(o => o.status === 'PAID' || o.status === 'REDEEMED').reduce((a, b) => a + b.amount, 0))}</p>
+            </div>
+            <div className="glass-card">
+              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Omset Bulan Ini</h3>
+              <p style={{ fontSize: '2rem', fontWeight: 800 }}>{formatRupiah(orders.filter(o => (o.status === 'PAID' || o.status === 'REDEEMED') && o.paid_at && new Date(o.paid_at).getMonth() === new Date().getMonth()).reduce((a, b) => a + b.amount, 0))}</p>
+            </div>
+            <div className="glass-card">
+              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Omset Minggu Ini</h3>
+              <p style={{ fontSize: '2rem', fontWeight: 800 }}>{formatRupiah(orders.filter(o => (o.status === 'PAID' || o.status === 'REDEEMED') && o.paid_at && new Date(o.paid_at) > new Date(Date.now() - 7*86400000)).reduce((a, b) => a + b.amount, 0))}</p>
+            </div>
+            <div className="glass-card">
+              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Omset Hari Ini</h3>
+              <p style={{ fontSize: '2rem', fontWeight: 800 }}>{formatRupiah(orders.filter(o => (o.status === 'PAID' || o.status === 'REDEEMED') && o.paid_at && new Date(o.paid_at).toDateString() === new Date().toDateString()).reduce((a, b) => a + b.amount, 0))}</p>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <div className="glass-card">
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '16px' }}>Omset per Paket</h3>
+              <div style={{ height: '300px' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={(() => {
+                      const pkgs: any = {};
+                      orders.filter(o => o.status === 'PAID' || o.status === 'REDEEMED').forEach(o => {
+                        pkgs[o.paket] = (pkgs[o.paket] || 0) + o.amount;
+                      });
+                      return Object.entries(pkgs).map(([name, value]) => ({name, value}));
+                    })()} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label>
+                      <Cell fill="#38bdf8" />
+                      <Cell fill="#4ade80" />
+                      <Cell fill="#facc15" />
+                      <Cell fill="#f87171" />
+                    </Pie>
+                    <Tooltip formatter={(val: any) => formatRupiah(Number(val))} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className="glass-card">
+               <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '16px' }}>Rekomendasi Cerdas</h3>
+               <p style={{ fontSize: '0.9rem', color: 'hsl(var(--text-secondary))', marginBottom: '10px' }}>💡 Berdasarkan data 3 bulan terakhir, kami sarankan follow up pangkalan yang kuotanya sudah lebih dari 80% terpakai.</p>
+               <p style={{ fontSize: '0.9rem', color: 'hsl(var(--text-secondary))' }}>🚀 Paket paling populer: {Object.entries(orders.filter(o => o.status === 'PAID' || o.status === 'REDEEMED').reduce((acc:any, curr) => { acc[curr.paket] = (acc[curr.paket] || 0) + 1; return acc; }, {})).sort((a:any, b:any) => b[1] - a[1])[0]?.[0] || 'Belum ada'}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'RADAR' && (
+        <div className="animate-fade-in">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <div className="glass-card">
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#facc15' }}>⏳ Belum Bayar ({orders.filter(o => o.status === 'PENDING' || o.status === 'EXPIRED').length})</h3>
+              <p style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))', marginBottom: '16px' }}>Potensi: {formatRupiah(orders.filter(o => o.status === 'PENDING' || o.status === 'EXPIRED').reduce((a,b)=>a+b.amount,0))}</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {orders.filter(o => o.status === 'PENDING' || o.status === 'EXPIRED').map(o => (
+                  <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+                    <div><div style={{ fontWeight: 600 }}>{o.whatsapp}</div><div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>{o.paket} - {formatRupiah(o.amount)}</div></div>
+                    <button className="btn btn-secondary" onClick={() => window.open(`https://wa.me/${o.whatsapp.replace(/\D/g,'')}?text=${encodeURIComponent(`Halo kak! Pesanan Paket ${o.paket} Anda (${formatRupiah(o.amount)}) masih menunggu pembayaran. Ada yang bisa kami bantu? 😊`)}`)} style={{ fontSize: '0.75rem', padding: '4px 8px' }}>💬 Follow-up</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="glass-card">
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#f87171' }}>😴 Pangkalan Tidur</h3>
+              <p style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))', marginBottom: '16px' }}>Tidak aktif 7-30 hari terakhir</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {pangkalanProfiles.filter(p => p.last_active_at && new Date(p.last_active_at) < new Date(Date.now() - 7*86400000) && new Date(p.last_active_at) > new Date(Date.now() - 30*86400000)).map(p => (
+                  <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+                    <div><div style={{ fontWeight: 600 }}>{p.nama_pangkalan || p.whatsapp}</div></div>
+                    <button className="btn btn-secondary" onClick={() => window.open(`https://wa.me/${p.whatsapp.replace(/\D/g,'')}?text=${encodeURIComponent(`Halo kak! Sudah lama tidak memakai bot Pertamina. Ada kendala yang bisa kami bantu? 🤝`)}`)} style={{ fontSize: '0.75rem', padding: '4px 8px' }}>💬 Tanya Kendala</button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>

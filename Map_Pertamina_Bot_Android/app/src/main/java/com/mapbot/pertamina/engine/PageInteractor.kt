@@ -379,4 +379,24 @@ class PageInteractor(private val wvManager: WebViewManager) {
         )
         return mapping[kode4] ?: "INDONESIA"
     }
+
+    suspend fun getNamaPangkalan(): String = suspendCoroutine { cont ->
+        wvManager.executeJs("""
+            (function() {
+                try {
+                    var el = document.querySelector('.merchant-name');
+                    if (el && el.innerText) return el.innerText;
+                    var el2 = document.querySelector('h1.text-lg, h2.text-lg, .text-lg.font-bold');
+                    if (el2 && el2.innerText) return el2.innerText;
+                    return '';
+                } catch (e) {
+                    return '';
+                }
+            })()
+        """) { result ->
+            val cleanResult = result.replace("\"", "").trim()
+            if (cleanResult == "null") cont.resume("")
+            else cont.resume(cleanResult)
+        }
+    }
 }

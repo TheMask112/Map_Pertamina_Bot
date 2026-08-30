@@ -155,6 +155,82 @@ def _poll_telegram_command(whatsapp: str) -> str:
     return None
 
 
+def _report_session_to_server(
+    whatsapp: str,
+    session_start: datetime,
+    session_end: datetime,
+    total_nik: int,
+    nik_sukses: int,
+    nik_gagal: int,
+    nik_tidak_terdaftar: int = 0,
+    nik_kuota_habis: int = 0,
+    nik_meninggal: int = 0,
+    nik_dibawah_umur: int = 0,
+    nik_tidak_aktif: int = 0,
+    captcha_total: int = 0,
+    captcha_sukses: int = 0,
+    jumlah_tabung: int = 1,
+    avg_seconds_per_nik: float = 0.0,
+    batch_number: int = 1,
+    error_summary: str = "",
+    nama_pangkalan: str = "",
+):
+    """Kirim laporan sesi bot ke server untuk analitik dashboard admin."""
+    try:
+        import urllib.request
+        import json
+        from license_manager import get_hwid, verify_license
+
+        hwid = get_hwid()
+        valid, _, payload = verify_license(hwid)
+        license_key = payload.get("license_key", "") if (valid and payload) else ""
+
+        if not license_key:
+            return
+
+        duration = int((session_end - session_start).total_seconds())
+
+        url = "https://map-pertamina-web.vercel.app/api/report-session"
+        data = {
+            "whatsapp": whatsapp,
+            "nama_pangkalan": nama_pangkalan,
+            "platform": "DESKTOP",
+            "app_version": "1.0.0",
+            "started_at": session_start.isoformat(),
+            "ended_at": session_end.isoformat(),
+            "duration_seconds": duration,
+            "total_nik": total_nik,
+            "nik_sukses": nik_sukses,
+            "nik_gagal": nik_gagal,
+            "nik_tidak_terdaftar": nik_tidak_terdaftar,
+            "nik_kuota_habis": nik_kuota_habis,
+            "nik_meninggal": nik_meninggal,
+            "nik_dibawah_umur": nik_dibawah_umur,
+            "nik_tidak_aktif": nik_tidak_aktif,
+            "captcha_total": captcha_total,
+            "captcha_sukses": captcha_sukses,
+            "jumlah_tabung": jumlah_tabung,
+            "avg_seconds_per_nik": avg_seconds_per_nik,
+            "batch_number": batch_number,
+            "error_summary": error_summary[:500] if error_summary else "",
+            "hwid": hwid,
+        }
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(data).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "X-License-Key": license_key,
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as response:
+            response.read()
+        print("[INFO] Laporan sesi berhasil dikirim ke server.")
+    except Exception as e:
+        print(f"[WARN] Gagal mengirim laporan sesi ke server: {e}")
+
+
 def find_nik_column(df: pd.DataFrame) -> str:
     """
     Mencari kolom NIK secara otomatis di dalam DataFrame.
@@ -1054,6 +1130,16 @@ def run_bot(
     batch_number = 1
     batch_count  = 0  # Counter transaksi dalam batch ini
 
+    # Session tracking untuk laporan ke server
+    session_start_time = datetime.now()
+    captcha_total_count = 0
+    captcha_sukses_count = 0
+    nik_tidak_terdaftar_count = 0
+    nik_kuota_habis_count = 0
+    nik_meninggal_count = 0
+    nik_dibawah_umur_count = 0
+    nik_tidak_aktif_count = 0
+
     # ----------------------------------------------------------
     # 2. Browser
     # ----------------------------------------------------------
@@ -1666,6 +1752,35 @@ def run_bot(
 
         if on_progress:
             on_progress(processed_count, total_data, f"✅ Selesai — {sukses_total} sukses, {gagal_total} gagal")
+
+        # Kirim laporan sesi ke server (untuk analitik dashboard admin)
+        wa_num_report = _get_whatsapp_number()
+        if wa_num_report:
+            session_end_time = datetime.now()
+            duration_sec = (session_end_time - session_start_time).total_seconds()
+            avg_sec = duration_sec / max(processed_count, 1)
+            threading.Thread(
+                target=_report_session_to_server,
+                kwargs={
+                    "whatsapp": wa_num_report,
+                    "session_start": session_start_time,
+                    "session_end": session_end_time,
+                    "total_nik": total_data,
+                    "nik_sukses": sukses_total,
+                    "nik_gagal": gagal_total,
+                    "nik_tidak_terdaftar": nik_tidak_terdaftar_count,
+                    "nik_kuota_habis": nik_kuota_habis_count,
+                    "nik_meninggal": nik_meninggal_count,
+                    "nik_dibawah_umur": nik_dibawah_umur_count,
+                    "nik_tidak_aktif": nik_tidak_aktif_count,
+                    "captcha_total": captcha_total_count,
+                    "captcha_sukses": captcha_sukses_count,
+                    "jumlah_tabung": jumlah_tabung,
+                    "avg_seconds_per_nik": round(avg_sec, 2),
+                    "batch_number": batch_number,
+                },
+                daemon=True,
+            ).start()
 
         try:
             context.close()
