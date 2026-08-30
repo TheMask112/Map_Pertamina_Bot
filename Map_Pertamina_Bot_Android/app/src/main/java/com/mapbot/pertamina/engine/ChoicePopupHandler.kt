@@ -5,23 +5,27 @@ import kotlinx.coroutines.delay
 
 object ChoicePopupHandler {
     suspend fun handle(pageInteractor: PageInteractor) {
-        // 1. Cek Modal "Segera Lengkapi NIB" / "Perbarui Data Pelanggan" Usaha Mikro
-        val isNibModal = pageInteractor.pageContainsText("Segera Lengkapi NIB") || 
-                         pageInteractor.pageContainsText("Lengkapi NIB") ||
-                         pageInteractor.pageContainsText("NANTI SAJA, LANJUT PENJUALAN") ||
-                         pageInteractor.pageContainsText("NANTI SAJA") ||
-                         pageInteractor.isElementVisibleByText("NANTI SAJA, LANJUT PENJUALAN") ||
-                         pageInteractor.isElementVisibleByText("NANTI SAJA")
+        // 1. Pastikan BUKAN modal update data pelanggan sebelum menangani popup NIB
+        val isUpdateModal = pageInteractor.isElementVisibleByText("UPDATE DATA PELANGGAN") || 
+                            pageInteractor.isElementVisibleByText("UPDATE DATA") ||
+                            pageInteractor.isElementVisibleByText("PERBARUI DATA PELANGGAN") ||
+                            pageInteractor.pageContainsText("data pelanggan belum lengkap") ||
+                            pageInteractor.pageContainsText("lengkapi data pelanggan")
 
-        if (isNibModal) {
-            Log.d("ChoicePopup", "Modal 'Segera Lengkapi NIB' terdeteksi. Mengklik NANTI SAJA, LANJUT PENJUALAN...")
-            pageInteractor.dismissKeyboard()
-            val clicked = pageInteractor.clickButtonByText("NANTI SAJA, LANJUT PENJUALAN") ||
-                          pageInteractor.clickButtonByText("NANTI SAJA, LANJUTKAN PENJUALAN") ||
-                          pageInteractor.clickButtonByText("NANTI SAJA") ||
-                          pageInteractor.clickButtonByText("LANJUT PENJUALAN")
-            if (clicked) {
-                delay(1200)
+        if (!isUpdateModal) {
+            val isNibModal = pageInteractor.pageContainsText("Segera Lengkapi NIB") || 
+                             pageInteractor.pageContainsText("Lengkapi NIB") ||
+                             pageInteractor.isElementVisibleByText("NANTI SAJA, LANJUT PENJUALAN") ||
+                             pageInteractor.isElementVisibleByText("NANTI SAJA, LANJUTKAN PENJUALAN")
+
+            if (isNibModal) {
+                Log.d("ChoicePopup", "Modal 'Segera Lengkapi NIB' terdeteksi. Mengklik NANTI SAJA, LANJUT PENJUALAN...")
+                pageInteractor.dismissKeyboard()
+                val clicked = pageInteractor.clickButtonByText("NANTI SAJA, LANJUT PENJUALAN") ||
+                              pageInteractor.clickButtonByText("NANTI SAJA, LANJUTKAN PENJUALAN")
+                if (clicked) {
+                    delay(1200)
+                }
             }
         }
 
