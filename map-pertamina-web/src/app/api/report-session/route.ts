@@ -33,7 +33,9 @@ export async function POST(request: Request) {
       nik_kuota_habis, nik_meninggal, nik_dibawah_umur, nik_tidak_aktif,
       captcha_total, captcha_sukses, jumlah_tabung,
       avg_seconds_per_nik, batch_number, error_summary,
-      kota, provinsi, alokasi_bulanan, jumlah_pelanggan, hwid
+      kota, provinsi, alokasi_bulanan, jumlah_pelanggan, hwid,
+      // BIG DATA V3 FIELDS
+      latitude, longitude, ram_usage_mb, ping_ms
     } = body;
 
     if (!whatsapp) {
@@ -47,13 +49,15 @@ export async function POST(request: Request) {
         total_nik, nik_sukses, nik_gagal, nik_tidak_terdaftar,
         nik_kuota_habis, nik_meninggal, nik_dibawah_umur, nik_tidak_aktif,
         captcha_total, captcha_sukses, jumlah_tabung, avg_seconds_per_nik,
-        batch_number, app_version, error_summary, nama_pangkalan
+        batch_number, app_version, error_summary, nama_pangkalan,
+        latitude, longitude, ram_usage_mb, ping_ms
       ) VALUES (
         ${whatsapp}, ${hwid}, ${platform || 'DESKTOP'}, ${started_at ? new Date(started_at) : null}, ${ended_at ? new Date(ended_at) : new Date()}, ${duration_seconds || 0},
         ${total_nik || 0}, ${nik_sukses || 0}, ${nik_gagal || 0}, ${nik_tidak_terdaftar || 0},
         ${nik_kuota_habis || 0}, ${nik_meninggal || 0}, ${nik_dibawah_umur || 0}, ${nik_tidak_aktif || 0},
         ${captcha_total || 0}, ${captcha_sukses || 0}, ${jumlah_tabung || 1}, ${avg_seconds_per_nik || 0},
-        ${batch_number || 1}, ${app_version}, ${error_summary}, ${nama_pangkalan}
+        ${batch_number || 1}, ${app_version}, ${error_summary}, ${nama_pangkalan},
+        ${latitude ? parseFloat(latitude) : null}, ${longitude ? parseFloat(longitude) : null}, ${ram_usage_mb ? parseInt(ram_usage_mb) : null}, ${ping_ms ? parseInt(ping_ms) : null}
       )
       RETURNING id
     `;

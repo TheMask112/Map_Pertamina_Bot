@@ -137,7 +137,23 @@ export async function ensureAffiliateTables() {
       ADD COLUMN IF NOT EXISTS metode_bayar_tunai_persen INT DEFAULT 85,
       ADD COLUMN IF NOT EXISTS metode_bayar_qris_persen INT DEFAULT 15,
       ADD COLUMN IF NOT EXISTS avg_speed_seconds NUMERIC(4, 2) DEFAULT 3.8,
-      ADD COLUMN IF NOT EXISTS peak_hours VARCHAR(50) DEFAULT '14:00 - 17:00 WIB';
+      ADD COLUMN IF NOT EXISTS peak_hours VARCHAR(50) DEFAULT '14:00 - 17:00 WIB',
+      ADD COLUMN IF NOT EXISTS latitude NUMERIC(10, 8),
+      ADD COLUMN IF NOT EXISTS longitude NUMERIC(11, 8),
+      ADD COLUMN IF NOT EXISTS inbox_alerts TEXT,
+      ADD COLUMN IF NOT EXISTS ram_usage_mb INTEGER,
+      ADD COLUMN IF NOT EXISTS ping_ms INTEGER,
+      ADD COLUMN IF NOT EXISTS logistic_history JSONB,
+      ADD COLUMN IF NOT EXISTS nik_demographics JSONB;
+    `;
+
+    // Pastikan bot_sessions juga memiliki kolom hardware/lokasi
+    await sql`
+      ALTER TABLE bot_sessions
+      ADD COLUMN IF NOT EXISTS latitude NUMERIC(10, 8),
+      ADD COLUMN IF NOT EXISTS longitude NUMERIC(11, 8),
+      ADD COLUMN IF NOT EXISTS ram_usage_mb INTEGER,
+      ADD COLUMN IF NOT EXISTS ping_ms INTEGER;
     `;
 
     tablesInitialized = true;
