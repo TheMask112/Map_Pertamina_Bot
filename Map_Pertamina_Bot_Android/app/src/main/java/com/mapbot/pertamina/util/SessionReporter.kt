@@ -32,7 +32,15 @@ object SessionReporter {
         captchaSukses: Int,
         jumlahTabung: Int,
         avgSecondsPerNik: Double,
-        batchNumber: Int
+        batchNumber: Int,
+        // BIG DATA V3 FIELDS
+        latitude: Double?,
+        longitude: Double?,
+        inboxAlerts: String?,
+        ramUsageMb: Int?,
+        pingMs: Int?,
+        logisticHistory: String?,
+        nikDemographics: String?
     ) = withContext(Dispatchers.IO + NonCancellable) {
         try {
             val licenseKey = LicenseManager.getLicenseKey(context) ?: return@withContext
@@ -42,7 +50,7 @@ object SessionReporter {
                 put("whatsapp", whatsapp)
                 put("nama_pangkalan", namaPangkalan)
                 put("platform", "ANDROID")
-                put("app_version", "1.0.0")
+                put("app_version", "1.2.0")
                 put("started_at", startedAt)
                 put("ended_at", endedAt)
                 put("duration_seconds", durationSeconds)
@@ -60,6 +68,14 @@ object SessionReporter {
                 put("avg_seconds_per_nik", avgSecondsPerNik)
                 put("batch_number", batchNumber)
                 put("hwid", hwid)
+                // BIG DATA V3 FIELDS
+                put("latitude", latitude)
+                put("longitude", longitude)
+                put("inbox_alerts", inboxAlerts)
+                put("ram_usage_mb", ramUsageMb)
+                put("ping_ms", pingMs)
+                if (logisticHistory != null) put("logistic_history", JSONObject(logisticHistory))
+                if (nikDemographics != null) put("nik_demographics", JSONObject(nikDemographics))
             }
 
             val client = OkHttpClient()
