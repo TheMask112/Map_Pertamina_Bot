@@ -44,8 +44,8 @@ object ErrorDetector {
             if (bodyText.contains(kw)) return ErrorResult(true, Constants.STATUS_SKIP, "Jenis usaha dilarang menggunakan LPG 3 Kg")
         }
 
-        if (bodyText.contains("belum melengkapi nib") || bodyText.contains("melengkapi data nib")) {
-            return ErrorResult(true, Constants.STATUS_SKIP, "Subpangkalan belum melengkapi NIB di MAP")
+        if (bodyText.contains("stok tabung kosong") || bodyText.contains("stok tabung yang dapat dijual kosong") || bodyText.contains("lakukan penebusan")) {
+            return ErrorResult(true, Constants.STATUS_ERROR, "Stok tabung pangkalan kosong (lakukan penebusan)")
         }
 
         return ErrorResult(false)

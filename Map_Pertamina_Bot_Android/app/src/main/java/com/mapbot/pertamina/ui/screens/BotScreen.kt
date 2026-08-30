@@ -4,32 +4,26 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.border
-import com.mapbot.pertamina.ui.theme.*
-import com.mapbot.pertamina.data.BotUiState
 import com.mapbot.pertamina.data.ExcelWriter
 import com.mapbot.pertamina.data.SessionData
-import com.mapbot.pertamina.engine.BotEngine
-import com.mapbot.pertamina.engine.PageInteractor
-import com.mapbot.pertamina.engine.WebViewManager
-import kotlinx.coroutines.flow.MutableStateFlow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BotScreen(onNavigateBack: () -> Unit) {
     val context = LocalContext.current
+    var isFullscreen by remember { mutableStateOf(false) }
     
     // Initialize Singleton
     LaunchedEffect(Unit) {
@@ -60,13 +54,35 @@ fun BotScreen(onNavigateBack: () -> Unit) {
         }
     }
 
+    // Auto-start bot saat mode batch queue aktif
+    LaunchedEffect(SessionData.isBatchQueueActive) {
+        if (SessionData.isBatchQueueActive && !uiState.isRunning && SessionData.loadedNikList.isNotEmpty()) {
+            val phoneToUse = SessionData.phone
+            val passToUse = SessionData.pass
+            com.mapbot.pertamina.engine.BotManager.botEngine?.start(
+                phoneToUse,
+                passToUse,
+                SessionData.loadedNikList
+            )
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Kontrol Bot") },
+                title = { Text(if (isFullscreen) "Layar Penuh" else "Kontrol Bot") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Kembali")
+                    }
+                },
+                actions = {
+                    TextButton(onClick = { isFullscreen = !isFullscreen }) {
+                        Text(
+                            if (isFullscreen) "Minimize" else "Full Screen",
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelMedium
+                        )
                     }
                 }
             )
@@ -78,88 +94,216 @@ fun BotScreen(onNavigateBack: () -> Unit) {
                 factory = { ctx ->
                     val wv = com.mapbot.pertamina.engine.BotManager.webViewManager?.getWebView()
                     if (wv != null) {
-                        // Bersihkan parent ViewGroup jika ada
                         (wv.parent as? android.view.ViewGroup)?.removeView(wv)
-                        // Bersihkan dari WindowManager jika masih tertempel
                         try {
                             val wm = ctx.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager
                             wm.removeViewImmediate(wv)
-                        } catch (e: Exception) {
-                            // Abaikan
-                        }
+                        } catch (_: Exception) {}
                         wv
                     } else {
                         android.webkit.WebView(ctx)
                     }
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.5f)
-                    .align(Alignment.TopCenter)
+                modifier = if (isFullscreen) {
+                    Modifier.fillMaxSize()
+                } else {
+                    Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.52f)
+                        .align(Alignment.TopCenter)
+                }
             )
             
-            // Overlay Log & Control Panel (Translucent) di bagian bawah
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.5f)
-                    .align(Alignment.BottomCenter),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                shadowElevation = 8.dp
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+            if (isFullscreen) {
+                // Floating Bar di Bawah saat Layar Penuh
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .padding(8.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                    shadowElevation = 8.dp
                 ) {
-                    Text(
-                        "Status: ${if (uiState.isRunning) "BERJALAN" else "SIAP"} | Estimasi: ${if (uiState.estimatedTimeSeconds >= 0) uiState.estimatedTimeSeconds.toString() + " dtk" else "-"}", 
-                        style = MaterialTheme.typography.titleSmall
-                    )
-                    Text("Progres NIK: ${uiState.processedCount} / ${uiState.totalNik}", style = MaterialTheme.typography.bodySmall)
-                    Text("✅ Sukses: ${uiState.successCount} | ❌ Gagal: ${uiState.failedCount} | ⚠️ Invalid: ${uiState.invalidCount}", style = MaterialTheme.typography.bodySmall)
-                    
-                    Spacer(modifier = Modifier.height(4.dp))
-                    
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Status: ${if (uiState.isRunning) (if (uiState.isPaused) "DIJEDA" else "BERJALAN") else "SIAP"}",
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                            Text(
+                                "NIK: ${uiState.processedCount}/${uiState.totalNik} | ✅ ${uiState.successCount} | ❌ ${uiState.failedCount}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = {
-                                if (SessionData.loadedNikList.isNotEmpty()) {
-                                    com.mapbot.pertamina.engine.BotManager.botEngine?.start(
-                                        SessionData.phone,
-                                        SessionData.pass,
-                                        SessionData.loadedNikList
-                                    )
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            // Tombol Mulai / Stop
+                            if (!uiState.isRunning) {
+                                Button(
+                                    onClick = {
+                                        if (SessionData.loadedNikList.isNotEmpty()) {
+                                            val credStore = com.mapbot.pertamina.security.CredentialStore(context)
+                                            val phoneToUse = SessionData.phone.ifBlank { credStore.getPhone() }
+                                            val passToUse = SessionData.pass.ifBlank { credStore.getPass() }
+                                            
+                                            com.mapbot.pertamina.engine.BotManager.botEngine?.start(
+                                                phoneToUse,
+                                                passToUse,
+                                                SessionData.loadedNikList
+                                            )
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                                    modifier = Modifier.height(36.dp)
+                                ) {
+                                    Text("Mulai", style = MaterialTheme.typography.labelSmall)
                                 }
-                            },
-                            modifier = Modifier.height(36.dp)
-                        ) {
-                            Text("Mulai", style = MaterialTheme.typography.labelSmall)
-                        }
-                        Button(
-                            onClick = { com.mapbot.pertamina.engine.BotManager.botEngine?.stop() },
-                            modifier = Modifier.height(36.dp)
-                        ) {
-                            Text("Jeda", style = MaterialTheme.typography.labelSmall)
-                        }
-                        if (!uiState.isRunning && uiState.successCount > 0) {
+                            } else {
+                                Button(
+                                    onClick = { com.mapbot.pertamina.engine.BotManager.botEngine?.stop() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828)),
+                                    modifier = Modifier.height(36.dp)
+                                ) {
+                                    Text("Stop", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+
+                            // Tombol Jeda / Lanjutkan
+                            if (uiState.isRunning) {
+                                if (uiState.isPaused) {
+                                    Button(
+                                        onClick = { com.mapbot.pertamina.engine.BotManager.botEngine?.resume() },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0)),
+                                        modifier = Modifier.height(36.dp)
+                                    ) {
+                                        Text("Lanjutkan", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                } else {
+                                    Button(
+                                        onClick = { com.mapbot.pertamina.engine.BotManager.botEngine?.pause() },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF57F17)),
+                                        modifier = Modifier.height(36.dp)
+                                    ) {
+                                        Text("Jeda", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                            }
+
                             OutlinedButton(
-                                onClick = { createDocLauncher.launch("NIK_Berhasil_${System.currentTimeMillis()}.xlsx") },
+                                onClick = { isFullscreen = false },
                                 modifier = Modifier.height(36.dp)
                             ) {
-                                Text("Simpan Excel", style = MaterialTheme.typography.labelSmall)
+                                Text("Minimize", style = MaterialTheme.typography.labelSmall)
                             }
                         }
                     }
-                    
-                    Spacer(modifier = Modifier.height(4.dp))
-                    
-                    // Log viewer
-                    androidx.compose.foundation.lazy.LazyColumn(
-                        modifier = Modifier.fillMaxWidth().weight(1f)
+                }
+            } else {
+                // Control Panel & Logs (Split View Normal)
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.48f)
+                        .align(Alignment.BottomCenter),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                    shadowElevation = 8.dp
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxSize().padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        items(uiState.logs.size) { index ->
-                            Text(uiState.logs[index], style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            "Status: ${if (uiState.isRunning) (if (uiState.isPaused) "DIJEDA" else "BERJALAN") else "SIAP"} | Estimasi: ${if (uiState.estimatedTimeSeconds >= 0) uiState.estimatedTimeSeconds.toString() + " dtk" else "-"}", 
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        Text("Progres NIK: ${uiState.processedCount} / ${uiState.totalNik}", style = MaterialTheme.typography.bodySmall)
+                        Text("✅ Sukses: ${uiState.successCount} | ❌ Gagal: ${uiState.failedCount} | ⚠️ Invalid: ${uiState.invalidCount}", style = MaterialTheme.typography.bodySmall)
+                        
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // Tombol Mulai / Stop Dinamis
+                            if (!uiState.isRunning) {
+                                Button(
+                                    onClick = {
+                                        if (SessionData.loadedNikList.isNotEmpty()) {
+                                            com.mapbot.pertamina.engine.BotManager.botEngine?.start(
+                                                SessionData.phone,
+                                                SessionData.pass,
+                                                SessionData.loadedNikList
+                                            )
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                                    modifier = Modifier.height(36.dp)
+                                ) {
+                                    Text("Mulai Bot", style = MaterialTheme.typography.labelSmall)
+                                }
+                            } else {
+                                Button(
+                                    onClick = { com.mapbot.pertamina.engine.BotManager.botEngine?.stop() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828)),
+                                    modifier = Modifier.height(36.dp)
+                                ) {
+                                    Text("Stop Bot", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+
+                            // Tombol Jeda / Lanjutkan Dinamis
+                            if (uiState.isRunning) {
+                                if (uiState.isPaused) {
+                                    Button(
+                                        onClick = { com.mapbot.pertamina.engine.BotManager.botEngine?.resume() },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0)),
+                                        modifier = Modifier.height(36.dp)
+                                    ) {
+                                        Text("Lanjutkan", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                } else {
+                                    Button(
+                                        onClick = { com.mapbot.pertamina.engine.BotManager.botEngine?.pause() },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF57F17)),
+                                        modifier = Modifier.height(36.dp)
+                                    ) {
+                                        Text("Jeda", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                            }
+
+                            // Tombol Layar Penuh
+                            OutlinedButton(
+                                onClick = { isFullscreen = true },
+                                modifier = Modifier.height(36.dp)
+                            ) {
+                                Text("Layar Penuh", style = MaterialTheme.typography.labelSmall)
+                            }
+
+                            if (!uiState.isRunning && uiState.successCount > 0) {
+                                OutlinedButton(
+                                    onClick = { createDocLauncher.launch("NIK_Berhasil_${System.currentTimeMillis()}.xlsx") },
+                                    modifier = Modifier.height(36.dp)
+                                ) {
+                                    Text("Simpan Excel", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(6.dp))
+                        
+                        // Log viewer
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth().weight(1f)
+                        ) {
+                            items(uiState.logs.size) { index ->
+                                Text(uiState.logs[index], style = MaterialTheme.typography.bodySmall)
+                            }
                         }
                     }
                 }
@@ -167,3 +311,4 @@ fun BotScreen(onNavigateBack: () -> Unit) {
         }
     }
 }
+

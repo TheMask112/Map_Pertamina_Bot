@@ -89,7 +89,6 @@ class FastNikChecker(private val wvManager: WebViewManager) {
     private fun parseCheckResult(nikData: NikData, rawJson: String) {
         try {
             if (rawJson.contains("FALLBACK_UI")) {
-                // Jika endpoint belum match, biarkan lolos untuk diproses UI biasa
                 nikData.keterangan = "Siap Diproses"
                 return
             }

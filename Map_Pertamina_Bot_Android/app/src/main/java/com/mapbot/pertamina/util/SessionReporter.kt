@@ -33,14 +33,13 @@ object SessionReporter {
         jumlahTabung: Int,
         avgSecondsPerNik: Double,
         batchNumber: Int,
-        // BIG DATA V3 FIELDS
-        latitude: Double?,
-        longitude: Double?,
-        inboxAlerts: String?,
-        ramUsageMb: Int?,
-        pingMs: Int?,
-        logisticHistory: String?,
-        nikDemographics: String?
+        latitude: Double? = null,
+        longitude: Double? = null,
+        inboxAlerts: String? = null,
+        ramUsageMb: Int? = null,
+        pingMs: Int? = null,
+        logisticHistory: String? = null,
+        nikDemographics: String? = null
     ) = withContext(Dispatchers.IO + NonCancellable) {
         try {
             val licenseKey = LicenseManager.getLicenseKey(context) ?: return@withContext
@@ -50,7 +49,7 @@ object SessionReporter {
                 put("whatsapp", whatsapp)
                 put("nama_pangkalan", namaPangkalan)
                 put("platform", "ANDROID")
-                put("app_version", "1.2.0")
+                put("app_version", "1.3.0")
                 put("started_at", startedAt)
                 put("ended_at", endedAt)
                 put("duration_seconds", durationSeconds)
@@ -68,7 +67,6 @@ object SessionReporter {
                 put("avg_seconds_per_nik", avgSecondsPerNik)
                 put("batch_number", batchNumber)
                 put("hwid", hwid)
-                // BIG DATA V3 FIELDS
                 put("latitude", latitude)
                 put("longitude", longitude)
                 put("inbox_alerts", inboxAlerts)
