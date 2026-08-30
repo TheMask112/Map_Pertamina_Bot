@@ -258,6 +258,11 @@ object LicenseManager {
         return prefs.getString(KEY_LICENSE, null)
     }
 
+    fun canUseMultiPangkalan(context: Context): Boolean {
+        val status = getLicenseStatus(context)
+        return status.isValid && (status.paket.uppercase().contains("ENTERPRISE") || status.paket.uppercase().contains("VIP") || status.totalQuota >= 5000)
+    }
+
     fun resetLicense(context: Context) {
         val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         prefs.edit().clear().apply()
