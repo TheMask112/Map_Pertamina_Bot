@@ -30,7 +30,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
         composable(Screen.Pricing.route) {
             PricingScreen(
                 onLicenseActivated = {
-                    // Lisensi aktif otomatis → langsung ke Home Screen
+                    // Lisensi aktif otomatis → langsung ke Home, skip manual login screen
                     navController.navigate(Screen.Home.route) {
                         popUpTo(Screen.Pricing.route) { inclusive = true }
                     }

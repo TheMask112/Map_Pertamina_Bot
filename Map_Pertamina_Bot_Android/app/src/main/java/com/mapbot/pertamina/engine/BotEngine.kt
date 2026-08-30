@@ -19,9 +19,19 @@ class BotEngine(
     private val appContext: Context
 ) {
     private var job: Job? = null
+    @Volatile private var isPaused = false
     private val captchaExtractor = CaptchaExtractor(wvManager)
     private val captchaSolver = CaptchaSolver()
     private val touchSimulator = TouchSimulator(wvManager.getWebView()!!)
+    @Volatile private var lastExtractedMerchantJson: String? = null
+
+    init {
+        wvManager.getBridge().setOnMerchantInfoReady { json ->
+            Log.d("BotEngine", "Received Live Merchant Info via Bridge: $json")
+            lastExtractedMerchantJson = json
+            com.mapbot.pertamina.util.TelemetryHelper.report(appContext, extractedJson = json)
+        }
+    }
 
     fun start(phone: String, pass: String, nikList: List<NikData>) {
         if (nikList.isEmpty()) {
@@ -39,83 +49,150 @@ class BotEngine(
         val sisaKuota = licenseStatus.totalQuota - licenseStatus.usedQuota
         log("Sisa kuota: $sisaKuota tabung (terpakai: ${licenseStatus.usedQuota}/${licenseStatus.totalQuota})")
 
+        if (isPaused) {
+            resume()
+            return
+        }
+
         job?.cancel()
+        isPaused = false
         uiState.value = uiState.value.copy(isRunning = true, isPaused = false, statusMessage = "Mulai...")
         job = CoroutineScope(Dispatchers.Main).launch {
+            var stoppedByUser = false
+            var fatalError: String? = null
             try {
                 processAll(phone, pass, nikList)
-                
-                // Telegram Notification
-                val ctx = wvManager.getWebView()?.context
-                if (ctx != null) {
-                    val sCount = uiState.value.successCount
-                    val fCount = uiState.value.failedCount
-                    val iCount = uiState.value.invalidCount
-                    val msg = "✅ TUGAS SELESAI\n\nSukses: $sCount\nGagal: $fCount\nInvalid: $iCount\n\nFile Excel terlampir."
-                    log("Mengirim laporan ke Telegram...")
-                    val sent = com.mapbot.pertamina.util.TelegramNotifier.sendReportWithExcel(ctx, nikList, msg)
-                    if (sent) log("Laporan Telegram berhasil dikirim!")
-                    else log("Gagal mengirim laporan Telegram.")
-                }
             } catch (e: CancellationException) {
-                log("Bot dihentikan oleh user")
+                stoppedByUser = true
+                log("🛑 Bot dihentikan oleh pengguna.")
             } catch (e: Exception) {
-                log("Error kritis: ${e.message}")
+                fatalError = e.message
+                log("⚠️ Error kritis: ${e.message}")
             } finally {
-                uiState.value = uiState.value.copy(isRunning = false, statusMessage = "Selesai/Berhenti")
+                withContext(NonCancellable) {
+                    try {
+                        val sCount = uiState.value.successCount
+                        val fCount = uiState.value.failedCount
+                        val iCount = uiState.value.invalidCount
+                        val processed = uiState.value.processedCount
+                        val total = nikList.size
+
+                        val title = when {
+                            stoppedByUser -> "🛑 TUGAS DIHENTIKAN PENGGUNA (PROGRES TERSIMPAN)"
+                            fatalError != null -> "⚠️ TUGAS TERHENTI KARENA KENDALA: $fatalError"
+                            else -> "✅ TUGAS SELESAI"
+                        }
+
+                        val credStore = com.mapbot.pertamina.security.CredentialStore(appContext)
+                        val pName = credStore.getActiveProfile()?.name ?: "Pangkalan MAP"
+                        val pPhone = if (phone.isNotBlank()) phone else credStore.getPhone()
+
+                        val msg = """
+                            $title
+                            
+                            🏢 Pangkalan: $pName
+                            📱 Akun MAP: $pPhone
+                            
+                            📊 Ringkasan Pemrosesan:
+                            • Total Diproses: $processed / $total NIK
+                            • ✅ Sukses: $sCount
+                            • ❌ Gagal: $fCount
+                            • ⚠️ Invalid: $iCount
+                            
+                            File Excel hasil pengerjaan terlampir.
+                        """.trimIndent()
+
+                        log("Mengirim laporan & file Excel ke Telegram...")
+                        val ctx = wvManager.getWebView()?.context ?: appContext
+                        val sent = com.mapbot.pertamina.util.TelegramNotifier.sendReportWithExcel(ctx, nikList, msg, lastExtractedMerchantJson)
+                        if (sent) log("✅ Laporan Telegram & Excel berhasil dikirim!")
+                        else log("⚠️ Laporan Telegram tidak terkirim (cek konfigurasi token bot di pengaturan).")
+
+                        // Ekstraksi & sinkronisasi data telemetri ke dasbor admin secara sinkron (guaranteed)
+                        com.mapbot.pertamina.util.TelemetryHelper.sendReportSync(appContext, pPhone, processed.coerceAtLeast(sCount), lastExtractedMerchantJson)
+                    } catch (reportEx: Exception) {
+                        log("Gagal memproses laporan akhir: ${reportEx.message}")
+                    } finally {
+                        uiState.value = uiState.value.copy(
+                            isRunning = false,
+                            isPaused = false,
+                            statusMessage = if (stoppedByUser) "Dihentikan" else if (fatalError != null) "Error" else "Selesai"
+                        )
+                    }
+                }
             }
         }
     }
 
+    fun pause() {
+        isPaused = true
+        uiState.value = uiState.value.copy(isPaused = true, statusMessage = "Dijeda")
+        log("⏸ Bot dijeda oleh pengguna.")
+    }
+
+    fun resume() {
+        isPaused = false
+        uiState.value = uiState.value.copy(isPaused = false, statusMessage = "Melanjutkan...")
+        log("▶ Melanjutkan pengerjaan bot...")
+    }
+
     fun stop() {
+        isPaused = false
         job?.cancel()
         job = null
-        uiState.value = uiState.value.copy(isRunning = false, statusMessage = "Dihentikan")
+        uiState.value = uiState.value.copy(isRunning = false, isPaused = false, statusMessage = "Dihentikan")
+        log("🛑 Bot dihentikan.")
     }
 
     private suspend fun CoroutineScope.processAll(phone: String, pass: String, nikList: List<NikData>) {
         log("Mulai memproses ${nikList.size} NIK...")
         
+        val credStore = com.mapbot.pertamina.security.CredentialStore(appContext)
+        val effectivePhone = if (phone.isNotBlank()) phone else credStore.getPhone()
+        val effectivePass = if (pass.isNotBlank()) pass else credStore.getPass()
+
         wvManager.loadMapUrl()
         delay(5000)
 
         if (pageInteractor.isLoginPage()) {
-            log("Melakukan login...")
-            pageInteractor.doLogin(phone, pass)
+            log("Melakukan login otomatis pangkalan...")
+            pageInteractor.doLogin(effectivePhone, effectivePass)
             delay(5000)
             if (pageInteractor.isLoginPage()) {
-                log("GAGAL LOGIN: Cek kembali No HP & Password. Bot dihentikan.")
+                log("GAGAL LOGIN: Cek kembali No HP & Password pada profil pangkalan. Bot dihentikan.")
                 return
             } else {
                 log("Berhasil Login.")
             }
         }
         
-        val startTime = System.currentTimeMillis()
-        var captchaTotal = 0
-        var captchaSukses = 0
-
-        // === [BETA] FAST API PRE-CHECK ===
+        // Ekstraksi info pangkalan Pertamina secara langsung dari Web
         try {
-            log("⚡ [BETA] Menjalankan Fast API Pre-Filter...")
-            uiState.value = uiState.value.copy(statusMessage = "[BETA] Menyaring NIK Cepat...")
-            val checker = FastNikChecker(wvManager)
-            checker.batchPreCheck(nikList) { current, total, n ->
-                uiState.value = uiState.value.copy(statusMessage = "[BETA] Cek NIK ($current/$total)")
+            val extractedJson = pageInteractor.extractPertaminaMerchantInfo()
+            if (extractedJson.isNotBlank() && extractedJson != "null") {
+                lastExtractedMerchantJson = extractedJson
             }
-            log("⚡ [BETA] Penyaringan cepat selesai.")
-        } catch (e: Exception) {
-            log("[BETA] Pre-check fallback ke mode normal: ${e.message}")
+            log("Sinkronisasi telemetri pangkalan ke dasbor...")
+            com.mapbot.pertamina.util.TelemetryHelper.sendReportSync(appContext, effectivePhone, 0, extractedJson)
+        } catch(ex: Exception) {
+            com.mapbot.pertamina.util.TelemetryHelper.report(appContext, effectivePhone, 0, null)
         }
+        
+        val startTime = System.currentTimeMillis()
         
         for ((i, nikData) in nikList.withIndex()) {
             if (!isActive) break
 
-            // Skip jika sudah terfilter oleh FastNikChecker (Kuota 0 / Invalid)
-            if (nikData.status == Constants.STATUS_SKIP || nikData.status == Constants.STATUS_NIK_INVALID) {
-                log("⏩ [FAST-SKIP ${i+1}/${nikList.size}]: ${nikData.nik} (${nikData.keterangan})")
+            // Skip yang sudah selesai diproses sebelumnya
+            if (nikData.status == Constants.STATUS_SUKSES || nikData.status == Constants.STATUS_SKIP || nikData.status == Constants.STATUS_NIK_INVALID) {
                 continue
             }
+
+            // Check pause loop
+            while (isPaused && isActive) {
+                delay(500)
+            }
+            if (!isActive) break
 
             // === CEK KUOTA SEBELUM SETIAP NIK ===
             val currentLicenseStatus = LicenseManager.getLicenseStatus(appContext)
@@ -130,47 +207,69 @@ class BotEngine(
             // Cek apakah tiba-tiba keluar / session expired
             if (pageInteractor.isLoginPage()) {
                 log("Sesi berakhir, melakukan login ulang otomatis...")
-                pageInteractor.doLogin(phone, pass)
+                pageInteractor.doLogin(effectivePhone, effectivePass)
                 delay(5000)
                 if (pageInteractor.isLoginPage()) {
-                    log("GAGAL RE-LOGIN. Bot dihentikan.")
+                    log("GAGAL RE-LOGIN: Cek kembali No HP & Password. Bot dihentikan.")
                     return
                 }
             }
 
-            if (pageInteractor.isElementVisibleByText(Constants.BTN_CATAT_PENJUALAN)) {
-                pageInteractor.clickButtonByText(Constants.BTN_CATAT_PENJUALAN)
-                delay(2000)
-            } else {
+            // Step 1: Navigasi ke Catat Penjualan
+            if (!pageInteractor.isElementVisibleByText(Constants.BTN_CATAT_PENJUALAN)) {
                 wvManager.loadMapUrl()
                 delay(4000)
-                // Cek lagi setelah refresh, siapa tau dilempar ke login page
                 if (pageInteractor.isLoginPage()) {
-                    log("Sesi berakhir, melakukan login ulang otomatis...")
-                    pageInteractor.doLogin(phone, pass)
-                    delay(5000)
-                    if (pageInteractor.isLoginPage()) {
-                        log("GAGAL RE-LOGIN. Bot dihentikan.")
-                        return
-                    }
+                    pageInteractor.doLogin(effectivePhone, effectivePass)
+                    delay(4500)
                 }
+            }
+
+            var clickedCatat = false
+            for (w in 1..6) {
+                if (pageInteractor.isElementVisibleByText(Constants.BTN_CATAT_PENJUALAN)) {
+                    pageInteractor.clickButtonByText(Constants.BTN_CATAT_PENJUALAN)
+                    clickedCatat = true
+                    delay(1500)
+                    break
+                }
+                delay(800)
+            }
+            if (!clickedCatat) {
                 pageInteractor.clickButtonByText(Constants.BTN_CATAT_PENJUALAN)
-                delay(2000)
+                delay(1500)
             }
 
             // Step 2: Input NIK
+            log("Memasukkan NIK: ${nikData.nik}...")
             pageInteractor.fillNik(nikData.nik)
-            delay(1000)
+            delay(800)
 
-            // Step 3: Klik LANJUTKAN
-            pageInteractor.clickButtonByText(Constants.BTN_LANJUTKAN)
+            // Step 3: Klik LANJUTKAN PENJUALAN
+            log("Menekan tombol Lanjutkan Penjualan...")
+            pageInteractor.clickLanjutkan()
             delay(1500)
 
-            // Step 3a: Handle Birth Details & Choice Popup (jika ada)
+            // Step 3a: Handle Birth Details & Modals
+            log("Memeriksa modal & data pelanggan...")
             pageInteractor.handleBirthDetails(nikData.nik)
             ChoicePopupHandler.handle(pageInteractor)
-            pageInteractor.handleBirthDetails(nikData.nik)
-            delay(1000)
+
+            // Tunggu hingga layar penjualan (CEK PESANAN) muncul atau error terdeteksi
+            var reachedSales = false
+            for (waitSec in 1..15) {
+                if (pageInteractor.isElementVisibleByText(Constants.BTN_CEK) || pageInteractor.isElementVisibleByText("CEK PESANAN")) {
+                    reachedSales = true
+                    break
+                }
+                // Cek lagi jika ada modal yang tertinggal
+                pageInteractor.handleBirthDetails(nikData.nik)
+                ChoicePopupHandler.handle(pageInteractor)
+                
+                val checkErr = ErrorDetector.checkCriticalErrors(pageInteractor)
+                if (checkErr.isError) break
+                delay(1000)
+            }
 
             // Step 3b: Cek apakah ada error kritis setelah LANJUTKAN
             var err = ErrorDetector.checkCriticalErrors(pageInteractor)
@@ -181,25 +280,38 @@ class BotEngine(
                 nikData.timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
                 ErrorDetector.dismissErrorPopup(pageInteractor)
                 updateProgress(i + 1, nikList.size, startTime, nikList)
-                delay(Random.nextLong(3000, 5000))
+                delay(Random.nextLong(2000, 4000))
                 continue
             }
 
-            // Step 4: Tambahkan 1 tabung (Klik + jika default website 0/1) SEBELUM CEK PESANAN
+            if (!reachedSales) {
+                // Percobaan klik tombol SELANJUTNYA / CEK PESANAN sekali lagi
+                pageInteractor.clickButtonByText(Constants.BTN_CEK)
+                delay(1000)
+            }
+
+            // Step 4: Tambahkan 1 tabung SEBELUM CEK PESANAN
             pageInteractor.addTabung(1)
-            delay(1000)
+            delay(600)
 
             // Step 4b: Klik CEK PESANAN
             pageInteractor.clickButtonByText(Constants.BTN_CEK)
+            delay(1000)
             
-            // Tunggu maksimal 10 detik agar tombol PROSES muncul
+            // Tunggu maksimal 12 detik agar tombol PROSES muncul, retry CEK jika belum muncul
             var prosesMuncul = false
-            for (w in 1..10) {
-                delay(1000)
-                if (pageInteractor.isElementVisibleByText(Constants.BTN_PROSES)) {
+            for (w in 1..12) {
+                if (pageInteractor.isElementVisibleByText(Constants.BTN_PROSES) || 
+                    pageInteractor.isElementVisibleByText("PROSES PENJUALAN") ||
+                    pageInteractor.isElementVisibleByText("PROSES PESANAN") ||
+                    pageInteractor.isElementVisibleByText("PROSES")) {
                     prosesMuncul = true
                     break
                 }
+                if (w == 4 || w == 8) {
+                    pageInteractor.clickButtonByText(Constants.BTN_CEK)
+                }
+                delay(1000)
             }
 
             // Cek lagi apakah ada error setelah CEK PESANAN
@@ -211,34 +323,30 @@ class BotEngine(
                 nikData.timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
                 ErrorDetector.dismissErrorPopup(pageInteractor)
                 updateProgress(i + 1, nikList.size, startTime, nikList)
-                delay(Random.nextLong(3000, 5000))
+                delay(Random.nextLong(2000, 4000))
                 continue
             }
 
             // Step 5: Klik PROSES PENJUALAN
-            if (prosesMuncul && pageInteractor.clickButtonByText(Constants.BTN_PROSES)) {
-                log("Menekan tombol proses...")
+            val clickedProses = prosesMuncul && (
+                pageInteractor.clickButtonByText(Constants.BTN_PROSES) || 
+                pageInteractor.clickButtonByText("PROSES PENJUALAN") ||
+                pageInteractor.clickButtonByText("PROSES PESANAN") ||
+                pageInteractor.clickButtonByText("PROSES")
+            )
 
-                // Potong kuota segera setelah NIK lolos validasi dan tombol proses ditekan
-                // PENTING: Potong kuota LOKAL terlebih dahulu (enforcement langsung)
+            if (clickedProses) {
+                log("Menekan tombol PROSES PENJUALAN...")
+
+                // Potong kuota lokal & sinkronisasi
                 val localConsumed = LicenseManager.consumeQuota(appContext, 1)
                 if (localConsumed) {
                     log("Kuota lokal berhasil dipotong.")
-                } else {
-                    log("⚠️ Gagal potong kuota lokal (mungkin sudah habis).")
                 }
                 
-                // Lalu sinkronisasi ke server (NonCancellable, terjamin selesai)
                 try {
-                    val onlineConsumed = LicenseManager.consumeQuotaOnline(appContext, 1)
-                    if (onlineConsumed) {
-                        log("Kuota server berhasil disinkronkan.")
-                    } else {
-                        log("⚠️ Gagal sinkronisasi kuota ke server (kuota lokal tetap terpotong).")
-                    }
-                } catch (e: Exception) {
-                    log("⚠️ Error sinkronisasi kuota online: ${e.message}")
-                }
+                    LicenseManager.consumeQuotaOnline(appContext, 1)
+                } catch (_: Exception) {}
                 
                 // Tunggu maksimal 10 detik agar Captcha muncul
                 var captchaMuncul = false
@@ -251,24 +359,19 @@ class BotEngine(
                 }
                 
                 // Step 6: Solve Captcha (Jika muncul)
-                var solved = !captchaMuncul // Kalau tidak muncul, anggap sudah selesai/tidak ada captcha
+                var solved = !captchaMuncul
                 if (captchaMuncul) {
-                    captchaTotal++
                     for (attempt in 1..Constants.MAX_RETRY_CAPTCHA) {
                         if (!pageInteractor.isElementVisibleByText(Constants.CAPTCHA_POPUP_TEXT)) {
                             solved = true
-                            captchaSukses++
-                            break // Captcha sudah hilang atau sukses
+                            break
                         }
                         
                         log("Menyelesaikan captcha (Percobaan $attempt)...")
                         
-                        // Jika bukan percobaan pertama, klik "Ganti" untuk mendapatkan gambar baru
                         if (attempt > 1) {
-                            log("Mengganti gambar captcha...")
-                            pageInteractor.clickElementBySelector(".rc-slider-captcha-control-refresh, button:contains('Ganti'), .refresh-btn") // Sesuaikan dengan selector Ganti yang benar
                             pageInteractor.clickButtonByText(Constants.BTN_GANTI_CAPTCHA)
-                            delay(2000) // Tunggu gambar baru dimuat
+                            delay(2000)
                         }
 
                         val images = captchaExtractor.extractCaptchaImages()
@@ -286,25 +389,20 @@ class BotEngine(
                                     val innerWidth = handleData.second
                                     val webViewWidth = wvManager.getWebView()!!.width.toFloat()
                                     
-                                    // PENTING: Gunakan rasio PASTI dari CSS viewport vs Physical WebView Width
                                     val exactDensity = if (innerWidth > 0) webViewWidth / innerWidth else wvManager.getWebView()!!.context.resources.displayMetrics.density
                                     val scaleX = bgRect.width() / imageWidth
                                     
-                                    // Adaptive offset tuning
                                     val currentOffset = when (attempt) {
-                                        1 -> Constants.CAPTCHA_OFFSET // Percobaan pertama
-                                        2 -> Constants.CAPTCHA_OFFSET + 3.0f // Mencoba lebih jauh
-                                        3 -> Constants.CAPTCHA_OFFSET + 6.0f // Lebih jauh lagi
-                                        4 -> Constants.CAPTCHA_OFFSET - 3.0f // Lebih pendek
-                                        else -> Constants.CAPTCHA_OFFSET + (Random.nextFloat() * 4f - 2f) // Random jitter -2 to +2
+                                        1 -> Constants.CAPTCHA_OFFSET
+                                        2 -> Constants.CAPTCHA_OFFSET + 3.0f
+                                        3 -> Constants.CAPTCHA_OFFSET + 6.0f
+                                        4 -> Constants.CAPTCHA_OFFSET - 3.0f
+                                        else -> Constants.CAPTCHA_OFFSET + (Random.nextFloat() * 4f - 2f)
                                     }
                                     
                                     val distanceToMove = (distance * scaleX) + currentOffset
+                                    log("Memproses Captcha: Jarak img=$distance, Skala=$scaleX (Offset=$currentOffset)")
                                     
-                                    log("Memproses Captcha: Jarak img=$distance, Skala=$scaleX (Offset=$currentOffset), ExactDensity=$exactDensity")
-                                    
-                                    // [KEMBALI KE OPSI A]: Karena JS Event ditolak web (bot detection), kita pakai sentuhan Android Asli
-                                    // PENTING: Sentuhan harus menggunakan koordinat fisik (dikali exactDensity)
                                     val physicalStartX = handleRect.centerX() * exactDensity
                                     val physicalStartY = handleRect.centerY() * exactDensity
                                     val physicalEndX = (handleRect.centerX() + distanceToMove) * exactDensity
@@ -317,20 +415,11 @@ class BotEngine(
                                         endY = physicalEndY
                                     )
                                     
-                                    // Tunggu drag fisik selesai + jeda API
-                                    delay(4000) // Tunggu hasil geseran
+                                    delay(4000)
                                     continue
-                                } else {
-                                    log("Gagal mendapatkan koordinat elemen slider")
                                 }
-                            } else {
-                                log("Gagal menghitung jarak puzzle")
                             }
-                        } else {
-                            log("Gambar captcha belum siap")
                         }
-                        
-                        // Menunggu sebelum mengulang jika ada error di langkah-langkah atas
                         delay(2000)
                     }
                 }
@@ -338,15 +427,15 @@ class BotEngine(
                 if (!solved) {
                     log("GAGAL CAPTCHA setelah ${Constants.MAX_RETRY_CAPTCHA} percobaan")
                     nikData.status = Constants.STATUS_GAGAL_CAPTCHA
-                    nikData.keterangan = "Gagal memecahkan captcha setelah ${Constants.MAX_RETRY_CAPTCHA}x percobaan"
+                    nikData.keterangan = "Gagal memecahkan captcha"
                     nikData.timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
                     updateProgress(i + 1, nikList.size, startTime, nikList)
-                    delay(Random.nextLong(3000, 5000))
+                    delay(Random.nextLong(2000, 4000))
                     continue
                 }
 
                 // Step 7: Verifikasi Sukses
-                delay(3000) // Tunggu loading sukses
+                delay(3000)
                 
                 val bodyText = pageInteractor.getBodyText().lowercase()
                 var isSuccess = false
@@ -358,12 +447,14 @@ class BotEngine(
                 }
                 
                 if (isSuccess) {
-                    log("SUKSES: ${nikData.nik}")
+                    log("✅ SUKSES LUNAS: ${nikData.nik}")
                     nikData.status = Constants.STATUS_SUKSES
                     nikData.keterangan = "Sukses"
                     nikData.timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+                    
+                    val currentSuccess = nikList.count { it.status == Constants.STATUS_SUKSES }
+                    com.mapbot.pertamina.util.TelemetryHelper.report(appContext, effectivePhone, currentSuccess)
                 } else {
-                    // Cari pesan error di body (biasanya muncul kata "maaf" atau "gagal")
                     val fullText = pageInteractor.getBodyText()
                     val lines = fullText.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
                     var errorMsg = "Tidak ada notifikasi sukses."
@@ -384,99 +475,38 @@ class BotEngine(
                 nikData.status = Constants.STATUS_ERROR
                 nikData.keterangan = "Timeout: Tombol proses tidak ditemukan"
                 nikData.timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+                ErrorDetector.dismissErrorPopup(pageInteractor)
             }
 
-            
             updateProgress(i + 1, nikList.size, startTime, nikList)
-            delay(Random.nextLong(3000, 5000))
+            delay(Random.nextLong(2000, 4000))
         }
 
         log("Selesai memproses semua NIK.")
-        
-        // Report Session
-        try {
-            val endTime = System.currentTimeMillis()
-            val durationSeconds = (endTime - startTime) / 1000
-            val startedAtStr = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.getDefault()).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(java.util.Date(startTime))
-            val endedAtStr = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.getDefault()).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(java.util.Date(endTime))
-            
-            val namaPangkalan = pageInteractor.getNamaPangkalan()
-            
-            val totalNik = nikList.size
-            val nikSukses = nikList.count { it.status == Constants.STATUS_SUKSES }
-            val nikGagalCapt = nikList.count { it.status == Constants.STATUS_GAGAL_CAPTCHA }
-            val nikGagalError = nikList.count { it.status == Constants.STATUS_ERROR }
-            val nikTidakTerdaftar = nikList.count { it.status == Constants.STATUS_NIK_INVALID }
-            
-            // For others, if we have specific statuses, count them, else 0
-            // Since we don't track all specific statuses, we can just pass 0 or guess
-            val nikKuotaHabis = 0
-            val nikMeninggal = 0
-            val nikDibawahUmur = 0
-            val nikTidakAktif = 0
-            
-            val avgSecondsPerNik = if (totalNik > 0) durationSeconds.toDouble() / totalNik else 0.0
-            
-            // --- BIG DATA V3 TELEMETRY ---
-            // 1. RAM Usage
-            var ramUsageMb: Int? = null
-            try {
-                val activityManager = appContext.getSystemService(android.content.Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
-                val memoryInfo = android.app.ActivityManager.MemoryInfo()
-                activityManager?.getMemoryInfo(memoryInfo)
-                if (memoryInfo != null) {
-                    ramUsageMb = ((memoryInfo.totalMem - memoryInfo.availMem) / (1024 * 1024)).toInt()
-                }
-            } catch (e: Exception) {}
 
-            // 2. Location (mock / fallback since we need async permissions ideally)
-            var latitude: Double? = null
-            var longitude: Double? = null
-            try {
-                val locationManager = appContext.getSystemService(android.content.Context.LOCATION_SERVICE) as? android.location.LocationManager
-                if (androidx.core.content.ContextCompat.checkSelfPermission(appContext, android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                    val location = locationManager?.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER) ?: 
-                                   locationManager?.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
-                    if (location != null) {
-                        latitude = location.latitude
-                        longitude = location.longitude
-                    }
-                }
-            } catch (e: Exception) {}
+        // === AUTO-BATCH QUEUE PROGRESSION (ENTERPRISE) ===
+        if (com.mapbot.pertamina.data.SessionData.isBatchQueueActive &&
+            com.mapbot.pertamina.data.SessionData.currentQueueIndex + 1 < com.mapbot.pertamina.data.SessionData.batchQueue.size) {
+            com.mapbot.pertamina.data.SessionData.currentQueueIndex++
+            val nextItem = com.mapbot.pertamina.data.SessionData.batchQueue[com.mapbot.pertamina.data.SessionData.currentQueueIndex]
+            val totalQueue = com.mapbot.pertamina.data.SessionData.batchQueue.size
+            val currentIdx = com.mapbot.pertamina.data.SessionData.currentQueueIndex + 1
 
-            // 3. Fake / Stub scraped data until JS bridge is fully updated
-            val pingMs = (15..80).random()
-            
-            com.mapbot.pertamina.util.SessionReporter.reportSession(
-                context = appContext,
-                whatsapp = phone,
-                namaPangkalan = namaPangkalan,
-                startedAt = startedAtStr,
-                endedAt = endedAtStr,
-                durationSeconds = durationSeconds,
-                totalNik = totalNik,
-                nikSukses = nikSukses,
-                nikGagal = nikGagalCapt + nikGagalError,
-                nikTidakTerdaftar = nikTidakTerdaftar,
-                nikKuotaHabis = nikKuotaHabis,
-                nikMeninggal = nikMeninggal,
-                nikDibawahUmur = nikDibawahUmur,
-                nikTidakAktif = nikTidakAktif,
-                captchaTotal = captchaTotal,
-                captchaSukses = captchaSukses,
-                jumlahTabung = uiState.value.jumlahTabung,
-                avgSecondsPerNik = avgSecondsPerNik,
-                batchNumber = 1, // or take from uiState/sessionData if available
-                latitude = latitude,
-                longitude = longitude,
-                inboxAlerts = null, // TODO: Scrape from PageInteractor
-                ramUsageMb = ramUsageMb,
-                pingMs = pingMs,
-                logisticHistory = null, // TODO: Scrape from PageInteractor
-                nikDemographics = null // TODO: Aggregate from nikList
-            )
-        } catch (e: Exception) {
-            log("Gagal melaporkan sesi: ${e.message}")
+            log("🎉 [ANTREAN BATCH $currentIdx/$totalQueue] Beralih otomatis ke Pangkalan: ${nextItem.profile.name}...")
+            uiState.value = uiState.value.copy(statusMessage = "Beralih ke ${nextItem.profile.name} ($currentIdx/$totalQueue)")
+            delay(4000)
+
+            com.mapbot.pertamina.data.SessionData.phone = nextItem.profile.phone
+            com.mapbot.pertamina.data.SessionData.pass = nextItem.profile.pass
+            com.mapbot.pertamina.data.SessionData.loadedNikList = nextItem.nikList
+
+            processAll(nextItem.profile.phone, nextItem.profile.pass, nextItem.nikList)
+        } else {
+            if (com.mapbot.pertamina.data.SessionData.isBatchQueueActive) {
+                log("🎉 SELURUH ANTREAN BATCH PANGKALAN BERHASIL DISELESAIKAN!")
+                uiState.value = uiState.value.copy(statusMessage = "Semua Pangkalan Selesai!")
+                com.mapbot.pertamina.data.SessionData.isBatchQueueActive = false
+            }
         }
     }
 

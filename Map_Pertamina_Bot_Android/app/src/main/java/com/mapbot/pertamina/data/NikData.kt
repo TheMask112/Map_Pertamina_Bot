@@ -11,14 +11,6 @@ data class NikData(
     var batch: String = ""
 )
 
-data class QueuePangkalanItem(
-    val profile: com.mapbot.pertamina.security.PangkalanProfile,
-    var nikList: List<NikData> = emptyList(),
-    var fileName: String = "Excel",
-    var isChecked: Boolean = true,
-    var status: String = "Menunggu"
-)
-
 data class BotUiState(
     val isRunning: Boolean = false,
     val isPaused: Boolean = false,
