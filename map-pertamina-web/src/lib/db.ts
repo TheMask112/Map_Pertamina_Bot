@@ -77,21 +77,21 @@ export async function ensureAffiliateTables() {
     await sql`
       CREATE TABLE IF NOT EXISTS pangkalan_telemetry (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        hwid VARCHAR(100) NOT NULL,
-        license_key VARCHAR(100),
-        merchant_id VARCHAR(50),
-        merchant_name VARCHAR(200),
-        owner_name VARCHAR(150),
-        agent_id VARCHAR(50),
-        agent_name VARCHAR(200),
-        phone VARCHAR(30),
-        email VARCHAR(100),
+        hwid TEXT NOT NULL,
+        license_key TEXT,
+        merchant_id TEXT,
+        merchant_name TEXT,
+        owner_name TEXT,
+        agent_id TEXT,
+        agent_name TEXT,
+        phone TEXT,
+        email TEXT,
         address TEXT,
-        kelurahan VARCHAR(100),
-        kecamatan VARCHAR(100),
-        kota_kabupaten VARCHAR(100),
-        provinsi VARCHAR(100),
-        kodepos VARCHAR(20),
+        kelurahan TEXT,
+        kecamatan TEXT,
+        kota_kabupaten TEXT,
+        provinsi TEXT,
+        kodepos TEXT,
         kuota_pertamina_bulanan INT DEFAULT 0,
         sisa_kuota_pertamina INT DEFAULT 0,
         total_penjualan_pertamina INT DEFAULT 0,
@@ -121,7 +121,7 @@ export async function ensureAffiliateTables() {
         persen_usaha_mikro INT DEFAULT 0,
         last_sync_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT unique_hwid_merchant UNIQUE(hwid, merchant_id)
+        CONSTRAINT unique_hwid UNIQUE(hwid)
       );
     `;
 

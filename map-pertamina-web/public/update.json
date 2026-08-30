@@ -1,14 +1,12 @@
 {
-  "versionCode": 14,
-  "apkUrl": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.4/MAP_Pertamina_Bot_v1.1.4.apk",
-  "latestVersion": "1.1.4",
-  "latestVersionCode": 14,
-  "url": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.4/MAP_Pertamina_Bot_v1.1.4.apk",
+  "versionCode": 15,
+  "apkUrl": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.5/MAP_Pertamina_Bot_v1.1.5.apk",
+  "latestVersion": "1.1.5",
+  "latestVersionCode": 15,
+  "url": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.5/MAP_Pertamina_Bot_v1.1.5.apk",
   "releaseNotes": [
-    "Ekstraksi Otomatis Intelijen Pangkalan: Nama pangkalan, ID registrasi, Agen Penyalur, kuota, dan wilayah otomatis tersinkronisasi ke dasbor admin",
-    "Sinkronisasi Instan Saat Buka Aplikasi: Profil langsung terhubung ke dasbor telemetri",
-    "Laporan Telegram & Excel Otomatis Saat Stop: Tetap mengirimkan rekapan progres dan file Excel NIK saat bot dihentikan manual di tengah jalan",
-    "Sleek 1-Klik Salin Lisensi Admin UX: Tampilan tabel admin lebih ringkas, rapi, dan nyaman di mata",
-    "Ultra-Reliable Background Execution & WakeLock 6 Jam Non-Stop"
+    "Penyempurnaan performa aplikasi dan kestabilan sistem",
+    "Perbaikan bug dan optimasi pemrosesan latar belakang",
+    "Peningkatan kompatibilitas perangkat dan keandalan sinkronisasi"
   ]
 }

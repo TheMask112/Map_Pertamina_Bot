@@ -1,4 +1,4 @@
-﻿import os
+import os
 import zipfile
 import sys
 
@@ -13,10 +13,12 @@ def create_update_zip():
     ]
     
     print(f"Creating lightweight Update ZIP: {output_zip}...")
-    temp_zip = os.path.join(base_dir, "temp_update.zip")
     
     try:
-        with zipfile.ZipFile(temp_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        if os.path.exists(output_zip):
+            os.remove(output_zip)
+
+        with zipfile.ZipFile(output_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for f in update_files:
                 file_path = os.path.join(base_dir, f)
                 if os.path.exists(file_path):
@@ -25,15 +27,9 @@ def create_update_zip():
                 else:
                     print(f"Warning: {f} not found!")
                     
-        if os.path.exists(output_zip):
-            os.remove(output_zip)
-            
-        os.rename(temp_zip, output_zip)
         print(f"Update ZIP successfully created at: {output_zip}")
         
     except Exception as e:
-        if os.path.exists(temp_zip):
-            os.remove(temp_zip)
         print(f"Error: {e}")
         sys.exit(1)
 

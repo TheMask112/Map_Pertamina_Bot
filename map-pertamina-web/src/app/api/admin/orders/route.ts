@@ -54,7 +54,21 @@ export async function GET(request: Request) {
 
     const orders = rawOrders.map((o: any) => {
       const pKey = (o.paket || 'STARTER').toUpperCase();
-      const kuotaTotal = paketQuotaMap[pKey] || CONFIG.pakets[pKey as keyof typeof CONFIG.pakets]?.kuota || 500;
+      let kuotaTotal = paketQuotaMap[pKey] || CONFIG.pakets[pKey as keyof typeof CONFIG.pakets]?.kuota || 500;
+
+      // Jika order memiliki license_key, ambil kuota_total presisi dari token lisensi (khusus paket CUSTOM/Telegram)
+      if (o.license_key) {
+        try {
+          const parts = String(o.license_key).split('.');
+          if (parts.length === 2) {
+            const payload = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf-8'));
+            if (payload && payload.kuota_total) {
+              kuotaTotal = Number(payload.kuota_total);
+            }
+          }
+        } catch (e) {}
+      }
+
       const kuotaTerpakai = Number(o.kuota_terpakai || 0);
       const sisaKuota = Math.max(0, kuotaTotal - kuotaTerpakai);
 
