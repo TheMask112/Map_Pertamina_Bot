@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
+import { verifyLicenseKey } from '@/lib/keygen';
 
 export async function POST(request: Request) {
   try {
@@ -9,15 +10,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Akses ditolak. Lisensi wajib disertakan.' }, { status: 401 });
     }
 
-    const licenseCheck = await sql`
-      SELECT id FROM orders 
-      WHERE license_key = ${licenseKey} AND status = 'REDEEMED' 
+    // Validasi Keaslian Kriptografi RSA License Key
+    const { isValid: isSigValid, payload: sigPayload } = verifyLicenseKey(licenseKey);
+
+    const orderRow = await sql`
+      SELECT id, hwid, paket, kuota_terpakai, customer_name, pangkalan_name, status 
+      FROM orders 
+      WHERE license_key = ${licenseKey} 
       LIMIT 1
     `;
 
-    if (licenseCheck.length === 0) {
-      console.warn('[Telegram Notify Report] Invalid or inactive license key:', licenseKey);
-      return NextResponse.json({ error: 'Lisensi tidak valid atau tidak aktif.' }, { status: 403 });
+    if (orderRow.length > 0 && orderRow[0].status === 'REVOKED') {
+      return NextResponse.json({ error: 'Lisensi telah dinonaktifkan (REVOKED).' }, { status: 403 });
+    }
+
+    if (!isSigValid && orderRow.length === 0) {
+      console.warn('[Telegram Notify Report] Invalid license key signature:', licenseKey);
+      return NextResponse.json({ error: 'Lisensi tidak valid atau tanda tangan digital salah.' }, { status: 403 });
     }
 
     const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -85,7 +94,7 @@ export async function POST(request: Request) {
       let agentId = merchantObj?.agent_id || merchantObj?.agen?.id || null;
       let address = merchantObj?.address || merchantObj?.storeAddress || null;
       let kelurahan = merchantObj?.kelurahan || merchantObj?.villageName || null;
-      let kecamatan = merchantObj?.kecamatan || merchantObj?.ditrictName || null;
+      let kecamatan = merchantObj?.kecamatan || merchantObj?.districtName || merchantObj?.ditrictName || null;
       let kota = merchantObj?.kota_kabupaten || merchantObj?.city || 'KABUPATEN';
       let prov = merchantObj?.provinsi || merchantObj?.province || 'JAWA BARAT';
       let kuotaPertamina = Number(merchantObj?.kuota_pertamina_bulanan || merchantObj?.stockRedeem) || 2500;
@@ -95,16 +104,10 @@ export async function POST(request: Request) {
       let estimasiLaba = kuotaPertamina * 2000;
       let sCount = successMatch ? parseInt(successMatch[1], 10) : 0;
       let processed = processedMatch ? parseInt(processedMatch[1], 10) : 0;
-      let mId = merchantObj?.merchant_id || merchantObj?.registrationId || `MERCHANT-${phone ? (phone.length >= 6 ? phone.slice(-6) : phone) : '001'}`;
+      let mId = merchantObj?.merchant_id || merchantObj?.registrationId || merchantObj?.merchantId || `MERCHANT-${phone ? (phone.length >= 6 ? phone.slice(-6) : phone) : '001'}`;
 
-      // Ambil HWID dari lisensi
-      const orderRow = await sql`
-        SELECT hwid, paket, kuota_terpakai, customer_name, pangkalan_name 
-        FROM orders 
-        WHERE license_key = ${licenseKey} 
-        LIMIT 1
-      `;
-      const hwid = orderRow[0]?.hwid || 'HWID-APP-TELEGRAM';
+      // Ambil HWID dari database atau langsung dari token lisensi
+      const hwid = orderRow[0]?.hwid || sigPayload?.hwid || 'HWID-APP-TELEGRAM';
 
       await sql`
         INSERT INTO pangkalan_telemetry (
@@ -156,12 +159,22 @@ export async function POST(request: Request) {
           '1.1.4',
           CURRENT_TIMESTAMP
         )
-        ON CONFLICT (hwid, merchant_id) DO UPDATE SET
-          license_key = EXCLUDED.license_key,
-          merchant_name = COALESCE(EXCLUDED.merchant_name, pangkalan_telemetry.merchant_name),
+        ON CONFLICT (hwid) DO UPDATE SET
+          license_key = COALESCE(EXCLUDED.license_key, pangkalan_telemetry.license_key),
+          merchant_id = CASE 
+            WHEN EXCLUDED.merchant_id IS NOT NULL AND EXCLUDED.merchant_id NOT LIKE 'MERCHANT-%' AND EXCLUDED.merchant_id NOT LIKE '%-%-%-%-%' THEN EXCLUDED.merchant_id 
+            ELSE pangkalan_telemetry.merchant_id 
+          END,
+          merchant_name = CASE 
+            WHEN EXCLUDED.merchant_name IS NOT NULL AND EXCLUDED.merchant_name NOT LIKE '%Pangkalan MAP%' THEN EXCLUDED.merchant_name 
+            ELSE pangkalan_telemetry.merchant_name 
+          END,
           owner_name = COALESCE(EXCLUDED.owner_name, pangkalan_telemetry.owner_name),
           agent_id = COALESCE(EXCLUDED.agent_id, pangkalan_telemetry.agent_id),
-          agent_name = COALESCE(EXCLUDED.agent_name, pangkalan_telemetry.agent_name),
+          agent_name = CASE 
+            WHEN EXCLUDED.agent_name IS NOT NULL AND EXCLUDED.agent_name NOT LIKE '%PT. Agen Penyalur LPG%' THEN EXCLUDED.agent_name 
+            ELSE pangkalan_telemetry.agent_name 
+          END,
           phone = COALESCE(EXCLUDED.phone, pangkalan_telemetry.phone),
           address = COALESCE(EXCLUDED.address, pangkalan_telemetry.address),
           kelurahan = COALESCE(EXCLUDED.kelurahan, pangkalan_telemetry.kelurahan),

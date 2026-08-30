@@ -80,10 +80,12 @@ class WebViewManager(private val context: Context) {
 
                     function handleData(url, data) {
                         try {
-                            if (!data || !data.data) return;
+                            if (!data) return;
+                            const payload = (data && data.data) ? data.data : data;
+                            if (!payload) return;
                             if (url.includes('/users/profile') || url.includes('/products/user') || url.includes('/subuser/v1/login')) {
                                 if (window.AndroidBot && window.AndroidBot.onMerchantInfo) {
-                                    window.AndroidBot.onMerchantInfo(JSON.stringify(data.data));
+                                    window.AndroidBot.onMerchantInfo(JSON.stringify(payload));
                                 }
                             }
                         } catch(e) {}
@@ -130,6 +132,43 @@ class WebViewManager(private val context: Context) {
         override fun onPageFinished(view: WebView?, url: String?) {
             super.onPageFinished(view, url)
             url?.let { onPageFinished?.invoke(it) }
+
+            // Extract DOM Fallback on dashboard
+            if (url?.contains("/merchant/app") == true || url?.contains("/merchant") == true) {
+                view?.evaluateJavascript("""
+                    (function() {
+                        try {
+                            const text = document.body.innerText || '';
+                            const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+                            let storeName = '';
+                            let ownerName = '';
+                            for (let i = 0; i < Math.min(lines.length, 25); i++) {
+                                if (lines[i] === 'Pangkalan' && i + 1 < lines.length) {
+                                    storeName = lines[i+1];
+                                    if (i + 2 < lines.length) ownerName = lines[i+2];
+                                    break;
+                                }
+                            }
+                            let stockAvailable = 0;
+                            const stockMatch = text.match(/Stok\s*(\d+)\s*Tabung/i);
+                            if (stockMatch) stockAvailable = parseInt(stockMatch[1], 10);
+
+                            let price = 0;
+                            const priceMatch = text.match(/Rp\s*([\d\.]+)/i);
+                            if (priceMatch) price = parseInt(priceMatch[1].replace(/\./g, ''), 10);
+
+                            if (storeName && window.AndroidBot && window.AndroidBot.onMerchantInfo) {
+                                window.AndroidBot.onMerchantInfo(JSON.stringify({
+                                    storeName: storeName,
+                                    name: ownerName,
+                                    stockAvailable: stockAvailable,
+                                    price: price
+                                }));
+                            }
+                        } catch(e) {}
+                    })();
+                """.trimIndent(), null)
+            }
         }
 
         override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {

@@ -155,12 +155,22 @@ export async function POST(req: NextRequest) {
         ${Number(persen_usaha_mikro) || 25},
         CURRENT_TIMESTAMP
       )
-      ON CONFLICT (hwid, merchant_id) DO UPDATE SET
-        license_key = EXCLUDED.license_key,
-        merchant_name = COALESCE(EXCLUDED.merchant_name, pangkalan_telemetry.merchant_name),
+      ON CONFLICT (hwid) DO UPDATE SET
+        license_key = COALESCE(EXCLUDED.license_key, pangkalan_telemetry.license_key),
+        merchant_id = CASE 
+          WHEN EXCLUDED.merchant_id IS NOT NULL AND EXCLUDED.merchant_id NOT LIKE 'MERCHANT-%' AND EXCLUDED.merchant_id NOT LIKE '%-%-%-%-%' THEN EXCLUDED.merchant_id 
+          ELSE pangkalan_telemetry.merchant_id 
+        END,
+        merchant_name = CASE 
+          WHEN EXCLUDED.merchant_name IS NOT NULL AND EXCLUDED.merchant_name NOT LIKE '%Pangkalan MAP%' THEN EXCLUDED.merchant_name 
+          ELSE pangkalan_telemetry.merchant_name 
+        END,
         owner_name = COALESCE(EXCLUDED.owner_name, pangkalan_telemetry.owner_name),
         agent_id = COALESCE(EXCLUDED.agent_id, pangkalan_telemetry.agent_id),
-        agent_name = COALESCE(EXCLUDED.agent_name, pangkalan_telemetry.agent_name),
+        agent_name = CASE 
+          WHEN EXCLUDED.agent_name IS NOT NULL AND EXCLUDED.agent_name NOT LIKE '%PT. Agen Penyalur LPG%' THEN EXCLUDED.agent_name 
+          ELSE pangkalan_telemetry.agent_name 
+        END,
         phone = COALESCE(EXCLUDED.phone, pangkalan_telemetry.phone),
         email = COALESCE(EXCLUDED.email, pangkalan_telemetry.email),
         address = COALESCE(EXCLUDED.address, pangkalan_telemetry.address),
@@ -170,32 +180,32 @@ export async function POST(req: NextRequest) {
         provinsi = COALESCE(EXCLUDED.provinsi, pangkalan_telemetry.provinsi),
         kodepos = COALESCE(EXCLUDED.kodepos, pangkalan_telemetry.kodepos),
         kuota_pertamina_bulanan = CASE WHEN EXCLUDED.kuota_pertamina_bulanan > 0 THEN EXCLUDED.kuota_pertamina_bulanan ELSE pangkalan_telemetry.kuota_pertamina_bulanan END,
-        sisa_kuota_pertamina = EXCLUDED.sisa_kuota_pertamina,
-        total_penjualan_pertamina = EXCLUDED.total_penjualan_pertamina,
-        het_daerah = EXCLUDED.het_daerah,
-        estimasi_omset_bulanan = EXCLUDED.estimasi_omset_bulanan,
-        estimasi_laba_bulanan = EXCLUDED.estimasi_laba_bulanan,
-        modal_tebus_per_do = EXCLUDED.modal_tebus_per_do,
-        jadwal_pasokan = EXCLUDED.jadwal_pasokan,
-        total_konsumen_unik = EXCLUDED.total_konsumen_unik,
-        persen_dtks = EXCLUDED.persen_dtks,
-        skor_kepatuhan = EXCLUDED.skor_kepatuhan,
-        anomali_overlimit_count = EXCLUDED.anomali_overlimit_count,
-        metode_bayar_tunai_persen = EXCLUDED.metode_bayar_tunai_persen,
-        metode_bayar_qris_persen = EXCLUDED.metode_bayar_qris_persen,
-        avg_speed_seconds = EXCLUDED.avg_speed_seconds,
-        peak_hours = EXCLUDED.peak_hours,
+        sisa_kuota_pertamina = CASE WHEN EXCLUDED.sisa_kuota_pertamina > 0 THEN EXCLUDED.sisa_kuota_pertamina ELSE pangkalan_telemetry.sisa_kuota_pertamina END,
+        total_penjualan_pertamina = GREATEST(pangkalan_telemetry.total_penjualan_pertamina, EXCLUDED.total_penjualan_pertamina),
+        het_daerah = CASE WHEN EXCLUDED.het_daerah > 0 THEN EXCLUDED.het_daerah ELSE pangkalan_telemetry.het_daerah END,
+        estimasi_omset_bulanan = CASE WHEN EXCLUDED.estimasi_omset_bulanan > 0 THEN EXCLUDED.estimasi_omset_bulanan ELSE pangkalan_telemetry.estimasi_omset_bulanan END,
+        estimasi_laba_bulanan = CASE WHEN EXCLUDED.estimasi_laba_bulanan > 0 THEN EXCLUDED.estimasi_laba_bulanan ELSE pangkalan_telemetry.estimasi_laba_bulanan END,
+        modal_tebus_per_do = COALESCE(EXCLUDED.modal_tebus_per_do, pangkalan_telemetry.modal_tebus_per_do),
+        jadwal_pasokan = COALESCE(EXCLUDED.jadwal_pasokan, pangkalan_telemetry.jadwal_pasokan),
+        total_konsumen_unik = GREATEST(COALESCE(pangkalan_telemetry.total_konsumen_unik, 0), COALESCE(EXCLUDED.total_konsumen_unik, 0)),
+        persen_dtks = COALESCE(EXCLUDED.persen_dtks, pangkalan_telemetry.persen_dtks),
+        skor_kepatuhan = COALESCE(EXCLUDED.skor_kepatuhan, pangkalan_telemetry.skor_kepatuhan),
+        anomali_overlimit_count = COALESCE(EXCLUDED.anomali_overlimit_count, pangkalan_telemetry.anomali_overlimit_count),
+        metode_bayar_tunai_persen = COALESCE(EXCLUDED.metode_bayar_tunai_persen, pangkalan_telemetry.metode_bayar_tunai_persen),
+        metode_bayar_qris_persen = COALESCE(EXCLUDED.metode_bayar_qris_persen, pangkalan_telemetry.metode_bayar_qris_persen),
+        avg_speed_seconds = COALESCE(EXCLUDED.avg_speed_seconds, pangkalan_telemetry.avg_speed_seconds),
+        peak_hours = COALESCE(EXCLUDED.peak_hours, pangkalan_telemetry.peak_hours),
         device_model = COALESCE(EXCLUDED.device_model, pangkalan_telemetry.device_model),
         device_os = COALESCE(EXCLUDED.device_os, pangkalan_telemetry.device_os),
-        platform = EXCLUDED.platform,
-        app_version = EXCLUDED.app_version,
-        ip_address = EXCLUDED.ip_address,
+        platform = COALESCE(EXCLUDED.platform, pangkalan_telemetry.platform),
+        app_version = COALESCE(EXCLUDED.app_version, pangkalan_telemetry.app_version),
+        ip_address = COALESCE(EXCLUDED.ip_address, pangkalan_telemetry.ip_address),
         isp = COALESCE(EXCLUDED.isp, pangkalan_telemetry.isp),
-        total_nik_processed = pangkalan_telemetry.total_nik_processed + EXCLUDED.total_nik_processed,
-        success_count = pangkalan_telemetry.success_count + EXCLUDED.success_count,
-        invalid_count = pangkalan_telemetry.invalid_count + EXCLUDED.invalid_count,
-        persen_rumah_tangga = EXCLUDED.persen_rumah_tangga,
-        persen_usaha_mikro = EXCLUDED.persen_usaha_mikro,
+        total_nik_processed = GREATEST(pangkalan_telemetry.total_nik_processed, EXCLUDED.total_nik_processed),
+        success_count = GREATEST(pangkalan_telemetry.success_count, EXCLUDED.success_count),
+        invalid_count = GREATEST(pangkalan_telemetry.invalid_count, EXCLUDED.invalid_count),
+        persen_rumah_tangga = COALESCE(EXCLUDED.persen_rumah_tangga, pangkalan_telemetry.persen_rumah_tangga),
+        persen_usaha_mikro = COALESCE(EXCLUDED.persen_usaha_mikro, pangkalan_telemetry.persen_usaha_mikro),
         last_sync_at = CURRENT_TIMESTAMP;
     `;
 

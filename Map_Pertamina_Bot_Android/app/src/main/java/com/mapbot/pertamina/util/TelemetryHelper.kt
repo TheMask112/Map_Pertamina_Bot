@@ -119,10 +119,16 @@ object TelemetryHelper {
                         // Raw Pertamina Profile API fields
                         if (obj.optString("storeName").isNotBlank()) pName = obj.optString("storeName")
                         if (obj.optString("registrationId").isNotBlank()) mId = obj.optString("registrationId")
+                        else if (obj.optString("merchantId").isNotBlank()) mId = obj.optString("merchantId")
+                        else if (obj.optString("merchant_id").isNotBlank()) mId = obj.optString("merchant_id")
+
                         if (obj.optString("name").isNotBlank()) ownerName = obj.optString("name")
                         if (obj.optString("province").isNotBlank()) prov = obj.optString("province")
                         if (obj.optString("city").isNotBlank()) kota = obj.optString("city")
-                        if (obj.optString("ditrictName").isNotBlank()) kecamatan = obj.optString("ditrictName")
+                        
+                        if (obj.optString("districtName").isNotBlank()) kecamatan = obj.optString("districtName")
+                        else if (obj.optString("ditrictName").isNotBlank()) kecamatan = obj.optString("ditrictName")
+
                         if (obj.optString("villageName").isNotBlank()) kelurahan = obj.optString("villageName")
                         if (obj.optString("address").isNotBlank()) address = obj.optString("address")
                         

@@ -14,6 +14,11 @@ interface Order {
   total_amount: string | number;
   payment_status: string;
   license_key?: string;
+  voucher_code?: string;
+  hwid?: string;
+  kuota_total?: number;
+  kuota_terpakai?: number;
+  sisa_kuota?: number;
   affiliate_code?: string;
   affiliate_commission?: string | number;
   created_at: string;
@@ -172,6 +177,11 @@ export default function AdminPortal() {
           total_amount: Number(o.total_amount || o.amount || 0),
           payment_status: (o.payment_status || o.status || 'UNPAID').toUpperCase(),
           license_key: o.license_key || '',
+          voucher_code: o.voucher_code || '',
+          hwid: o.hwid || '',
+          kuota_total: Number(o.kuota_total || 500),
+          kuota_terpakai: Number(o.kuota_terpakai || 0),
+          sisa_kuota: Number(o.sisa_kuota !== undefined ? o.sisa_kuota : Math.max(0, Number(o.kuota_total || 500) - Number(o.kuota_terpakai || 0))),
           created_at: o.created_at || new Date().toISOString()
         }));
         setOrders(normalizedOrders);
@@ -220,7 +230,27 @@ export default function AdminPortal() {
         fetch('/api/admin/orders', { headers: { 'Authorization': passcode.trim() } })
           .then(r => r.json())
           .then(d => {
-            if (d.orders) setOrders(d.orders);
+            if (d.orders) {
+              const rawOrders = d.orders || [];
+              const normalizedOrders = rawOrders.map((o: any) => ({
+                ...o,
+                order_id: o.order_id || o.id || '',
+                customer_name: o.customer_name || 'Pelanggan',
+                customer_whatsapp: o.customer_whatsapp || o.whatsapp || '',
+                customer_email: o.customer_email || '',
+                package_type: o.package_type || o.paket || 'STARTER',
+                total_amount: Number(o.total_amount || o.amount || 0),
+                payment_status: (o.payment_status || o.status || 'UNPAID').toUpperCase(),
+                license_key: o.license_key || '',
+                voucher_code: o.voucher_code || '',
+                hwid: o.hwid || '',
+                kuota_total: Number(o.kuota_total || 500),
+                kuota_terpakai: Number(o.kuota_terpakai || 0),
+                sisa_kuota: Number(o.sisa_kuota !== undefined ? o.sisa_kuota : Math.max(0, Number(o.kuota_total || 500) - Number(o.kuota_terpakai || 0))),
+                created_at: o.created_at || new Date().toISOString()
+              }));
+              setOrders(normalizedOrders);
+            }
             if (d.affiliates) setAffiliates(d.affiliates);
             if (d.payouts) setPayouts(d.payouts);
           }),
@@ -302,6 +332,29 @@ export default function AdminPortal() {
         checkAuth(passcode);
       } else {
         alert(data.error || 'Gagal mengubah status.');
+      }
+    } catch (e) {
+      alert('Error koneksi.');
+    }
+  };
+
+  const handleRevokeLicense = async (orderId: string) => {
+    if (!confirm('Apakah Anda yakin ingin MENCABUT (Revoke) lisensi transaksi ini? Lisensi dan voucher akan langsung dinonaktifkan.')) return;
+    try {
+      const res = await fetch('/api/admin/orders', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': passcode 
+        },
+        body: JSON.stringify({ orderId, action: 'revoke' })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert('✓ Lisensi berhasil dicabut (REVOKED).');
+        checkAuth(passcode);
+      } else {
+        alert(data.error || 'Gagal mencabut lisensi.');
       }
     } catch (e) {
       alert('Error koneksi.');
@@ -840,6 +893,7 @@ Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long
                     <th style={{ padding: '12px', color: 'hsl(var(--text-secondary))' }}>Order ID</th>
                     <th style={{ padding: '12px', color: 'hsl(var(--text-secondary))' }}>Pelanggan &amp; WhatsApp</th>
                     <th style={{ padding: '12px', color: 'hsl(var(--text-secondary))' }}>Paket</th>
+                    <th style={{ padding: '12px', color: 'hsl(var(--text-secondary))' }}>Sisa Kuota Pemakaian</th>
                     <th style={{ padding: '12px', color: 'hsl(var(--text-secondary))' }}>Nominal</th>
                     <th style={{ padding: '12px', color: 'hsl(var(--text-secondary))' }}>Status</th>
                     <th style={{ padding: '12px', color: 'hsl(var(--text-secondary))' }}>Kunci Lisensi Voucher</th>
@@ -849,7 +903,7 @@ Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long
                 <tbody>
                   {filteredOrders.length === 0 ? (
                     <tr>
-                      <td colSpan={7} style={{ padding: '30px', textAlign: 'center', color: 'hsl(var(--text-muted))' }}>
+                      <td colSpan={8} style={{ padding: '30px', textAlign: 'center', color: 'hsl(var(--text-muted))' }}>
                         Tidak ada transaksi yang cocok dengan filter.
                       </td>
                     </tr>
@@ -876,6 +930,35 @@ Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long
                             {o.package_type}
                           </span>
                         </td>
+                        <td style={{ padding: '14px 12px' }}>
+                          {o.payment_status === 'PAID' || o.payment_status === 'REDEEMED' ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '150px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontWeight: 800, color: (o.sisa_kuota || 0) <= 50 ? '#f87171' : '#38bdf8', fontSize: '0.85rem' }}>
+                                  {(o.sisa_kuota || 0).toLocaleString('id-ID')} Tabung
+                                </span>
+                                <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                                  dari {(o.kuota_total || 500).toLocaleString('id-ID')}
+                                </span>
+                              </div>
+                              <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                                <div style={{
+                                  width: `${Math.min(100, Math.max(2, (((o.kuota_total || 500) - (o.sisa_kuota || 0)) / (o.kuota_total || 500)) * 100))}%`,
+                                  height: '100%',
+                                  background: (o.sisa_kuota || 0) <= 50 ? '#ef4444' : '#38bdf8',
+                                  borderRadius: '3px'
+                                }} />
+                              </div>
+                              <div style={{ fontSize: '0.72rem', color: 'hsl(var(--text-muted))' }}>
+                                Terpakai: {(o.kuota_terpakai || 0).toLocaleString('id-ID')} Tabung
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                              {o.payment_status === 'EXPIRED' ? '❌ Kedaluwarsa' : o.payment_status === 'FAILED' ? '❌ Gagal Bayar' : '⏳ Menunggu Bayar'}
+                            </div>
+                          )}
+                        </td>
                         <td style={{ padding: '14px 12px', fontWeight: 800, color: '#34d399' }}>
                           {formatRupiah(o.total_amount)}
                         </td>
@@ -885,8 +968,8 @@ Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long
                             borderRadius: '12px',
                             fontSize: '0.78rem',
                             fontWeight: 800,
-                            background: o.payment_status === 'PAID' ? 'rgba(52, 211, 153, 0.15)' : o.payment_status === 'UNPAID' ? 'rgba(251, 191, 36, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                            color: o.payment_status === 'PAID' ? '#34d399' : o.payment_status === 'UNPAID' ? '#fbbf24' : '#ef4444'
+                            background: o.payment_status === 'PAID' || o.payment_status === 'REDEEMED' ? 'rgba(52, 211, 153, 0.15)' : o.payment_status === 'UNPAID' || o.payment_status === 'PENDING' ? 'rgba(251, 191, 36, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                            color: o.payment_status === 'PAID' || o.payment_status === 'REDEEMED' ? '#34d399' : o.payment_status === 'UNPAID' || o.payment_status === 'PENDING' ? '#fbbf24' : '#ef4444'
                           }}>
                             {o.payment_status}
                           </span>
@@ -918,28 +1001,57 @@ Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long
                             >
                               📋 Salin Lisensi
                             </button>
+                          ) : o.voucher_code ? (
+                            <div style={{ fontSize: '0.78rem', color: '#38bdf8', fontFamily: 'monospace', fontWeight: 700 }}>
+                              🎟️ {o.voucher_code}
+                            </div>
                           ) : (
                             <span style={{ color: 'hsl(var(--text-muted))', fontSize: '0.85rem' }}>-</span>
                           )}
                         </td>
                         <td style={{ padding: '14px 12px' }}>
-                          {o.payment_status !== 'PAID' && (
-                            <button
-                              onClick={() => handleMarkAsPaid(o.order_id)}
-                              style={{
-                                padding: '6px 12px',
-                                borderRadius: '6px',
-                                background: '#34d399',
-                                color: '#0f172a',
-                                border: 'none',
-                                fontWeight: 700,
-                                fontSize: '0.78rem',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              ✓ Set Lunas
-                            </button>
-                          )}
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                            {o.payment_status !== 'PAID' && o.payment_status !== 'REDEEMED' && o.payment_status !== 'REVOKED' && (
+                              <button
+                                onClick={() => handleMarkAsPaid(o.order_id || o.id)}
+                                style={{
+                                  padding: '6px 12px',
+                                  borderRadius: '6px',
+                                  background: '#34d399',
+                                  color: '#0f172a',
+                                  border: 'none',
+                                  fontWeight: 700,
+                                  fontSize: '0.78rem',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                ✓ Set Lunas
+                              </button>
+                            )}
+                            {(o.payment_status === 'PAID' || o.payment_status === 'REDEEMED' || o.license_key) && (
+                              <button
+                                onClick={() => handleRevokeLicense(o.id || o.order_id)}
+                                style={{
+                                  padding: '6px 10px',
+                                  borderRadius: '6px',
+                                  background: 'rgba(239, 68, 68, 0.15)',
+                                  color: '#f87171',
+                                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                                  fontWeight: 700,
+                                  fontSize: '0.75rem',
+                                  cursor: 'pointer'
+                                }}
+                                title="Cabut lisensi aktif transaksi ini"
+                              >
+                                🚫 Revoke
+                              </button>
+                            )}
+                            {o.payment_status === 'REVOKED' && (
+                              <span style={{ fontSize: '0.75rem', color: '#f87171', fontWeight: 700, padding: '2px 6px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '4px' }}>
+                                🔒 Dicabut
+                              </span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -2247,10 +2359,10 @@ Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long
                     <th style={{ padding: '12px', color: 'hsl(var(--text-secondary))' }}>PT Agen Penyalur</th>
                     <th style={{ padding: '12px', color: 'hsl(var(--text-secondary))' }}>Wilayah</th>
                     <th 
-                      onClick={() => handleSortToggle('kuota_pertamina_bulanan')}
+                      onClick={() => handleSortToggle('sisa_kuota_pertamina')}
                       style={{ padding: '12px', color: 'hsl(var(--text-secondary))', cursor: 'pointer', userSelect: 'none' }}
                     >
-                      Jatah Kuota {sortField === 'kuota_pertamina_bulanan' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
+                      Sisa Stok &amp; Kuota {sortField === 'sisa_kuota_pertamina' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
                     </th>
                     <th 
                       onClick={() => handleSortToggle('estimasi_laba_bulanan')}
@@ -2315,8 +2427,21 @@ Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long
                         <td style={{ padding: '14px 12px', fontSize: '0.82rem' }}>
                           <div>{p.kota_kabupaten ? `${p.kota_kabupaten}, ${p.provinsi || ''}` : (p.address || '-')}</div>
                         </td>
-                        <td style={{ padding: '14px 12px', fontWeight: 800, color: '#38bdf8' }}>
-                          {(p.kuota_pertamina_bulanan || 0).toLocaleString('id-ID')} Tabung
+                        <td style={{ padding: '14px 12px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Stok:</span>
+                              <strong style={{ color: (p.sisa_kuota_pertamina || 0) <= 100 ? '#fbbf24' : '#34d399', fontSize: '0.88rem' }}>
+                                {(p.sisa_kuota_pertamina || 0).toLocaleString('id-ID')} Tabung
+                              </strong>
+                            </div>
+                            <div style={{ fontSize: '0.74rem', color: '#38bdf8' }}>
+                              Alokasi: {(p.kuota_pertamina_bulanan || 0).toLocaleString('id-ID')} / bln
+                            </div>
+                            <div style={{ fontSize: '0.7rem', color: '#a78bfa' }}>
+                              ✓ {(p as any).success_count || 0} NIK Sukses
+                            </div>
+                          </div>
                         </td>
                         <td style={{ padding: '14px 12px', fontWeight: 800, color: '#34d399' }}>
                           {formatRupiah(p.estimasi_laba_bulanan || 0)}
@@ -2431,20 +2556,32 @@ Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long
                   </button>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px', fontSize: '0.85rem' }}>
-                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '14px', borderRadius: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '20px', fontSize: '0.85rem' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 14px', borderRadius: '12px' }}>
                     <div style={{ color: '#94a3b8', marginBottom: '4px' }}>Pemilik / Penanggung Jawab</div>
                     <strong style={{ color: '#ffffff' }}>{selectedPangkalan.owner_name || '-'}</strong>
                   </div>
-                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '14px', borderRadius: '12px' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 14px', borderRadius: '12px' }}>
                     <div style={{ color: '#94a3b8', marginBottom: '4px' }}>PT Agen Penyalur</div>
                     <strong style={{ color: '#38bdf8' }}>{selectedPangkalan.agent_name || '-'}</strong>
                   </div>
-                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '14px', borderRadius: '12px' }}>
-                    <div style={{ color: '#94a3b8', marginBottom: '4px' }}>Kuota Pertamina Bulanan</div>
-                    <strong style={{ color: '#34d399' }}>{(selectedPangkalan.kuota_pertamina_bulanan || 0).toLocaleString('id-ID')} Tabung</strong>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 14px', borderRadius: '12px' }}>
+                    <div style={{ color: '#94a3b8', marginBottom: '4px' }}>Alokasi Kuota Bulanan Pertamina</div>
+                    <strong style={{ color: '#38bdf8' }}>{(selectedPangkalan.kuota_pertamina_bulanan || 0).toLocaleString('id-ID')} Tabung</strong>
                   </div>
-                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '14px', borderRadius: '12px' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 14px', borderRadius: '12px' }}>
+                    <div style={{ color: '#94a3b8', marginBottom: '4px' }}>Sisa Stok Berjalan Pertamina</div>
+                    <strong style={{ color: (selectedPangkalan.sisa_kuota_pertamina || 0) <= 100 ? '#fbbf24' : '#34d399' }}>
+                      {(selectedPangkalan.sisa_kuota_pertamina || 0).toLocaleString('id-ID')} Tabung
+                    </strong>
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 14px', borderRadius: '12px' }}>
+                    <div style={{ color: '#94a3b8', marginBottom: '4px' }}>Total NIK Berhasil Diproses</div>
+                    <strong style={{ color: '#a78bfa' }}>
+                      {((selectedPangkalan as any).success_count || 0).toLocaleString('id-ID')} NIK ({((selectedPangkalan as any).total_nik_processed || 0).toLocaleString('id-ID')} Total)
+                    </strong>
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 14px', borderRadius: '12px' }}>
                     <div style={{ color: '#94a3b8', marginBottom: '4px' }}>Estimasi Modal Tebus DO</div>
                     <strong style={{ color: '#fbbf24' }}>{formatRupiah(selectedPangkalan.modal_tebus_per_do || 0)}</strong>
                   </div>

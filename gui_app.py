@@ -561,7 +561,20 @@ class MainScreen(ctk.CTkFrame):
         self.progress_lic.pack(fill="x", pady=(4, 0))
         self.progress_lic.set(0)
 
-        # Tombol Perbarui Lisensi tanpa restart aplikasi
+        # Tombol Salin Lisensi & Perbarui Lisensi
+        self.btn_copy_lic = ctk.CTkButton(
+            right,
+            text="📋 Salin Lisensi",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color=C_BORDER,
+            text_color=C_TEXT,
+            hover_color=C_ACCENT,
+            height=28,
+            corner_radius=6,
+            command=self._copy_license_with_log
+        )
+        self.btn_copy_lic.pack(fill="x", pady=(10, 0))
+
         self.btn_change_lic = ctk.CTkButton(
             right,
             text="🔑 Perbarui Lisensi",
@@ -573,7 +586,7 @@ class MainScreen(ctk.CTkFrame):
             corner_radius=6,
             command=lambda: self.master._show_license()
         )
-        self.btn_change_lic.pack(fill="x", pady=(12, 0))
+        self.btn_change_lic.pack(fill="x", pady=(6, 0))
 
     # ──────────────────────────────────────────────────────────
     # Helpers
@@ -604,6 +617,19 @@ class MainScreen(ctk.CTkFrame):
             print(f"\n[INFO] HWID ({self.hwid}) berhasil disalin ke clipboard!")
         except Exception as e:
             print(f"\n[ERROR] Gagal menyalin HWID: {e}")
+
+    def _copy_license_with_log(self):
+        try:
+            info = get_license_info(self.hwid)
+            lic_key = info.get("license_key", "")
+            if lic_key:
+                self.clipboard_clear()
+                self.clipboard_append(lic_key)
+                print(f"\n[INFO] License Key berhasil disalin ke clipboard!")
+            else:
+                print(f"\n[WARN] Tidak ada License Key tersimpan.")
+        except Exception as e:
+            print(f"\n[ERROR] Gagal menyalin License Key: {e}")
 
     def _refresh_license_info(self):
         info = get_license_info(self.hwid)
