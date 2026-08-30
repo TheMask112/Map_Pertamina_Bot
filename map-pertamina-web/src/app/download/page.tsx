@@ -3,7 +3,7 @@
 
 export default function DownloadPage() {
   // Gunakan variabel lingkungan NEXT_PUBLIC_DOWNLOAD_URL untuk tautan Google Drive / cloud storage eksternal
-  const downloadUrl = process.env.NEXT_PUBLIC_DOWNLOAD_URL || 'https://drive.google.com/file/d/1TZeTrXRV1vtsgK55WUkLKcuE07enABFo/view?usp=drive_link';
+  const downloadUrl = process.env.NEXT_PUBLIC_DOWNLOAD_URL || 'https://drive.google.com/drive/folders/1Y2aWbsPPDtrsdfMdY1DTX_1sp_XZk-Ou?usp=sharing';
   const androidDownloadUrl = process.env.NEXT_PUBLIC_ANDROID_DOWNLOAD_URL || 'https://drive.google.com/drive/folders/1YbkWYl-fxjz1BBK06X2f2reWi0JXFY-G?usp=sharing';
 
   return (
@@ -79,27 +79,52 @@ export default function DownloadPage() {
 
       {/* INSTALLATION STEPS */}
       <section style={styles.instructionsSection} className="glass-card">
-        <h2 style={styles.instructionsTitle}>Langkah Demi Langkah Cara Instalasi</h2>
-        <div style={styles.stepsGrid}>
-          <div style={styles.step}>
-            <div style={styles.stepNum}>1</div>
-            <h4 style={styles.stepTitle}>Ekstrak ZIP</h4>
-            <p style={styles.stepDesc}>Klik kanan pada file <code>Bot_MAP_Pertamina_Installer.zip</code> yang telah diunduh, lalu pilih <strong>Extract All...</strong>.</p>
+        <h2 style={styles.instructionsTitle}>Panduan Mudah Cara Pasang & Pakai</h2>
+        <p style={{ color: 'hsl(215, 20%, 65%)', fontSize: '0.95rem', marginBottom: '32px' }}>
+          Ikuti langkah mudah di bawah ini untuk mulai menjalankan bot di perangkat Anda:
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '30px', textAlign: 'left' }}>
+          {/* PANDUAN WINDOWS */}
+          <div style={{ background: 'rgba(255,255,255,0.02)', padding: '24px', borderRadius: '14px', border: '1px solid rgba(56,189,248,0.2)' }}>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#38bdf8', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              💻 Panduan Windows Desktop (Laptop/PC)
+            </h3>
+            <ol style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '0.9rem', color: '#e2e8f0', lineHeight: '1.5' }}>
+              <li>
+                <strong>Unduh File ZIP:</strong> Klik tombol <em>Unduh Installer (.zip)</em> di atas untuk masuk ke Google Drive, lalu unduh filenya.
+              </li>
+              <li>
+                <strong>Ekstrak File:</strong> Klik kanan pada file <code>Bot_MAP_Pertamina_Installer.zip</code> yang sudah diunduh, lalu pilih <strong>Extract All... (Ekstrak Semua)</strong>.
+              </li>
+              <li>
+                <strong>Instal Awal (Hanya 1x):</strong> Buka folder hasil ekstrak, klik kanan file <code>Instal_Bot.bat</code> lalu pilih <strong>Run as administrator</strong>. Tunggu sampai selesai.
+              </li>
+              <li>
+                <strong>Jalankan Bot:</strong> Klik 2x pada <code>Bot_MAP_Pertamina.exe</code>. Salin Hardware ID Anda untuk aktivasi lisensi, dan bot langsung siap memproses NIK dari Excel!
+              </li>
+            </ol>
           </div>
-          <div style={styles.step}>
-            <div style={styles.stepNum}>2</div>
-            <h4 style={styles.stepTitle}>Jalankan Installer</h4>
-            <p style={styles.stepDesc}>Masuk ke folder hasil ekstrak, jalankan file <code>Instal_Bot.bat</code> dengan klik kanan dan pilih <strong>Run as Administrator</strong>.</p>
-          </div>
-          <div style={styles.step}>
-            <div style={styles.stepNum}>3</div>
-            <h4 style={styles.stepTitle}>Pasang Dependensi</h4>
-            <p style={styles.stepDesc}>Skrip instalasi akan otomatis memeriksa dan memasang Microsoft VC++ Redistributable jika belum ada di PC Anda.</p>
-          </div>
-          <div style={styles.step}>
-            <div style={styles.stepNum}>4</div>
-            <h4 style={styles.stepTitle}>Aktivasi & Mulai</h4>
-            <p style={styles.stepDesc}>Buka aplikasi <code>Bot_MAP_Pertamina.exe</code>, salin Hardware ID Anda untuk di-redeem di Telegram, masukkan License Key, dan mulai!</p>
+
+          {/* PANDUAN ANDROID */}
+          <div style={{ background: 'rgba(255,255,255,0.02)', padding: '24px', borderRadius: '14px', border: '1px solid rgba(16,185,129,0.2)' }}>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#34d399', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              📱 Panduan Aplikasi Android (HP)
+            </h3>
+            <ol style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '0.9rem', color: '#e2e8f0', lineHeight: '1.5' }}>
+              <li>
+                <strong>Unduh File APK:</strong> Klik tombol <em>Unduh APK Android</em> di atas untuk masuk ke Google Drive, lalu download file <code>MAP_Pertamina_Bot_v1.0.1.apk</code>.
+              </li>
+              <li>
+                <strong>Pasang di HP:</strong> Buka file APK yang sudah selesai diunduh, lalu tekan <strong>Install / Pasang</strong>.
+              </li>
+              <li>
+                <strong>Izin Keamanan:</strong> Jika muncul jendela <em>"Aplikasi dari sumber tidak dikenal"</em>, pilih <strong>Izinkan / Tetap Pasang (Install Anyway)</strong>.
+              </li>
+              <li>
+                <strong>Buka & Aktivasi:</strong> Buka aplikasi di HP Anda, masukkan lisensi Anda, dan mulai proses transaksi NIK kapan saja!
+              </li>
+            </ol>
           </div>
         </div>
       </section>
