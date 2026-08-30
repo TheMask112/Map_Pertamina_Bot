@@ -456,52 +456,18 @@ class PageInteractor(private val wvManager: WebViewManager) {
         val safeTempat = tempat.replace("\"", "\\\"").uppercase()
         wvManager.executeJs("""
             (function() {
-                var allInputs = document.querySelectorAll("input:not([type='hidden']):not([type='checkbox']):not([type='radio'])");
-                var tempatInp = null;
-
+                var allInputs = document.querySelectorAll("input");
                 for (var i = 0; i < allInputs.length; i++) {
-                    var inp = allInputs[i];
-                    var ph = (inp.placeholder || inp.name || inp.id || inp.getAttribute('data-testid') || '').toLowerCase();
-                    var label = inp.id ? document.querySelector('label[for="' + inp.id + '"]') : null;
-                    var labelText = label ? (label.innerText || label.textContent || '').toLowerCase() : '';
-                    var parentText = (inp.parentElement?.parentElement?.innerText || inp.parentElement?.parentElement?.textContent || '').toLowerCase();
-
-                    // Abaikan input tanggal lahir
-                    if (ph.includes('tgl') || ph.includes('tanggal') || ph.includes('date') || ph.includes('hari') || ph.includes('bulan') || ph.includes('tahun') || ph.includes('day') || ph.includes('month') || ph.includes('year') || labelText.includes('tanggal') || labelText.includes('tgl') || labelText.includes('hari')) {
-                        continue;
-                    }
-
-                    var isTempat = ph.includes('tempat') || ph.includes('kota') || ph.includes('birthplace') || ph.includes('city') || ph.includes('ketik') || labelText.includes('tempat') || labelText.includes('kota') || parentText.includes('tempat lahir');
-                    if (isTempat) {
-                        tempatInp = inp;
-                        break;
-                    }
-                }
-
-                // Fallback: Jika tidak ketemu dari label, ambil text input pertama yang bukan select
-                if (!tempatInp) {
-                    for (var j = 0; j < allInputs.length; j++) {
-                        var inp2 = allInputs[j];
-                        var p2 = (inp2.placeholder || '').toLowerCase();
-                        if (!inp2.readOnly && !inp2.classList.contains('mantine-Select-input') && !p2.includes('tgl') && !p2.includes('thn') && !p2.includes('bln')) {
-                            tempatInp = inp2;
-                            break;
-                        }
-                    }
-                }
-
-                if (tempatInp) {
-                    tempatInp.focus();
-                    try {
+                    var ph = (allInputs[i].placeholder || allInputs[i].name || allInputs[i].id || '').toLowerCase();
+                    if (ph.includes('tempat') || ph.includes('lahir') || ph.includes('ketik')) {
+                        allInputs[i].focus();
                         var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-                        nativeSetter.call(tempatInp, "$safeTempat");
-                    } catch(e) {
-                        tempatInp.value = "$safeTempat";
+                        nativeSetter.call(allInputs[i], "$safeTempat");
+                        allInputs[i].dispatchEvent(new Event('input', { bubbles: true }));
+                        allInputs[i].dispatchEvent(new Event('change', { bubbles: true }));
+                        allInputs[i].dispatchEvent(new Event('blur', { bubbles: true }));
+                        return 'true';
                     }
-                    tempatInp.dispatchEvent(new Event('input', { bubbles: true }));
-                    tempatInp.dispatchEvent(new Event('change', { bubbles: true }));
-                    tempatInp.dispatchEvent(new Event('blur', { bubbles: true }));
-                    return 'true';
                 }
                 return 'false';
             })()
@@ -511,18 +477,13 @@ class PageInteractor(private val wvManager: WebViewManager) {
     }
 
     suspend fun selectMantineDropdown(fieldHint: String, targetVal: String): Boolean {
-        val safeHint = fieldHint.replace("\"", "\\\"").lowercase()
-        val safeVal = targetVal.replace("\"", "\\\"").trim()
-
         // 1. Focus dan klik input select untuk memunculkan dropdown popup
         val opened = suspendCoroutine<Boolean> { cont ->
+            val safeHint = fieldHint.replace("\"", "\\\"").lowercase()
             wvManager.executeJs("""
                 (function() {
                     function simulateHumanTouch(el) {
                         if (!el) return false;
-                        try {
-                            el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
-                        } catch(e) {}
                         var rect = el.getBoundingClientRect();
                         var x = rect.left + rect.width / 2;
                         var y = rect.top + rect.height / 2;
@@ -550,39 +511,16 @@ class PageInteractor(private val wvManager: WebViewManager) {
 
                     var hint = "$safeHint";
                     var inps = document.querySelectorAll("input, .mantine-Select-input, [data-testid*='Select'], [data-testid*='select']");
-                    var targetInput = null;
-
                     for (var i = 0; i < inps.length; i++) {
                         var ph = (inps[i].placeholder || inps[i].getAttribute('data-testid') || inps[i].name || inps[i].id || '').toLowerCase();
-                        var label = inps[i].id ? document.querySelector('label[for="' + inps[i].id + '"]') : null;
-                        var labelText = label ? (label.innerText || label.textContent || '').toLowerCase() : '';
-
-                        var isMatch = ph.includes(hint) || labelText.includes(hint);
-                        if (!isMatch && (hint === 'tgl' || hint === 'dayselect') && (ph.includes('tgl') || ph.includes('day') || ph.includes('tanggal') || ph.includes('hari') || labelText.includes('hari') || labelText.includes('tanggal'))) isMatch = true;
-                        if (!isMatch && (hint === 'bln' || hint === 'monthselect') && (ph.includes('bln') || ph.includes('month') || ph.includes('bulan') || labelText.includes('bulan'))) isMatch = true;
-                        if (!isMatch && (hint === 'thn' || hint === 'yearselect') && (ph.includes('thn') || ph.includes('year') || ph.includes('tahun') || labelText.includes('tahun'))) isMatch = true;
+                        var isMatch = ph.includes(hint);
+                        if (!isMatch && (hint === 'tgl' || hint === 'dayselect') && (ph.includes('tgl') || ph.includes('day') || ph.includes('tanggal') || ph.includes('hari'))) isMatch = true;
+                        if (!isMatch && (hint === 'bln' || hint === 'monthselect') && (ph.includes('bln') || ph.includes('month') || ph.includes('bulan'))) isMatch = true;
+                        if (!isMatch && (hint === 'thn' || hint === 'yearselect') && (ph.includes('thn') || ph.includes('year') || ph.includes('tahun'))) isMatch = true;
 
                         if (isMatch) {
-                            targetInput = inps[i];
-                            break;
+                            return simulateHumanTouch(inps[i]) ? 'true' : 'false';
                         }
-                    }
-
-                    // Fallback berdasar urutan dropdown pada form (0=Tgl, 1=Bln, 2=Thn)
-                    if (!targetInput) {
-                        var selectInps = [];
-                        for (var k = 0; k < inps.length; k++) {
-                            if (inps[k].classList.contains('mantine-Select-input') || inps[k].readOnly || inps[k].getAttribute('data-testid')?.toLowerCase().includes('select')) {
-                                selectInps.push(inps[k]);
-                            }
-                        }
-                        if (hint.includes('tgl') || hint.includes('day')) targetInput = selectInps[0];
-                        else if (hint.includes('bln') || hint.includes('month')) targetInput = selectInps[1];
-                        else if (hint.includes('thn') || hint.includes('year')) targetInput = selectInps[2];
-                    }
-
-                    if (targetInput) {
-                        return simulateHumanTouch(targetInput) ? 'true' : 'false';
                     }
                     return 'false';
                 })()
@@ -590,18 +528,16 @@ class PageInteractor(private val wvManager: WebViewManager) {
                 cont.resume(res.replace("\"", "") == "true")
             }
         }
-
+        if (!opened) return false
         delay(400)
 
         // 2. Cari dan klik item target dari list dropdown
         val selected = suspendCoroutine<Boolean> { cont ->
+            val safeVal = targetVal.replace("\"", "\\\"").trim()
             wvManager.executeJs("""
                 (function() {
                     function simulateHumanTouch(el) {
                         if (!el) return false;
-                        try {
-                            el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
-                        } catch(e) {}
                         var rect = el.getBoundingClientRect();
                         var x = rect.left + rect.width / 2;
                         var y = rect.top + rect.height / 2;
@@ -628,32 +564,18 @@ class PageInteractor(private val wvManager: WebViewManager) {
                     }
 
                     var target = "$safeVal";
-                    var targetLower = target.toLowerCase();
                     var targetNum = parseInt(target, 10);
-
-                    var monthNames = ["", "januari", "februari", "maret", "april", "mei", "juni", "juli", "agustus", "september", "oktober", "november", "desember"];
-                    var monthNamesEn = ["", "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
-                    var targetMonthIdx = monthNames.indexOf(targetLower);
-                    if (targetMonthIdx === -1) targetMonthIdx = monthNamesEn.indexOf(targetLower);
-
-                    var items = document.querySelectorAll('.mantine-Select-item, [role="option"], [data-combobox-option="true"], .mantine-Combobox-option, .mantine-Select-option, li');
+                    var items = document.querySelectorAll('.mantine-Select-item, [role="option"], [data-combobox-option="true"], .mantine-Combobox-option, li');
                     for (var m = 0; m < items.length; m++) {
                         var itTxt = (items[m].innerText || items[m].textContent || '').trim();
-                        var itLower = itTxt.toLowerCase();
                         var itNum = parseInt(itTxt, 10);
                         var isOptionMatch = false;
 
-                        if (itTxt === target || itLower === targetLower) {
+                        if (itTxt === target) {
                             isOptionMatch = true;
                         } else if (!isNaN(targetNum) && !isNaN(itNum) && targetNum === itNum) {
                             isOptionMatch = true;
-                        } else if (targetMonthIdx > 0) {
-                            if (itNum === targetMonthIdx || itTxt === String(targetMonthIdx).padStart(2, '0')) {
-                                isOptionMatch = true;
-                            } else if (itLower.startsWith(monthNames[targetMonthIdx].slice(0, 3)) || itLower.startsWith(monthNamesEn[targetMonthIdx].slice(0, 3))) {
-                                isOptionMatch = true;
-                            }
-                        } else if (target.length > 2 && itLower.includes(targetLower)) {
+                        } else if (target.length > 2 && itTxt.toLowerCase().includes(target.toLowerCase())) {
                             isOptionMatch = true;
                         }
 
@@ -764,56 +686,39 @@ class PageInteractor(private val wvManager: WebViewManager) {
 
             val bText = getBodyText().lowercase()
 
-            // 1. Modal "Data Pelanggan belum lengkap" -> WAJIB KLIK UPDATE / PERBARUI DATA
-            val isModalBelumLengkap = bText.contains("data pelanggan belum lengkap") || 
-                                     bText.contains("lengkapi data dahulu") || 
-                                     bText.contains("perbarui data dahulu") ||
-                                     isElementVisibleByText("UPDATE DATA PELANGGAN") ||
-                                     isElementVisibleByText("PERBARUI DATA PELANGGAN")
-
-            if (isModalBelumLengkap) {
-                dismissKeyboard()
-                val clicked = clickButtonByText("UPDATE DATA PELANGGAN") || 
-                              clickButtonByText("PERBARUI DATA PELANGGAN") ||
-                              clickButtonByText("LENGKAPI DATA") ||
-                              clickButtonByText("UPDATE DATA")
-                if (clicked) {
-                    delay(1500)
-                    continue
-                }
-            }
-
-            // 2. Modal Sukses "Data Pelanggan berhasil diperbarui"
+            // 1. Modal Sukses "Data Pelanggan berhasil diperbarui" (Prioritas Utama)
             if (bText.contains("berhasil diperbarui") || isElementVisibleByText("LANJUTKAN KE TRANSAKSI")) {
                 dismissKeyboard()
-                val clicked = clickButtonByText("LANJUTKAN KE TRANSAKSI") || clickButtonByText("LANJUTKAN")
-                if (clicked) {
-                    delay(1500)
-                    continue
-                }
+                clickButtonByText("LANJUTKAN KE TRANSAKSI")
+                delay(1500)
+                continue
             }
 
-            // 3. Modal Konfirmasi "Pastikan semua data sudah benar"
+            // 2. Modal Konfirmasi "Pastikan semua data sudah benar" (Prioritas Kedua)
             val isKonfirmasi = bText.contains("pastikan semua data") || 
+                               bText.contains("ya, perbarui") || 
                                isElementVisibleByText("YA, PERBARUI DATA PELANGGAN") ||
+                               isElementVisibleByText("PERBARUI DATA PELANGGAN") ||
                                isElementVisibleByText("YA, PERBARUI")
 
             if (isKonfirmasi) {
                 dismissKeyboard()
                 val clicked = clickButtonByText("YA, PERBARUI DATA PELANGGAN") || 
-                              clickButtonByText("YA, PERBARUI") ||
-                              clickButtonByText("PERBARUI DATA PELANGGAN")
+                              clickButtonByText("PERBARUI DATA PELANGGAN") ||
+                              clickButtonByText("YA, PERBARUI")
                 if (clicked) {
                     delay(2500)
                     continue
                 }
             }
 
-            // 4. Modal Khusus "Segera Lengkapi NIB" (Usaha Mikro)
-            if (bText.contains("segera lengkapi nib") || bText.contains("lengkapi nib")) {
+            // 3. Modal "Data Pelanggan belum lengkap"
+            if (bText.contains("data pelanggan belum lengkap") || bText.contains("lengkapi data dahulu") || bText.contains("perbarui data")) {
                 dismissKeyboard()
-                val clicked = clickButtonByText("NANTI SAJA, LANJUT PENJUALAN") ||
-                              clickButtonByText("NANTI SAJA, LANJUTKAN PENJUALAN")
+                val clicked = clickButtonByText("UPDATE DATA PELANGGAN") ||
+                              clickButtonByText("PERBARUI DATA PELANGGAN") ||
+                              clickButtonByText("LENGKAPI DATA") ||
+                              clickButtonByText("UPDATE DATA")
                 if (clicked) {
                     delay(1500)
                     continue
@@ -828,8 +733,8 @@ class PageInteractor(private val wvManager: WebViewManager) {
                 continue
             }
 
-            // 5. Choice Popup (Rumah Tangga / Usaha Mikro)
-            if (bText.contains("pilihan jenis") || bText.contains("pelanggan terdaftar") || bText.contains("tekan pilihan jenis")) {
+            // 5. Choice Popup (Rumah Tangga)
+            if (bText.contains("pilihan jenis") || bText.contains("pelanggan terdaftar")) {
                 dismissKeyboard()
                 clickButtonByText("Rumah Tangga")
                 delay(400)
@@ -838,17 +743,13 @@ class PageInteractor(private val wvManager: WebViewManager) {
                 continue
             }
 
-            // 6. Form Update Data Pelanggan
+            // 6. Form Update Data Pelanggan (Hanya jika tidak ada modal overlay)
             val isFormTtl = bText.contains("lengkapi data pelanggan") || 
                             bText.contains("tempat lahir") || 
                             bText.contains("tanggal lahir") || 
-                            bText.contains("update data pelanggan") || 
-                            bText.contains("perbarui data pelanggan") || 
                             isElementVisible("input[placeholder*='tempat lahir' i]") ||
                             isElementVisible("input[placeholder*='Tempat' i]") ||
-                            isElementVisible("input[placeholder*='Ketik' i]") ||
-                            isElementVisible("input[data-testid*='Select' i]") ||
-                            isElementVisible(".mantine-Select-input")
+                            isElementVisible("input[placeholder*='Ketik' i]")
 
             if (isFormTtl) {
                 fillTempatLahir(tempatLahir)
@@ -865,10 +766,7 @@ class PageInteractor(private val wvManager: WebViewManager) {
                 delay(500)
 
                 dismissKeyboard()
-                val nextClicked = clickButtonByText("SELANJUTNYA") || 
-                                  clickButtonByText("SIMPAN") || 
-                                  clickButtonByText("KIRIM") || 
-                                  clickButtonByText("LANJUTKAN")
+                clickButtonByText("SELANJUTNYA")
                 delay(2000)
                 continue
             }
