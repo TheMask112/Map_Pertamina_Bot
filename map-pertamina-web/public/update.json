@@ -1,12 +1,13 @@
 {
-  "versionCode": 19,
-  "apkUrl": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.9/MAP_Pertamina_Bot_v1.1.9.apk",
-  "latestVersion": "1.1.9",
-  "latestVersionCode": 19,
-  "url": "https://github.com/TheMask112/Map_Pertamina_Bot/releases/download/v1.1.9/MAP_Pertamina_Bot_v1.1.9.apk",
+  "versionCode": 2,
+  "apkUrl": "https://drive.google.com/file/d/13WFppMMlsSMm278Sjt8HacUkHPuAABd3/view?usp=drive_link",
+  "latestVersion": "1.0.1",
+  "latestVersionCode": 2,
+  "url": "https://drive.google.com/file/d/13WFppMMlsSMm278Sjt8HacUkHPuAABd3/view?usp=drive_link",
   "releaseNotes": [
-    "Penyempurnaan aplikasi dan perbaikan bugs",
-    "Optimasi performa dan kestabilan sistem",
-    "Peningkatan kompatibilitas perangkat"
+    "Perbaikan Fatal: Kuota sekarang dicek sebelum setiap NIK diproses",
+    "Perbaikan Fatal: NIK sukses kini benar-benar mengurangi kuota",
+    "Sinkronisasi Kuota Real-time Neon PostgreSQL",
+    "Navigasi Instan Bebas Kedipan Layar Harga"
   ]
 }

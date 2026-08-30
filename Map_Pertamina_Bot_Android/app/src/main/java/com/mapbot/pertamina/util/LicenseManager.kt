@@ -262,13 +262,6 @@ object LicenseManager {
         val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         prefs.edit().clear().apply()
     }
-
-    fun canUseMultiPangkalan(context: Context): Boolean {
-        val status = getLicenseStatus(context)
-        if (!status.isValid) return false
-        val paketUpper = status.paket.uppercase(Locale.getDefault())
-        return paketUpper == "ENTERPRISE" || status.totalQuota >= 5000
-    }
 }
 
 data class LicenseStatus(

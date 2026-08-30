@@ -68,26 +68,18 @@ object AutoUpdater {
     }
 
     private fun installApk(context: Context, manager: DownloadManager, downloadId: Long) {
-        try {
-            val file = java.io.File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "MapPertaminaBot-Update.apk")
-            val uri: Uri = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-                androidx.core.content.FileProvider.getUriForFile(
-                    context,
-                    "${context.packageName}.fileprovider",
-                    file
-                )
-            } else {
-                manager.getUriForDownloadedFile(downloadId) ?: Uri.fromFile(file)
-            }
-
+        val uri = manager.getUriForDownloadedFile(downloadId)
+        if (uri != null) {
             val installIntent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, "application/vnd.android.package-archive")
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
             }
-            context.startActivity(installIntent)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            Toast.makeText(context, "Gagal memulai instalasi: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+            try {
+                context.startActivity(installIntent)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(context, "Gagal memulai instalasi", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 }
