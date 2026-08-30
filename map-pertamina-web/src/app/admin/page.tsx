@@ -11,93 +11,19 @@ interface Order {
   status: string;
   voucher_code: string | null;
   created_at: string;
-  paid_at?: string | null;
-  redeemed_at?: string | null;
   expires_at: string;
-  kuota_terpakai?: number;
-  hwid?: string | null;
-  license_key?: string | null;
-}
-
-interface TelegramLink {
-  chat_id: number;
-  whatsapp: string;
-  created_at: string;
-}
-
-interface PaketDetail {
-  id: string;
-  nama: string;
-  kuota: number;
-  harga: number;
-  hari: number;
-  icon: string;
-  desc: string;
-  fitur: string[];
 }
 
 export default function AdminPortal() {
   const [passcode, setPasscode] = useState('');
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [telegramLinks, setTelegramLinks] = useState<TelegramLink[]>([]);
-  const [paketsConfig, setPaketsConfig] = useState<Record<string, PaketDetail>>({});
   const [loading, setLoading] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  // Tab State
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'ORDERS' | 'LICENSES' | 'PACKAGES' | 'MONITORING'>('OVERVIEW');
-
-  // Search & Filter States
+  
+  // States untuk search & filter
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [dateFilter, setDateFilter] = useState('ALL'); // ALL, TODAY, 7DAYS, MONTH
-  const [licenseFilter, setLicenseFilter] = useState('ALL'); // ALL, REDEEMED, PAID, REVOKED
-
-  // Pagination States
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 12;
-
-  // Modals & Action States
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [modalType, setModalType] = useState<'RESET_HWID' | 'TOPUP_KUOTA' | 'CUSTOM_CREATE' | 'DETAIL' | 'DELETE' | null>(null);
-
-  // Form Top Up Kuota
-  const [topupDays, setTopupDays] = useState(30);
-  const [resetUsage, setResetUsage] = useState(false);
-
-  // Form Custom / Enterprise License
-  const [customForm, setCustomForm] = useState({
-    whatsapp: '',
-    paket: 'ENTERPRISE',
-    customPaketName: 'Enterprise Custom VIP',
-    harga: 500000,
-    kuota: 10000,
-    isUnlimitedQuota: false,
-    hari: 36500,
-    isLifetime: true,
-    hwid: '',
-    canSubmitSales: true,
-    canUpdateCustomer: true,
-    canAutoCaptcha: true,
-    canMultiBatch: true,
-    maxDevices: 1,
-  });
-
-  // Modal Hasil Generator Lisensi
-  const [generatedResult, setGeneratedResult] = useState<{
-    voucherCode?: string;
-    licenseKey?: string | null;
-    whatsapp?: string;
-    paket?: string;
-  } | null>(null);
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000);
-  };
 
   // Load passcode dari localStorage saat mount
   useEffect(() => {
@@ -118,8 +44,6 @@ export default function AdminPortal() {
       if (res.ok) {
         const data = await res.json();
         setOrders(data.orders || []);
-        setTelegramLinks(data.telegramLinks || []);
-        if (data.paketsConfig) setPaketsConfig(data.paketsConfig);
         setIsAuthorized(true);
         localStorage.setItem('gorillaz_admin_passcode', codeToTest);
       } else {
@@ -146,183 +70,51 @@ export default function AdminPortal() {
     setOrders([]);
   };
 
-  // --- API Action Handlers ---
   const handleMarkAsPaid = async (orderId: string) => {
-    if (!confirm('Apakah Anda yakin ingin menandai transaksi ini LUNAS secara manual? Voucher akan diterbitkan otomatis.')) return;
-    setActionLoading(true);
+    if (!confirm('Apakah Anda yakin ingin menandai transaksi ini LUNAS secara manual?')) return;
     try {
       const res = await fetch('/api/admin/orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': passcode },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': passcode 
+        },
         body: JSON.stringify({ orderId, action: 'paid' })
       });
-      const data = await res.json();
       if (res.ok) {
-        showToast('✓ Transaksi ditandai Lunas. Voucher: ' + (data.voucherCode || ''));
+        // Refresh data
         checkAuth(passcode);
       } else {
-        alert(data.error || 'Gagal memperbarui status order.');
+        alert('Gagal memperbarui status order.');
       }
     } catch (err) {
       alert('Error memperbarui status.');
-    } finally {
-      setActionLoading(false);
     }
   };
 
   const handleRevoke = async (orderId: string) => {
-    if (!confirm('AWAS: Apakah Anda yakin ingin MENCABUT lisensi ini? Voucher & lisensi akan dibatalkan permanen.')) return;
-    setActionLoading(true);
+    if (!confirm('AWAS: Apakah Anda yakin ingin MENCABUT lisensi ini? Voucher akan dibatalkan permanen.')) return;
     try {
       const res = await fetch('/api/admin/orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': passcode },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': passcode 
+        },
         body: JSON.stringify({ orderId, action: 'revoke' })
       });
       if (res.ok) {
-        showToast('✓ Lisensi berhasil dicabut.');
+        // Refresh data
         checkAuth(passcode);
       } else {
         alert('Gagal mencabut lisensi.');
       }
     } catch (err) {
       alert('Error mencabut lisensi.');
-    } finally {
-      setActionLoading(false);
     }
   };
 
-  const handleResetHwid = async () => {
-    if (!selectedOrder) return;
-    setActionLoading(true);
-    try {
-      const res = await fetch('/api/admin/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': passcode },
-        body: JSON.stringify({ orderId: selectedOrder.id, action: 'reset_hwid' })
-      });
-      if (res.ok) {
-        showToast('✓ HWID berhasil di-reset! Pelanggan dapat login di PC/Android baru.');
-        setModalType(null);
-        setSelectedOrder(null);
-        checkAuth(passcode);
-      } else {
-        alert('Gagal me-reset HWID.');
-      }
-    } catch (err) {
-      alert('Error reset HWID.');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleTopupQuota = async () => {
-    if (!selectedOrder) return;
-    setActionLoading(true);
-    try {
-      const res = await fetch('/api/admin/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': passcode },
-        body: JSON.stringify({ 
-          orderId: selectedOrder.id, 
-          action: 'topup_quota',
-          resetUsage,
-          additionalDays: topupDays
-        })
-      });
-      if (res.ok) {
-        showToast('✓ Kuota / Masa aktif berhasil diperbarui!');
-        setModalType(null);
-        setSelectedOrder(null);
-        checkAuth(passcode);
-      } else {
-        alert('Gagal memperbarui kuota.');
-      }
-    } catch (err) {
-      alert('Error topup kuota.');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleDeleteOrder = async () => {
-    if (!selectedOrder) return;
-    setActionLoading(true);
-    try {
-      const res = await fetch('/api/admin/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': passcode },
-        body: JSON.stringify({ orderId: selectedOrder.id, action: 'delete' })
-      });
-      if (res.ok) {
-        showToast('✓ Order berhasil dihapus dari database.');
-        setModalType(null);
-        setSelectedOrder(null);
-        checkAuth(passcode);
-      } else {
-        alert('Gagal menghapus order.');
-      }
-    } catch (err) {
-      alert('Error menghapus order.');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleCreateCustomLicense = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!customForm.whatsapp.trim()) {
-      alert('Nomor WhatsApp wajib diisi.');
-      return;
-    }
-    setActionLoading(true);
-    try {
-      const payload = {
-        action: 'create_custom_license',
-        whatsapp: customForm.whatsapp.trim(),
-        paket: customForm.paket || 'ENTERPRISE',
-        namaPaket: customForm.customPaketName,
-        harga: customForm.harga,
-        kuota: customForm.isUnlimitedQuota ? 999999 : customForm.kuota,
-        hari: customForm.isLifetime ? 36500 : customForm.hari,
-        hwid: customForm.hwid.trim() || undefined,
-        features: {
-          can_submit_sales: customForm.canSubmitSales,
-          can_update_customer: customForm.canUpdateCustomer,
-          can_auto_captcha: customForm.canAutoCaptcha,
-          can_multi_batch: customForm.canMultiBatch,
-          max_devices: customForm.maxDevices,
-          unlimited_quota: customForm.isUnlimitedQuota,
-          is_lifetime: customForm.isLifetime
-        }
-      };
-
-      const res = await fetch('/api/admin/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': passcode },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setGeneratedResult({
-          voucherCode: data.voucherCode,
-          licenseKey: data.licenseKey,
-          whatsapp: customForm.whatsapp,
-          paket: customForm.customPaketName,
-        });
-        showToast('✓ Lisensi Enterprise Kustom berhasil dibuat!');
-        checkAuth(passcode);
-      } else {
-        alert(data.error || 'Gagal membuat lisensi custom.');
-      }
-    } catch (err) {
-      alert('Error server.');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // Helper Format Rupiah
+  // Mengubah ke format mata uang Rupiah
   const formatRupiah = (num: number) => {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
@@ -331,149 +123,33 @@ export default function AdminPortal() {
     }).format(num);
   };
 
-  // Helper Format Tanggal
-  const formatDate = (dateStr?: string | null) => {
-    if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleString('id-ID', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  // Export to CSV Function
-  const exportToCSV = (data: Order[], filename = 'laporan-orders-pertamina.csv') => {
-    const headers = ['ID Order', 'Tanggal Dibuat', 'WhatsApp', 'Paket', 'Nominal', 'Status', 'Kode Voucher', 'HWID', 'Kuota Terpakai', 'Waktu Bayar', 'Waktu Redeem'];
-    const rows = data.map(o => [
-      o.id,
-      new Date(o.created_at).toISOString(),
-      o.whatsapp,
-      o.paket,
-      o.amount,
-      o.status,
-      o.voucher_code || '',
-      o.hwid || '',
-      o.kuota_terpakai || 0,
-      o.paid_at || '',
-      o.redeemed_at || ''
-    ]);
-
-    const csvContent = [headers.join(','), ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast('✓ Laporan CSV berhasil diunduh.');
-  };
-
-  // --- Filtering & Metrics Calculation ---
+  // Filter & Search Logic
   const filteredOrders = useMemo(() => {
     return orders.filter(o => {
-      // Search text
       const matchesSearch = 
         o.whatsapp.toLowerCase().includes(searchQuery.toLowerCase()) ||
         o.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (o.voucher_code && o.voucher_code.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (o.hwid && o.hwid.toLowerCase().includes(searchQuery.toLowerCase()));
+        (o.voucher_code && o.voucher_code.toLowerCase().includes(searchQuery.toLowerCase()));
       
-      // Status Filter
-      const matchesStatus = statusFilter === 'ALL' || o.status === statusFilter;
-
-      // Date Filter
-      let matchesDate = true;
-      if (dateFilter !== 'ALL') {
-        const orderDate = new Date(o.created_at);
-        const now = new Date();
-        if (dateFilter === 'TODAY') {
-          matchesDate = orderDate.toDateString() === now.toDateString();
-        } else if (dateFilter === '7DAYS') {
-          const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          matchesDate = orderDate >= sevenDaysAgo;
-        } else if (dateFilter === 'MONTH') {
-          matchesDate = orderDate.getMonth() === now.getMonth() && orderDate.getFullYear() === now.getFullYear();
-        }
-      }
-
-      return matchesSearch && matchesStatus && matchesDate;
+      const matchesFilter = statusFilter === 'ALL' || o.status === statusFilter;
+      return matchesSearch && matchesFilter;
     });
-  }, [orders, searchQuery, statusFilter, dateFilter]);
+  }, [orders, searchQuery, statusFilter]);
 
-  // Filtered Licenses (for License Tab)
-  const licenseOrders = useMemo(() => {
-    return orders.filter(o => {
-      const hasLicenseOrVoucher = Boolean(o.voucher_code || o.license_key || o.status === 'PAID' || o.status === 'REDEEMED' || o.status === 'REVOKED');
-      if (!hasLicenseOrVoucher) return false;
-
-      const matchesSearch = 
-        o.whatsapp.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (o.voucher_code && o.voucher_code.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (o.hwid && o.hwid.toLowerCase().includes(searchQuery.toLowerCase()));
-
-      let matchesLicenseStatus = true;
-      if (licenseFilter === 'REDEEMED') matchesLicenseStatus = o.status === 'REDEEMED' || Boolean(o.hwid);
-      else if (licenseFilter === 'PAID') matchesLicenseStatus = o.status === 'PAID' && !o.hwid;
-      else if (licenseFilter === 'REVOKED') matchesLicenseStatus = o.status === 'REVOKED';
-
-      return matchesSearch && matchesLicenseStatus;
-    });
-  }, [orders, searchQuery, licenseFilter]);
-
-  // Paginated data for Orders Tab
-  const paginatedOrders = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredOrders.slice(start, start + pageSize);
-  }, [filteredOrders, currentPage]);
-
-  const totalPages = Math.ceil(filteredOrders.length / pageSize) || 1;
-
-  // Key Metrics
+  // Hitung metrics
   const metrics = useMemo(() => {
-    const paidOrders = orders.filter(o => o.status === 'PAID' || o.status === 'REDEEMED');
+    const paidOrders = orders.filter(o => o.status === 'PAID');
     const totalRev = paidOrders.reduce((acc, curr) => acc + curr.amount, 0);
-
-    const now = new Date();
-    const todayOrders = paidOrders.filter(o => new Date(o.created_at).toDateString() === now.toDateString());
-    const todayRev = todayOrders.reduce((acc, curr) => acc + curr.amount, 0);
-
-    const activeLicenses = orders.filter(o => o.status === 'REDEEMED' || (o.status === 'PAID' && o.hwid)).length;
-    const unusedVouchers = orders.filter(o => o.status === 'PAID' && !o.hwid).length;
-    const pendingCount = orders.filter(o => o.status === 'PENDING').length;
     const successRate = orders.length > 0 ? Math.round((paidOrders.length / orders.length) * 100) : 0;
     
     return {
       revenue: totalRev,
-      todayRevenue: todayRev,
       totalCount: orders.length,
       paidCount: paidOrders.length,
-      activeLicenses,
-      unusedVouchers,
-      pendingCount,
       successRate
     };
   }, [orders]);
 
-  // Generate Pesan WhatsApp untuk Customer
-  const generateWhatsAppMessage = (voucher: string, key?: string | null, customPaket?: string) => {
-    const text = `*PEMBELIAN LISENSI BOT MAP PERTAMINA BERHASIL* 🎉%0A%0A` +
-      `Halo Bapak/Ibu Pangkalan,%0A` +
-      `Terima kasih telah berlangganan *Bot MAP Pertamina (${customPaket || 'Lisensi'} )*.%0A%0A` +
-      `🔑 *Kode Voucher Anda:* \`${voucher}\`%0A` +
-      (key ? `🔐 *License Key RSA:* \`${key}\`%0A%0A` : `%0A`) +
-      `*Cara Aktivasi:*%0A` +
-      `1. Buka aplikasi Bot MAP Pertamina di PC / Android Anda.%0A` +
-      `2. Masukkan kode voucher di atas pada menu Aktivasi.%0A` +
-      `3. Bot siap digunakan untuk mempercepat input transaksi gas! 🚀%0A%0A` +
-      `Jika butuh bantuan teknis, hubungi Admin via chat ini. Salam sukses!`;
-    return text;
-  };
-
-  // --- LOGIN SCREEN ---
   if (!isAuthorized) {
     return (
       <div style={{
@@ -492,24 +168,20 @@ export default function AdminPortal() {
           border: '1px solid rgba(255, 255, 255, 0.08)'
         }}>
           <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-            <div style={{ fontSize: '2.5rem', marginBottom: '10px' }}>🔐</div>
             <h2 className="gradient-text" style={{ fontSize: '2rem', marginBottom: '8px' }}>Admin Portal</h2>
-            <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.9rem' }}>
-              Masukkan Passcode Kunci Akses Administrator
-            </p>
+            <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.9rem' }}>Masukkan Kode Kunci Keamanan Tasker Anda</p>
           </div>
 
           <form onSubmit={handleLoginSubmit}>
-            <div className="form-group" style={{ marginBottom: '20px' }}>
-              <label className="form-label" style={{ fontSize: '0.75rem', letterSpacing: '0.1em' }}>PASSCODE ADMIN</label>
+            <div className="form-group">
+              <label className="form-label">KUNCI AKSES</label>
               <input
                 type="password"
                 className="form-input"
-                placeholder="Masukkan Passcode..."
+                placeholder="Masukkan Kode Kunci Keamanan..."
                 value={passcode}
                 onChange={(e) => setPasscode(e.target.value)}
-                style={{ textAlign: 'center', letterSpacing: '0.2em', fontSize: '1.1rem', padding: '12px' }}
-                autoFocus
+                style={{ textAlign: 'center', letterSpacing: '0.1em' }}
               />
             </div>
 
@@ -523,8 +195,8 @@ export default function AdminPortal() {
               }}>{error}</p>
             )}
 
-            <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '14px', fontWeight: 700 }} disabled={loading}>
-              {loading ? 'Memvalidasi...' : 'Masuk ke Portal Admin'}
+            <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '14px' }} disabled={loading}>
+              {loading ? 'Memvalidasi...' : 'Masuk Portal'}
             </button>
           </form>
         </div>
@@ -532,1096 +204,236 @@ export default function AdminPortal() {
     );
   }
 
-  // --- MAIN ADMIN DASHBOARD ---
   return (
-    <div style={{ padding: '30px 20px', maxWidth: '1360px', margin: '0 auto' }}>
+    <div style={{ padding: '40px 24px', maxWidth: '1280px', margin: '0 auto' }}>
       
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div style={{
-          position: 'fixed',
-          bottom: '24px',
-          right: '24px',
-          background: '#0f172a',
-          border: '1px solid #38bdf8',
-          color: '#ffffff',
-          padding: '14px 20px',
-          borderRadius: '12px',
-          boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-          zIndex: 9999,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          fontSize: '0.9rem',
-          fontWeight: 600
-        }}>
-          <span>📢</span> {toastMessage}
-        </div>
-      )}
-
-      {/* Top Header */}
+      {/* Header Admin */}
       <div className="animate-fade-in" style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: '28px',
+        marginBottom: '40px',
         flexWrap: 'wrap',
-        gap: '16px',
-        paddingBottom: '20px',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.08)'
+        gap: '20px'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{
-            width: '46px',
-            height: '46px',
-            borderRadius: '12px',
-            background: 'linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '1.4rem'
-          }}>
-            🛡️
-          </div>
-          <div>
-            <h1 className="gradient-text" style={{ fontSize: '1.8rem', fontWeight: 800 }}>Admin Command Center</h1>
-            <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.85rem' }}>
-              Pusat Kontrol Lisensi, Transaksi & Paket Bot MAP Pertamina
-            </p>
+        <div>
+          <h1 className="gradient-text" style={{ fontSize: '2.5rem', marginBottom: '8px' }}>Admin Dashboard</h1>
+          <p style={{ color: 'hsl(var(--text-secondary))' }}>Pantau transaksi, lisensi voucher, dan status bot MAP Pertamina secara riil.</p>
+        </div>
+        <button className="btn btn-secondary" onClick={handleLogout}>
+          Keluar Portal
+        </button>
+      </div>
+
+      {/* Metrics Cards */}
+      <div className="animate-fade-in" style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+        gap: '24px',
+        marginBottom: '40px'
+      }}>
+        <div className="glass-card" style={{ position: 'relative', overflow: 'hidden' }}>
+          <div className="glow-spot" style={{ top: '-50px', left: '-50px' }} />
+          <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Pendapatan</h3>
+          <p style={{ fontSize: '2.2rem', fontWeight: 800, color: 'hsl(var(--success))' }}>{formatRupiah(metrics.revenue)}</p>
+          <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginTop: '8px' }}>
+            Dari {metrics.paidCount} pembayaran sah
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <button 
-            className="btn btn-secondary" 
-            onClick={() => checkAuth(passcode)} 
-            disabled={loading}
-            style={{ padding: '8px 14px', fontSize: '0.85rem' }}
-          >
-            {loading ? '🔄 Menyinkron...' : '🔄 Refresh Data'}
-          </button>
-          <button 
-            className="btn" 
-            onClick={handleLogout}
-            style={{ padding: '8px 14px', fontSize: '0.85rem', background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)' }}
-          >
-            Keluar
-          </button>
+        <div className="glass-card">
+          <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Jumlah Orderan</h3>
+          <p style={{ fontSize: '2.2rem', fontWeight: 800 }}>{metrics.totalCount}</p>
+          <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginTop: '8px' }}>
+            {metrics.totalCount - metrics.paidCount} transaksi tertunda/kedaluwarsa
+          </div>
+        </div>
+
+        <div className="glass-card">
+          <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Rasio Sukses</h3>
+          <p style={{ fontSize: '2.2rem', fontWeight: 800, color: 'hsl(var(--secondary))' }}>{metrics.successRate}%</p>
+          <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginTop: '8px' }}>
+            Efisiensi webhook pembayaran otomatis
+          </div>
         </div>
       </div>
 
-      {/* Navigation Tabs */}
-      <div style={{
+      {/* Filter and Search Controls */}
+      <div className="glass-card animate-fade-in" style={{
         display: 'flex',
-        gap: '8px',
-        marginBottom: '28px',
-        overflowX: 'auto',
-        paddingBottom: '6px'
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '20px 24px',
+        marginBottom: '24px',
+        flexWrap: 'wrap',
+        gap: '20px'
       }}>
-        {[
-          { id: 'OVERVIEW', label: '📊 Ringkasan & Metrik', badge: null },
-          { id: 'ORDERS', label: '💳 Transaksi Pembayaran', badge: metrics.pendingCount > 0 ? `${metrics.pendingCount} Pending` : null, badgeColor: 'hsl(var(--warning))' },
-          { id: 'LICENSES', label: '🔑 Lisensi & HWID Mesin', badge: `${metrics.activeLicenses} Aktif`, badgeColor: 'hsl(var(--success))' },
-          { id: 'PACKAGES', label: '📦 Katalog & Enterprise Kustom', badge: 'VIP' },
-          { id: 'MONITORING', label: '🤖 Pangkalan & Telegram', badge: telegramLinks.length > 0 ? `${telegramLinks.length}` : null },
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => { setActiveTab(tab.id as any); setCurrentPage(1); }}
-            style={{
-              padding: '12px 18px',
-              borderRadius: '12px',
-              fontSize: '0.9rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              transition: 'all 0.2s',
-              border: activeTab === tab.id ? '1px solid rgba(56, 189, 248, 0.5)' : '1px solid rgba(255, 255, 255, 0.05)',
-              background: activeTab === tab.id ? 'linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(56, 189, 248, 0.15) 100%)' : 'rgba(255, 255, 255, 0.02)',
-              color: activeTab === tab.id ? '#ffffff' : 'hsl(var(--text-secondary))',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            <span>{tab.label}</span>
-            {tab.badge && (
-              <span style={{
-                fontSize: '0.75rem',
-                padding: '2px 7px',
-                borderRadius: '10px',
-                background: tab.badgeColor ? `${tab.badgeColor}22` : 'rgba(255, 255, 255, 0.1)',
-                color: tab.badgeColor || 'hsl(var(--text-primary))',
-                border: `1px solid ${tab.badgeColor || 'rgba(255, 255, 255, 0.2)'}`
-              }}>
-                {tab.badge}
-              </span>
-            )}
-          </button>
-        ))}
+        {/* Search */}
+        <div style={{ display: 'flex', flex: 1, minWidth: '280px', maxWidth: '440px' }}>
+          <input
+            type="text"
+            className="form-input"
+            placeholder="Cari nomor WhatsApp, ID order, atau kode voucher..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ fontSize: '0.95rem' }}
+          />
+        </div>
+
+        {/* Status Filters */}
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          {['ALL', 'PENDING', 'PAID', 'REDEEMED', 'EXPIRED', 'REVOKED'].map(f => (
+            <button
+              key={f}
+              className={`btn ${statusFilter === f ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setStatusFilter(f)}
+              style={{ padding: '8px 16px', fontSize: '0.85rem', borderRadius: '8px' }}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* ========================================================================= */}
-      {/* TAB 1: RINGKASAN & METRIK (OVERVIEW) */}
-      {/* ========================================================================= */}
-      {activeTab === 'OVERVIEW' && (
-        <div className="animate-fade-in">
-          {/* KPI Grid */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-            gap: '20px',
-            marginBottom: '28px'
-          }}>
-            <div className="glass-card">
-              <h3 style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', marginBottom: '8px' }}>Total Omset Lunas</h3>
-              <p style={{ fontSize: '2rem', fontWeight: 800, color: 'hsl(var(--success))' }}>{formatRupiah(metrics.revenue)}</p>
-              <p style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginTop: '6px' }}>
-                Hari Ini: <strong style={{ color: '#38bdf8' }}>{formatRupiah(metrics.todayRevenue)}</strong>
-              </p>
-            </div>
-
-            <div className="glass-card">
-              <h3 style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', marginBottom: '8px' }}>Lisensi & Perangkat</h3>
-              <p style={{ fontSize: '2rem', fontWeight: 800, color: 'hsl(var(--secondary))' }}>{metrics.activeLicenses}</p>
-              <p style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginTop: '6px' }}>
-                {metrics.unusedVouchers} voucher siap redeem | {metrics.paidCount} total terbit
-              </p>
-            </div>
-
-            <div className="glass-card">
-              <h3 style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', marginBottom: '8px' }}>Status Orderan</h3>
-              <p style={{ fontSize: '2rem', fontWeight: 800 }}>{metrics.totalCount}</p>
-              <p style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))', marginTop: '6px' }}>
-                <span style={{ color: metrics.pendingCount > 0 ? 'hsl(var(--warning))' : 'inherit' }}>
-                  {metrics.pendingCount} Pending
-                </span> | Rasio Sukses: {metrics.successRate}%
-              </p>
-            </div>
-
-            <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '10px' }}>
-              <h3 style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase' }}>Aksi Cepat Admin</h3>
-              <button 
-                className="btn btn-primary" 
-                onClick={() => { setActiveTab('PACKAGES'); setModalType('CUSTOM_CREATE'); }}
-                style={{ padding: '8px 12px', fontSize: '0.85rem' }}
-              >
-                + Buat Lisensi Enterprise Baru
-              </button>
-              <button 
-                className="btn btn-secondary" 
-                onClick={() => exportToCSV(orders)}
-                style={{ padding: '8px 12px', fontSize: '0.85rem' }}
-              >
-                📥 Export Seluruh Data (.csv)
-              </button>
-            </div>
-          </div>
-
-          {/* Recent Orders Overview */}
-          <div className="glass-card" style={{ padding: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>5 Transaksi Terakhir</h3>
-              <button 
-                onClick={() => setActiveTab('ORDERS')} 
-                style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}
-              >
-                Lihat Semua Transaksi →
-              </button>
-            </div>
-
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', textAlign: 'left', color: 'hsl(var(--text-secondary))' }}>
-                    <th style={{ padding: '10px 12px' }}>Tanggal</th>
-                    <th style={{ padding: '10px 12px' }}>WhatsApp</th>
-                    <th style={{ padding: '10px 12px' }}>Paket</th>
-                    <th style={{ padding: '10px 12px' }}>Nominal</th>
-                    <th style={{ padding: '10px 12px' }}>Status</th>
-                    <th style={{ padding: '10px 12px' }}>Voucher</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {orders.slice(0, 5).map(o => (
-                    <tr key={o.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)' }}>
-                      <td style={{ padding: '12px' }}>{formatDate(o.created_at)}</td>
-                      <td style={{ padding: '12px', fontWeight: 600 }}>{o.whatsapp}</td>
-                      <td style={{ padding: '12px' }}>
-                        <span style={{ padding: '3px 8px', borderRadius: '6px', fontSize: '0.8rem', background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8' }}>
-                          {o.paket}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px', fontWeight: 700 }}>{formatRupiah(o.amount)}</td>
-                      <td style={{ padding: '12px' }}>
-                        <span style={{
-                          padding: '3px 8px',
-                          borderRadius: '12px',
-                          fontSize: '0.75rem',
-                          fontWeight: 700,
-                          background: o.status === 'PAID' || o.status === 'REDEEMED' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
-                          color: o.status === 'PAID' || o.status === 'REDEEMED' ? '#4ade80' : '#facc15'
-                        }}>
-                          {o.status}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px', fontFamily: 'monospace', fontWeight: 700, color: '#38bdf8' }}>
-                        {o.voucher_code || '-'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB 2: MANAJEMEN TRANSAKSI & BILLING (ORDERS) */}
-      {/* ========================================================================= */}
-      {activeTab === 'ORDERS' && (
-        <div className="animate-fade-in">
-          {/* Controls: Search, Filters & Export */}
-          <div className="glass-card" style={{ padding: '18px 20px', marginBottom: '20px' }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', alignItems: 'center', justifyContent: 'space-between' }}>
-              {/* Search Bar */}
-              <div style={{ flex: '1 1 280px', maxWidth: '400px' }}>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="🔍 Cari WhatsApp, ID order, atau voucher..."
-                  value={searchQuery}
-                  onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                  style={{ fontSize: '0.9rem' }}
-                />
-              </div>
-
-              {/* Status Filter */}
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {['ALL', 'PENDING', 'PAID', 'REDEEMED', 'EXPIRED', 'REVOKED'].map(st => (
-                  <button
-                    key={st}
-                    onClick={() => { setStatusFilter(st); setCurrentPage(1); }}
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: '8px',
-                      fontSize: '0.8rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
-                      background: statusFilter === st ? 'hsl(var(--primary))' : 'rgba(255, 255, 255, 0.03)',
-                      color: statusFilter === st ? '#ffffff' : 'hsl(var(--text-secondary))'
-                    }}
-                  >
-                    {st}
-                  </button>
-                ))}
-              </div>
-
-              {/* Date Filter */}
-              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                <select
-                  className="form-input"
-                  value={dateFilter}
-                  onChange={(e) => { setDateFilter(e.target.value); setCurrentPage(1); }}
-                  style={{ padding: '6px 10px', fontSize: '0.85rem', width: 'auto' }}
-                >
-                  <option value="ALL">Semua Waktu</option>
-                  <option value="TODAY">Hari Ini</option>
-                  <option value="7DAYS">7 Hari Terakhir</option>
-                  <option value="MONTH">Bulan Ini</option>
-                </select>
-
-                <button 
-                  className="btn btn-secondary" 
-                  onClick={() => exportToCSV(filteredOrders, 'transaksi-filtered.csv')}
-                  style={{ padding: '6px 12px', fontSize: '0.85rem' }}
-                >
-                  📥 Export CSV
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Orders Table */}
-          <div className="glass-card" style={{ padding: '0', overflowX: 'auto', borderRadius: '16px', marginBottom: '20px' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', background: 'rgba(255, 255, 255, 0.015)' }}>
-                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Waktu</th>
-                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>WhatsApp Pangkalan</th>
-                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Paket</th>
-                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Nominal</th>
-                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Status</th>
-                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Voucher</th>
-                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))', textAlign: 'center' }}>Aksi Admin</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedOrders.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: 'hsl(var(--text-muted))' }}>
-                      Tidak ada data transaksi yang cocok dengan filter.
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedOrders.map(o => (
-                    <tr key={o.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)' }}>
-                      <td style={{ padding: '14px 18px' }}>
-                        <div>{formatDate(o.created_at)}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>ID: {o.id.slice(0, 8)}...</div>
-                      </td>
-                      <td style={{ padding: '14px 18px', fontWeight: 600 }}>
-                        <a 
-                          href={`https://wa.me/${o.whatsapp.replace(/\D/g, '')}`} 
-                          target="_blank" 
-                          rel="noreferrer"
-                          style={{ color: '#38bdf8', textDecoration: 'underline' }}
-                        >
-                          {o.whatsapp}
-                        </a>
-                      </td>
-                      <td style={{ padding: '14px 18px' }}>
-                        <span style={{
-                          padding: '3px 8px',
-                          borderRadius: '6px',
-                          fontSize: '0.75rem',
-                          fontWeight: 700,
-                          background: o.paket === 'PRO' ? 'hsla(var(--accent), 0.15)' : 'hsla(var(--primary), 0.15)',
-                          color: o.paket === 'PRO' ? 'hsl(var(--accent))' : 'hsl(var(--primary))'
-                        }}>
-                          {o.paket}
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px 18px', fontWeight: 700 }}>
-                        {formatRupiah(o.amount)}
-                      </td>
-                      <td style={{ padding: '14px 18px' }}>
-                        <span style={{
-                          padding: '4px 10px',
-                          borderRadius: '20px',
-                          fontSize: '0.75rem',
-                          fontWeight: 700,
-                          background: 
-                            o.status === 'PAID' ? 'hsla(var(--success), 0.15)' :
-                            o.status === 'REDEEMED' ? 'hsla(180, 70%, 50%, 0.15)' :
-                            o.status === 'PENDING' ? 'hsla(var(--warning), 0.15)' :
-                            o.status === 'REVOKED' ? 'hsla(var(--danger), 0.2)' : 'hsla(var(--danger), 0.05)',
-                          color:
-                            o.status === 'PAID' ? 'hsl(var(--success))' :
-                            o.status === 'REDEEMED' ? '#00f2fe' :
-                            o.status === 'PENDING' ? 'hsl(var(--warning))' :
-                            o.status === 'REVOKED' ? 'hsl(var(--danger))' : 'hsl(var(--text-muted))'
-                        }}>
-                          {o.status}
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px 18px', fontFamily: 'monospace', fontWeight: 700, color: '#38bdf8' }}>
-                        {o.voucher_code || '-'}
-                      </td>
-                      <td style={{ padding: '14px 18px', textAlign: 'center' }}>
-                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
-                          {o.status === 'PENDING' || o.status === 'EXPIRED' ? (
-                            <button 
-                              className="btn btn-success"
-                              onClick={() => handleMarkAsPaid(o.id)}
-                              disabled={actionLoading}
-                              style={{ padding: '5px 10px', fontSize: '0.75rem' }}
-                              title="Konfirmasi Pembayaran Manual"
-                            >
-                              ✓ Lunas
-                            </button>
-                          ) : null}
-
-                          {o.voucher_code && (
-                            <button 
-                              className="btn btn-secondary"
-                              onClick={() => {
-                                const msg = generateWhatsAppMessage(o.voucher_code || '', o.license_key, o.paket);
-                                window.open(`https://wa.me/${o.whatsapp.replace(/\D/g, '')}?text=${msg}`, '_blank');
-                              }}
-                              style={{ padding: '5px 10px', fontSize: '0.75rem', background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.3)' }}
-                              title="Kirim Pesan WhatsApp ke Pelanggan"
-                            >
-                              💬 Kirim WA
-                            </button>
-                          )}
-
-                          {o.status === 'PAID' || o.status === 'REDEEMED' ? (
-                            <button 
-                              className="btn"
-                              onClick={() => handleRevoke(o.id)}
-                              disabled={actionLoading}
-                              style={{ padding: '5px 10px', fontSize: '0.75rem', background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)' }}
-                              title="Cabut Lisensi"
-                            >
-                              Cabut
-                            </button>
-                          ) : null}
-
-                          <button 
-                            className="btn btn-secondary"
-                            onClick={() => { setSelectedOrder(o); setModalType('DELETE'); }}
-                            style={{ padding: '5px 8px', fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}
-                            title="Hapus Order"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination Controls */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-            <p style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>
-              Menampilkan {paginatedOrders.length} dari total {filteredOrders.length} transaksi
-            </p>
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-              <button 
-                className="btn btn-secondary" 
-                disabled={currentPage <= 1}
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                style={{ padding: '6px 12px', fontSize: '0.8rem' }}
-              >
-                ← Sebelumnya
-              </button>
-              <span style={{ fontSize: '0.85rem', fontWeight: 600, padding: '0 8px' }}>
-                Halaman {currentPage} dari {totalPages}
-              </span>
-              <button 
-                className="btn btn-secondary" 
-                disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                style={{ padding: '6px 12px', fontSize: '0.8rem' }}
-              >
-                Berikutnya →
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB 3: MANAJEMEN LISENSI & PERANGKAT (LICENSES & HWID) */}
-      {/* ========================================================================= */}
-      {activeTab === 'LICENSES' && (
-        <div className="animate-fade-in">
-          {/* Controls */}
-          <div className="glass-card" style={{ padding: '18px 20px', marginBottom: '20px' }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ flex: '1 1 280px', maxWidth: '400px' }}>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="🔍 Cari WhatsApp, HWID, atau Kode Voucher..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{ fontSize: '0.9rem' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {[
-                  { id: 'ALL', label: 'Semua Lisensi' },
-                  { id: 'REDEEMED', label: 'Terikat Mesin (Aktif)' },
-                  { id: 'PAID', label: 'Belum Terikat HWID' },
-                  { id: 'REVOKED', label: 'Dicabut' },
-                ].map(f => (
-                  <button
-                    key={f.id}
-                    onClick={() => setLicenseFilter(f.id)}
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: '8px',
-                      fontSize: '0.8rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
-                      background: licenseFilter === f.id ? 'hsl(var(--primary))' : 'rgba(255, 255, 255, 0.03)',
-                      color: licenseFilter === f.id ? '#ffffff' : 'hsl(var(--text-secondary))'
-                    }}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* License Table */}
-          <div className="glass-card" style={{ padding: '0', overflowX: 'auto', borderRadius: '16px' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', background: 'rgba(255, 255, 255, 0.015)' }}>
-                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>WhatsApp / Pemilik</th>
-                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Kode Voucher & Lisensi</th>
-                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Hardware ID (HWID)</th>
-                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Kuota Terpakai</th>
-                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Status</th>
-                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))', textAlign: 'center' }}>Operasional HWID</th>
-                </tr>
-              </thead>
-              <tbody>
-                {licenseOrders.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} style={{ padding: '40px', textAlign: 'center', color: 'hsl(var(--text-muted))' }}>
-                      Tidak ada lisensi ditemukan.
-                    </td>
-                  </tr>
-                ) : (
-                  licenseOrders.map(o => (
-                    <tr key={o.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)' }}>
-                      <td style={{ padding: '14px 18px' }}>
-                        <div style={{ fontWeight: 600 }}>{o.whatsapp}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#38bdf8' }}>Paket: {o.paket}</div>
-                      </td>
-                      <td style={{ padding: '14px 18px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#38bdf8', fontSize: '1rem' }}>
-                            {o.voucher_code || '-'}
-                          </span>
-                          {o.voucher_code && (
-                            <button 
-                              onClick={() => { navigator.clipboard.writeText(o.voucher_code || ''); showToast('Voucher disalin!'); }}
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', color: 'hsl(var(--text-muted))' }}
-                              title="Salin Voucher"
-                            >
-                              📋
-                            </button>
-                          )}
-                        </div>
-                        {o.license_key && (
-                          <div style={{ fontSize: '0.7rem', color: 'hsl(var(--text-muted))', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            Key: {o.license_key.slice(0, 20)}...
-                          </div>
-                        )}
-                      </td>
-                      <td style={{ padding: '14px 18px' }}>
-                        {o.hwid ? (
-                          <span style={{ fontFamily: 'monospace', fontSize: '0.8rem', background: 'rgba(255, 255, 255, 0.05)', padding: '4px 8px', borderRadius: '6px', color: '#e2e8f0' }}>
-                            {o.hwid}
-                          </span>
-                        ) : (
-                          <span style={{ fontSize: '0.8rem', color: 'hsl(var(--warning))', fontStyle: 'italic' }}>
-                            Belum terikat perangkat
-                          </span>
-                        )}
-                      </td>
-                      <td style={{ padding: '14px 18px' }}>
-                        <div style={{ fontWeight: 600 }}>
-                          {o.kuota_terpakai || 0} Tabung NIK
-                        </div>
-                        <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>
-                          Kadaluarsa: {formatDate(o.expires_at)}
-                        </div>
-                      </td>
-                      <td style={{ padding: '14px 18px' }}>
-                        <span style={{
-                          padding: '3px 8px',
-                          borderRadius: '12px',
-                          fontSize: '0.75rem',
-                          fontWeight: 700,
-                          background: o.hwid ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
-                          color: o.hwid ? '#4ade80' : '#facc15'
-                        }}>
-                          {o.hwid ? 'Terikat PC/HP' : 'Ready to Bind'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px 18px', textAlign: 'center' }}>
-                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
-                          {/* Tombol Reset HWID */}
-                          <button 
-                            className="btn btn-secondary"
-                            onClick={() => { setSelectedOrder(o); setModalType('RESET_HWID'); }}
-                            style={{ padding: '5px 10px', fontSize: '0.75rem', color: '#38bdf8' }}
-                            title="Reset HWID agar pelanggan bisa ganti PC/HP"
-                          >
-                            🔄 Reset HWID
-                          </button>
-
-                          {/* Tombol Topup Kuota */}
-                          <button 
-                            className="btn btn-secondary"
-                            onClick={() => { setSelectedOrder(o); setModalType('TOPUP_KUOTA'); }}
-                            style={{ padding: '5px 10px', fontSize: '0.75rem', color: '#4ade80' }}
-                            title="Reset kuota terpakai atau tambah masa aktif"
-                          >
-                            ➕ Top-up
-                          </button>
-
-                          {/* Tombol Cabut */}
-                          {o.status !== 'REVOKED' && (
-                            <button 
-                              className="btn"
-                              onClick={() => handleRevoke(o.id)}
-                              style={{ padding: '5px 8px', fontSize: '0.75rem', background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)' }}
-                              title="Cabut Lisensi"
-                            >
-                              Cabut
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB 4: KATALOG PAKET & GENERATOR ENTERPRISE KUSTOM */}
-      {/* ========================================================================= */}
-      {activeTab === 'PACKAGES' && (
-        <div className="animate-fade-in">
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
-            gap: '24px',
-            alignItems: 'start'
-          }}>
-            {/* Form Generator Lisensi Enterprise Kustom */}
-            <div className="glass-card" style={{ padding: '28px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '18px' }}>
-                <span style={{ fontSize: '1.8rem' }}>👑</span>
-                <div>
-                  <h3 className="gradient-text" style={{ fontSize: '1.3rem' }}>Generator Lisensi Enterprise</h3>
-                  <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.85rem' }}>
-                    Buat lisensi kustom untuk agen/pangkalan dengan kuota & fitur khusus
-                  </p>
-                </div>
-              </div>
-
-              <form onSubmit={handleCreateCustomLicense}>
-                <div className="form-group" style={{ marginBottom: '14px' }}>
-                  <label className="form-label">NO. WHATSAPP KLIEN / AGEN</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Contoh: 081234567890"
-                    value={customForm.whatsapp}
-                    onChange={(e) => setCustomForm({ ...customForm, whatsapp: e.target.value })}
-                    required
-                  />
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
-                  <div className="form-group">
-                    <label className="form-label">NAMA PAKET / KODE</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="ENTERPRISE_VIP"
-                      value={customForm.customPaketName}
-                      onChange={(e) => setCustomForm({ ...customForm, customPaketName: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">HARGA KESEPAKATAN (RP)</label>
-                    <input
-                      type="number"
-                      className="form-input"
-                      value={customForm.harga}
-                      onChange={(e) => setCustomForm({ ...customForm, harga: Number(e.target.value) })}
-                    />
-                  </div>
-                </div>
-
-                {/* Kuota & Durasi */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
-                  <div className="form-group">
-                    <label className="form-label">KUOTA (TABUNG NIK)</label>
-                    <input
-                      type="number"
-                      className="form-input"
-                      disabled={customForm.isUnlimitedQuota}
-                      value={customForm.kuota}
-                      onChange={(e) => setCustomForm({ ...customForm, kuota: Number(e.target.value) })}
-                    />
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: '#38bdf8', marginTop: '6px', cursor: 'pointer' }}>
-                      <input 
-                        type="checkbox" 
-                        checked={customForm.isUnlimitedQuota} 
-                        onChange={(e) => setCustomForm({ ...customForm, isUnlimitedQuota: e.target.checked })}
-                      />
-                      Kuota Unlimited
-                    </label>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">MASA AKTIF (HARI)</label>
-                    <input
-                      type="number"
-                      className="form-input"
-                      disabled={customForm.isLifetime}
-                      value={customForm.hari}
-                      onChange={(e) => setCustomForm({ ...customForm, hari: Number(e.target.value) })}
-                    />
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: '#38bdf8', marginTop: '6px', cursor: 'pointer' }}>
-                      <input 
-                        type="checkbox" 
-                        checked={customForm.isLifetime} 
-                        onChange={(e) => setCustomForm({ ...customForm, isLifetime: e.target.checked })}
-                      />
-                      Permanen / Lifetime (100 Thn)
-                    </label>
-                  </div>
-                </div>
-
-                {/* Target HWID (Opsional) */}
-                <div className="form-group" style={{ marginBottom: '16px' }}>
-                  <label className="form-label">TARGET HARDWARE ID / HWID (OPSIONAL)</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Kosongkan jika ingin customer redeem sendiri via voucher"
-                    value={customForm.hwid}
-                    onChange={(e) => setCustomForm({ ...customForm, hwid: e.target.value })}
-                  />
-                </div>
-
-                {/* Feature Toggles */}
-                <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.06)', marginBottom: '20px' }}>
-                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'hsl(var(--text-secondary))', marginBottom: '10px', textTransform: 'uppercase' }}>
-                    ⚙️ Penyesuaian Fitur Enterprise:
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.85rem' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                      <input 
-                        type="checkbox" 
-                        checked={customForm.canSubmitSales} 
-                        onChange={(e) => setCustomForm({ ...customForm, canSubmitSales: e.target.checked })}
-                      />
-                      Catat Penjualan
-                    </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                      <input 
-                        type="checkbox" 
-                        checked={customForm.canUpdateCustomer} 
-                        onChange={(e) => setCustomForm({ ...customForm, canUpdateCustomer: e.target.checked })}
-                      />
-                      Update Pelanggan Saja
-                    </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                      <input 
-                        type="checkbox" 
-                        checked={customForm.canAutoCaptcha} 
-                        onChange={(e) => setCustomForm({ ...customForm, canAutoCaptcha: e.target.checked })}
-                      />
-                      Bypass AI Captcha
-                    </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                      <input 
-                        type="checkbox" 
-                        checked={customForm.canMultiBatch} 
-                        onChange={(e) => setCustomForm({ ...customForm, canMultiBatch: e.target.checked })}
-                      />
-                      Multi-Batch Excel
-                    </label>
-                  </div>
-                </div>
-
-                <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '12px', fontWeight: 700 }} disabled={actionLoading}>
-                  {actionLoading ? 'Membuat Lisensi...' : '⚡ Generate Lisensi Enterprise'}
-                </button>
-              </form>
-            </div>
-
-            {/* Katalog Paket Standar Publik */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div className="glass-card" style={{ padding: '20px' }}>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '6px' }}>Katalog Paket Publik Website</h3>
-                <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.85rem', marginBottom: '16px' }}>
-                  Paket-paket berikut aktif ditampilkan di halaman landing page & checkout:
-                </p>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {Object.values(paketsConfig).map((pkg) => (
-                    <div key={pkg.id} style={{
-                      padding: '16px',
-                      borderRadius: '12px',
-                      background: 'rgba(255, 255, 255, 0.02)',
-                      border: '1px solid rgba(255, 255, 255, 0.05)',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center'
-                    }}>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontSize: '1.2rem' }}>{pkg.icon}</span>
-                          <strong style={{ fontSize: '1rem' }}>Paket {pkg.nama}</strong>
-                        </div>
-                        <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', marginTop: '4px' }}>
-                          Kuota: {pkg.kuota.toLocaleString()} Tabung | Durasi: {pkg.hari >= 36500 ? 'Lifetime' : `${pkg.hari} Hari`}
-                        </div>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#4ade80' }}>
-                          {formatRupiah(pkg.harga)}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB 5: PANGKALAN & MONITORING TELEGRAM */}
-      {/* ========================================================================= */}
-      {activeTab === 'MONITORING' && (
-        <div className="animate-fade-in">
-          <div className="glass-card" style={{ padding: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-              <div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>Integrasi WhatsApp & Telegram Pangkalan</h3>
-                <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.85rem' }}>
-                  Daftar pangkalan yang terhubung dengan bot keygen & command center Telegram
-                </p>
-              </div>
-            </div>
-
-            {telegramLinks.length === 0 ? (
-              <div style={{ padding: '40px', textAlign: 'center', color: 'hsl(var(--text-muted))' }}>
-                Belum ada pangkalan yang melakukan pairing ke bot Telegram.
-              </div>
+      {/* Orders Table/List */}
+      <div className="glass-card animate-fade-in" style={{ padding: '0', overflowX: 'auto', borderRadius: '16px' }}>
+        <table style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          textAlign: 'left',
+          fontSize: '0.95rem'
+        }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', background: 'rgba(255, 255, 255, 0.01)' }}>
+              <th style={{ padding: '16px 24px', color: 'hsl(var(--text-secondary))', fontWeight: 600 }}>Tanggal</th>
+              <th style={{ padding: '16px 24px', color: 'hsl(var(--text-secondary))', fontWeight: 600 }}>WhatsApp</th>
+              <th style={{ padding: '16px 24px', color: 'hsl(var(--text-secondary))', fontWeight: 600 }}>Paket</th>
+              <th style={{ padding: '16px 24px', color: 'hsl(var(--text-secondary))', fontWeight: 600 }}>Nominal</th>
+              <th style={{ padding: '16px 24px', color: 'hsl(var(--text-secondary))', fontWeight: 600 }}>Status</th>
+              <th style={{ padding: '16px 24px', color: 'hsl(var(--text-secondary))', fontWeight: 600 }}>Voucher Code</th>
+              <th style={{ padding: '16px 24px', color: 'hsl(var(--text-secondary))', fontWeight: 600, textAlign: 'center' }}>Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredOrders.length === 0 ? (
+              <tr>
+                <td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: 'hsl(var(--text-muted))' }}>
+                  Tidak ada data order ditemukan.
+                </td>
+              </tr>
             ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', textAlign: 'left', color: 'hsl(var(--text-secondary))' }}>
-                    <th style={{ padding: '12px' }}>Telegram Chat ID</th>
-                    <th style={{ padding: '12px' }}>WhatsApp Terhubung</th>
-                    <th style={{ padding: '12px' }}>Waktu Pairing</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {telegramLinks.map((link, i) => (
-                    <tr key={i} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)' }}>
-                      <td style={{ padding: '12px', fontFamily: 'monospace', color: '#38bdf8' }}>{link.chat_id}</td>
-                      <td style={{ padding: '12px', fontWeight: 600 }}>{link.whatsapp}</td>
-                      <td style={{ padding: '12px', color: 'hsl(var(--text-muted))' }}>{formatDate(link.created_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              filteredOrders.map(o => (
+                <tr key={o.id} style={{ 
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+                  transition: 'background 0.2s',
+                  cursor: 'default'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.015)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                >
+                  <td style={{ padding: '18px 24px' }}>
+                    {new Date(o.created_at).toLocaleString('id-ID', {
+                      day: '2-digit',
+                      month: 'short',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </td>
+                  <td style={{ padding: '18px 24px', fontWeight: 600 }}>
+                    <a 
+                      href={`https://wa.me/${o.whatsapp.replace(/\D/g, '')}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      style={{ color: 'hsl(var(--secondary))', textDecoration: 'underline' }}
+                    >
+                      {o.whatsapp}
+                    </a>
+                  </td>
+                  <td style={{ padding: '18px 24px' }}>
+                    <span style={{
+                      padding: '4px 8px',
+                      borderRadius: '6px',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      background: o.paket === 'PRO' ? 'hsla(var(--accent), 0.15)' : 'hsla(var(--primary), 0.15)',
+                      color: o.paket === 'PRO' ? 'hsl(var(--accent))' : 'hsl(var(--primary))'
+                    }}>
+                      {o.paket}
+                    </span>
+                  </td>
+                  <td style={{ padding: '18px 24px', fontWeight: 700 }}>
+                    {formatRupiah(o.amount)}
+                  </td>
+                  <td style={{ padding: '18px 24px' }}>
+                    <span style={{
+                      padding: '4px 10px',
+                      borderRadius: '20px',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      background: 
+                        o.status === 'PAID' ? 'hsla(var(--success), 0.15)' :
+                        o.status === 'REDEEMED' ? 'hsla(180, 70%, 50%, 0.15)' :
+                        o.status === 'PENDING' ? 'hsla(var(--warning), 0.15)' :
+                        o.status === 'REVOKED' ? 'hsla(var(--danger), 0.2)' : 'hsla(var(--danger), 0.05)',
+                      color:
+                        o.status === 'PAID' ? 'hsl(var(--success))' :
+                        o.status === 'REDEEMED' ? '#00f2fe' :
+                        o.status === 'PENDING' ? 'hsl(var(--warning))' :
+                        o.status === 'REVOKED' ? 'hsl(var(--danger))' : 'hsl(var(--text-muted))'
+                    }}>
+                      {o.status}
+                    </span>
+                  </td>
+                  <td style={{ padding: '18px 24px', fontFamily: 'monospace', fontWeight: 700, color: 'hsl(var(--secondary))' }}>
+                    {o.voucher_code || '-'}
+                  </td>
+                  <td style={{ padding: '18px 24px', textAlign: 'center' }}>
+                    {o.status === 'PENDING' || o.status === 'EXPIRED' ? (
+                      <button 
+                        className="btn btn-success" 
+                        onClick={() => handleMarkAsPaid(o.id)}
+                        style={{ padding: '6px 14px', fontSize: '0.8rem', borderRadius: '6px', cursor: 'pointer' }}
+                        title="Approve transaksi & generate voucher lisensi"
+                      >
+                        ✓ Tandai Lunas
+                      </button>
+                    ) : o.status === 'PAID' || o.status === 'REDEEMED' ? (
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                        <button 
+                          className="btn btn-secondary" 
+                          onClick={() => {
+                            navigator.clipboard.writeText(o.voucher_code || '');
+                            alert('Kode voucher disalin!');
+                          }}
+                          style={{ padding: '6px 12px', fontSize: '0.8rem', borderRadius: '6px', cursor: 'pointer' }}
+                        >
+                          Salin
+                        </button>
+                        <button 
+                          className="btn btn-danger" 
+                          onClick={() => handleRevoke(o.id)}
+                          style={{ padding: '6px 12px', fontSize: '0.8rem', borderRadius: '6px', background: 'hsl(var(--danger))', color: 'white', cursor: 'pointer' }}
+                        >
+                          Cabut
+                        </button>
+                      </div>
+                    ) : o.status === 'REVOKED' ? (
+                      <button 
+                        className="btn btn-primary" 
+                        onClick={() => handleMarkAsPaid(o.id)}
+                        style={{ padding: '6px 12px', fontSize: '0.8rem', borderRadius: '6px', cursor: 'pointer' }}
+                      >
+                        Aktifkan Ulang
+                      </button>
+                    ) : null}
+                  </td>
+                </tr>
+              ))
             )}
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* MODAL: RESET HWID */}
-      {/* ========================================================================= */}
-      {modalType === 'RESET_HWID' && selectedOrder && (
-        <div style={{
-          position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
-          backdropFilter: 'blur(8px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '20px',
-          zIndex: 10000
-        }}>
-          <div className="glass-card animate-fade-in" style={{ maxWidth: '480px', width: '100%', padding: '30px' }}>
-            <h3 style={{ fontSize: '1.3rem', fontWeight: 800, marginBottom: '10px' }}>🔄 Konfirmasi Reset HWID</h3>
-            <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.9rem', lineHeight: '1.5', marginBottom: '20px' }}>
-              Tindakan ini akan <strong>melepaskan kaitan Hardware ID</strong> dari lisensi pangkalan (<strong>{selectedOrder.whatsapp}</strong>).
-              Setelah di-reset, pangkalan dapat mengaktifkan kembali voucher di PC atau HP Android yang baru.
-            </p>
-
-            <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px', borderRadius: '8px', marginBottom: '20px', fontSize: '0.85rem' }}>
-              <div><strong>Voucher:</strong> <span style={{ color: '#38bdf8', fontFamily: 'monospace' }}>{selectedOrder.voucher_code}</span></div>
-              <div><strong>HWID Sebelumnya:</strong> <span style={{ fontFamily: 'monospace' }}>{selectedOrder.hwid || '-'}</span></div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary" onClick={() => setModalType(null)} disabled={actionLoading}>
-                Batal
-              </button>
-              <button className="btn btn-primary" onClick={handleResetHwid} disabled={actionLoading}>
-                {actionLoading ? 'Memproses...' : 'Ya, Reset HWID'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* MODAL: TOP UP KUOTA */}
-      {/* ========================================================================= */}
-      {modalType === 'TOPUP_KUOTA' && selectedOrder && (
-        <div style={{
-          position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
-          backdropFilter: 'blur(8px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '20px',
-          zIndex: 10000
-        }}>
-          <div className="glass-card animate-fade-in" style={{ maxWidth: '480px', width: '100%', padding: '30px' }}>
-            <h3 style={{ fontSize: '1.3rem', fontWeight: 800, marginBottom: '10px' }}>➕ Top-up Kuota & Masa Aktif</h3>
-            <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.9rem', marginBottom: '16px' }}>
-              Pelanggan: <strong>{selectedOrder.whatsapp}</strong> ({selectedOrder.paket})
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', cursor: 'pointer' }}>
-                <input 
-                  type="checkbox" 
-                  checked={resetUsage} 
-                  onChange={(e) => setResetUsage(e.target.checked)} 
-                />
-                <strong>Reset Pemakaian Kuota</strong> (Jadikan 0 tabung terpakai kembali)
-              </label>
-
-              <div className="form-group">
-                <label className="form-label">TAMBAH MASA AKTIF (HARI)</label>
-                <input
-                  type="number"
-                  className="form-input"
-                  value={topupDays}
-                  onChange={(e) => setTopupDays(Number(e.target.value))}
-                />
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary" onClick={() => setModalType(null)} disabled={actionLoading}>
-                Batal
-              </button>
-              <button className="btn btn-success" onClick={handleTopupQuota} disabled={actionLoading}>
-                {actionLoading ? 'Menyimpan...' : 'Simpan Perubahan'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* MODAL: HASIL GENERATE LISENSI ENTERPRISE */}
-      {/* ========================================================================= */}
-      {generatedResult && (
-        <div style={{
-          position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
-          backdropFilter: 'blur(8px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '20px',
-          zIndex: 10000
-        }}>
-          <div className="glass-card animate-fade-in" style={{ maxWidth: '520px', width: '100%', padding: '30px' }}>
-            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-              <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>🎉</div>
-              <h3 className="gradient-text" style={{ fontSize: '1.4rem' }}>Lisensi Berhasil Dibuat!</h3>
-              <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.85rem' }}>
-                Kirimkan kode voucher atau pesan WhatsApp di bawah ke pelanggan:
-              </p>
-            </div>
-
-            <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '16px', borderRadius: '12px', marginBottom: '20px' }}>
-              <div style={{ marginBottom: '10px' }}>
-                <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-secondary))' }}>KODE VOUCHER:</span>
-                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#38bdf8', fontFamily: 'monospace' }}>
-                  {generatedResult.voucherCode}
-                </div>
-              </div>
-
-              {generatedResult.licenseKey && (
-                <div>
-                  <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-secondary))' }}>LICENSE KEY RSA (INSTAN):</span>
-                  <div style={{ fontSize: '0.75rem', wordBreak: 'break-all', fontFamily: 'monospace', color: 'hsl(var(--text-muted))', maxHeight: '70px', overflowY: 'auto' }}>
-                    {generatedResult.licenseKey}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button 
-                className="btn btn-secondary" 
-                onClick={() => {
-                  navigator.clipboard.writeText(generatedResult.voucherCode || '');
-                  showToast('Voucher disalin!');
-                }}
-                style={{ flex: 1 }}
-              >
-                📋 Salin Voucher
-              </button>
-              <button 
-                className="btn btn-success" 
-                onClick={() => {
-                  const msg = generateWhatsAppMessage(generatedResult.voucherCode || '', generatedResult.licenseKey, generatedResult.paket);
-                  window.open(`https://wa.me/${(generatedResult.whatsapp || '').replace(/\D/g, '')}?text=${msg}`, '_blank');
-                }}
-                style={{ flex: 1.5 }}
-              >
-                💬 Kirim via WhatsApp
-              </button>
-              <button 
-                className="btn" 
-                onClick={() => setGeneratedResult(null)}
-                style={{ background: 'rgba(255, 255, 255, 0.1)' }}
-              >
-                Tutup
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* MODAL: KONFIRMASI DELETE */}
-      {/* ========================================================================= */}
-      {modalType === 'DELETE' && selectedOrder && (
-        <div style={{
-          position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
-          backdropFilter: 'blur(8px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '20px',
-          zIndex: 10000
-        }}>
-          <div className="glass-card animate-fade-in" style={{ maxWidth: '440px', width: '100%', padding: '30px' }}>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#f87171', marginBottom: '10px' }}>🗑️ Hapus Order?</h3>
-            <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.85rem', lineHeight: '1.5', marginBottom: '20px' }}>
-              Apakah Anda yakin ingin menghapus order <strong>{selectedOrder.whatsapp}</strong> ({selectedOrder.paket})? Tindakan ini permanen.
-            </p>
-
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary" onClick={() => setModalType(null)} disabled={actionLoading}>
-                Batal
-              </button>
-              <button className="btn btn-danger" onClick={handleDeleteOrder} disabled={actionLoading} style={{ background: '#ef4444' }}>
-                {actionLoading ? 'Menghapus...' : 'Ya, Hapus'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
-
