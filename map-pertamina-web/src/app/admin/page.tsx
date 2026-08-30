@@ -81,6 +81,54 @@ interface PaketDetail {
   fitur: string[];
 }
 
+interface PangkalanTelemetry {
+  id: string;
+  hwid: string;
+  license_key: string | null;
+  merchant_id: string | null;
+  merchant_name: string | null;
+  owner_name: string | null;
+  agent_id: string | null;
+  agent_name: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  kelurahan: string | null;
+  kecamatan: string | null;
+  kota_kabupaten: string | null;
+  provinsi: string | null;
+  kodepos: string | null;
+  kuota_pertamina_bulanan: number;
+  sisa_kuota_pertamina: number;
+  total_penjualan_pertamina: number;
+  het_daerah: number;
+  estimasi_omset_bulanan: number;
+  estimasi_laba_bulanan: number;
+  modal_tebus_per_do: number;
+  jadwal_pasokan: string | null;
+  total_konsumen_unik: number;
+  persen_dtks: number;
+  skor_kepatuhan: number;
+  anomali_overlimit_count: number;
+  metode_bayar_tunai_persen: number;
+  metode_bayar_qris_persen: number;
+  avg_speed_seconds: number;
+  peak_hours: string | null;
+  device_model: string | null;
+  device_os: string | null;
+  platform: string | null;
+  app_version: string | null;
+  ip_address: string | null;
+  isp: string | null;
+  total_nik_processed: number;
+  success_count: number;
+  invalid_count: number;
+  persen_rumah_tangga: number;
+  persen_usaha_mikro: number;
+  last_sync_at: string;
+  created_at: string;
+}
+
 export default function AdminPortal() {
   const [passcode, setPasscode] = useState('');
   const [isAuthorized, setIsAuthorized] = useState(false);
@@ -94,6 +142,7 @@ export default function AdminPortal() {
 
   // New States
   const [pangkalanProfiles, setPangkalanProfiles] = useState<PangkalanProfile[]>([]);
+  const [pangkalanTelemetry, setPangkalanTelemetry] = useState<PangkalanTelemetry[]>([]);
   const [botSessions, setBotSessions] = useState<BotSession[]>([]);
   const [selectedPangkalan, setSelectedPangkalan] = useState<PangkalanProfile | null>(null);
 
@@ -170,6 +219,7 @@ export default function AdminPortal() {
         setOrders(data.orders || []);
         setTelegramLinks(data.telegramLinks || []);
         setPangkalanProfiles(data.pangkalanProfiles || []);
+        setPangkalanTelemetry(data.pangkalanTelemetry || []);
         setBotSessions(data.botSessions || []);
         if (data.paketsConfig) setPaketsConfig(data.paketsConfig);
         setIsAuthorized(true);
@@ -510,6 +560,62 @@ export default function AdminPortal() {
     };
   }, [orders]);
 
+  // Agregat Data Telemetry Scrape MyPertamina
+  const telemetrySummary = useMemo(() => {
+    const totalPangkalan = pangkalanTelemetry.length;
+    const totalTabung = pangkalanTelemetry.reduce((acc, cur) => acc + (Number(cur.kuota_pertamina_bulanan) || 0), 0);
+    const totalOmset = pangkalanTelemetry.reduce((acc, cur) => acc + (Number(cur.estimasi_omset_bulanan) || 0), 0);
+    const totalLaba = pangkalanTelemetry.reduce((acc, cur) => acc + (Number(cur.estimasi_laba_bulanan) || 0), 0);
+    const totalModalDo = pangkalanTelemetry.reduce((acc, cur) => acc + (Number(cur.modal_tebus_per_do) || 0), 0);
+    const totalNik = pangkalanTelemetry.reduce((acc, cur) => acc + (Number(cur.total_nik_processed) || 0), 0);
+    const totalSukses = pangkalanTelemetry.reduce((acc, cur) => acc + (Number(cur.success_count) || 0), 0);
+    
+    // Group by Agent
+    const agentMap: Record<string, { count: number; tabung: number; omset: number }> = {};
+    pangkalanTelemetry.forEach(p => {
+      const ag = p.agent_name || 'PT. Agen Penyalur LPG';
+      if (!agentMap[ag]) agentMap[ag] = { count: 0, tabung: 0, omset: 0 };
+      agentMap[ag].count += 1;
+      agentMap[ag].tabung += Number(p.kuota_pertamina_bulanan) || 0;
+      agentMap[ag].omset += Number(p.estimasi_omset_bulanan) || 0;
+    });
+    const agentList = Object.entries(agentMap).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.count - a.count);
+
+    // Group by HWID (Joki / Multi-Pangkalan)
+    const hwidMap: Record<string, PangkalanTelemetry[]> = {};
+    pangkalanTelemetry.forEach(p => {
+      const h = p.hwid || 'UNKNOWN';
+      if (!hwidMap[h]) hwidMap[h] = [];
+      hwidMap[h].push(p);
+    });
+    const multiPangkalanOperators = Object.entries(hwidMap).filter(([_, list]) => list.length > 1).map(([hwid, list]) => ({
+      hwid,
+      count: list.length,
+      pangkalans: list,
+      totalTabung: list.reduce((acc, c) => acc + (Number(c.kuota_pertamina_bulanan) || 0), 0),
+      totalOmset: list.reduce((acc, c) => acc + (Number(c.estimasi_omset_bulanan) || 0), 0),
+      owner: list[0]?.owner_name || list[0]?.merchant_name || 'Operator',
+      phone: list[0]?.phone || ''
+    })).sort((a, b) => b.count - a.count);
+
+    // Low Quota (< 150 tabung sisa)
+    const lowQuotaList = pangkalanTelemetry.filter(p => Number(p.sisa_kuota_pertamina) > 0 && Number(p.sisa_kuota_pertamina) <= 150);
+
+    return {
+      totalPangkalan,
+      totalTabung,
+      totalOmset,
+      totalLaba,
+      totalModalDo,
+      totalNik,
+      totalSukses,
+      agentList,
+      totalAgents: agentList.length,
+      multiPangkalanOperators,
+      lowQuotaList
+    };
+  }, [pangkalanTelemetry]);
+
   // Generate Pesan WhatsApp untuk Customer
   const generateWhatsAppMessage = (voucher: string, key?: string | null, customPaket?: string) => {
     const text = `*PEMBELIAN LISENSI BOT MAP PERTAMINA BERHASIL* 🎉%0A%0A` +
@@ -721,37 +827,37 @@ export default function AdminPortal() {
       {/* ========================================================================= */}
       {activeTab === 'COMMAND' && (
         <div className="animate-fade-in">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '28px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
             <div className="glass-card">
-              <h3 style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', marginBottom: '8px' }}>Total Omset Lunas</h3>
-              <p style={{ fontSize: '2rem', fontWeight: 800, color: 'hsl(var(--success))' }}>{formatRupiah(orders.filter(o => o.status === 'PAID' || o.status === 'REDEEMED').reduce((a, b) => a + b.amount, 0))}</p>
+              <h3 style={{ fontSize: '0.75rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', marginBottom: '6px' }}>💰 Total Omset Bot Lunas</h3>
+              <p style={{ fontSize: '1.8rem', fontWeight: 800, color: 'hsl(var(--success))' }}>{formatRupiah(metrics.revenue)}</p>
             </div>
             <div className="glass-card">
-              <h3 style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', marginBottom: '8px' }}>Omset Bulan Ini</h3>
-              <p style={{ fontSize: '2rem', fontWeight: 800, color: '#38bdf8' }}>{formatRupiah(orders.filter(o => (o.status === 'PAID' || o.status === 'REDEEMED') && o.paid_at && new Date(o.paid_at).getMonth() === new Date().getMonth()).reduce((a, b) => a + b.amount, 0))}</p>
+              <h3 style={{ fontSize: '0.75rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', marginBottom: '6px' }}>🏪 Pangkalan Terpantau</h3>
+              <p style={{ fontSize: '1.8rem', fontWeight: 800, color: '#38bdf8' }}>{telemetrySummary.totalPangkalan} Pangkalan</p>
             </div>
             <div className="glass-card">
-              <h3 style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', marginBottom: '8px' }}>Pangkalan Aktif</h3>
-              <p style={{ fontSize: '2rem', fontWeight: 800 }}>{pangkalanProfiles.filter(p => p.last_active_at && new Date(p.last_active_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length}</p>
+              <h3 style={{ fontSize: '0.75rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', marginBottom: '6px' }}>⛽ Kuota Tabung Klien / Bln</h3>
+              <p style={{ fontSize: '1.8rem', fontWeight: 800 }}>{telemetrySummary.totalTabung.toLocaleString('id-ID')} Tabung</p>
             </div>
             <div className="glass-card">
-              <h3 style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', marginBottom: '8px' }}>Total Tabung Diproses</h3>
-              <p style={{ fontSize: '2rem', fontWeight: 800 }}>{botSessions.reduce((a, b) => a + (b.nik_sukses * b.jumlah_tabung), 0).toLocaleString()}</p>
+              <h3 style={{ fontSize: '0.75rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', marginBottom: '6px' }}>📈 Est. Nilai Omset Pangkalan</h3>
+              <p style={{ fontSize: '1.8rem', fontWeight: 800, color: '#a855f7' }}>{formatRupiah(telemetrySummary.totalOmset)}</p>
             </div>
             <div className="glass-card">
-              <h3 style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', marginBottom: '8px' }}>Tingkat Keberhasilan</h3>
-              <p style={{ fontSize: '2rem', fontWeight: 800, color: 'hsl(var(--warning))' }}>{botSessions.length > 0 ? Math.round(botSessions.reduce((a, b) => a + (b.nik_sukses / (b.total_nik || 1)), 0) / botSessions.length * 100) : 0}%</p>
+              <h3 style={{ fontSize: '0.75rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', marginBottom: '6px' }}>🏢 PT Agen Terhubung</h3>
+              <p style={{ fontSize: '1.8rem', fontWeight: 800 }}>{telemetrySummary.totalAgents} Agen</p>
             </div>
             <div className="glass-card">
-              <h3 style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', marginBottom: '8px' }}>Sesi Hari Ini</h3>
-              <p style={{ fontSize: '2rem', fontWeight: 800 }}>{botSessions.filter(s => new Date(s.ended_at).toDateString() === new Date().toDateString()).length}</p>
+              <h3 style={{ fontSize: '0.75rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', marginBottom: '6px' }}>🔑 Lisensi Bot Aktif</h3>
+              <p style={{ fontSize: '1.8rem', fontWeight: 800, color: 'hsl(var(--warning))' }}>{metrics.activeLicenses} Mesin</p>
             </div>
           </div>
           
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px', marginBottom: '28px' }}>
             <div className="glass-card" style={{ padding: '24px' }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '16px' }}>Trend Omset (6 Bulan Terakhir)</h3>
-              <div style={{ height: '300px' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '16px' }}>📊 Tren Penjualan Lisensi Bot (6 Bulan Terakhir)</h3>
+              <div style={{ height: '280px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={(() => {
                     const months: any = {};
@@ -778,12 +884,19 @@ export default function AdminPortal() {
               </div>
             </div>
             <div className="glass-card" style={{ padding: '24px' }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '16px' }}>5 Pangkalan Paling Aktif</h3>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '16px' }}>🏢 Pangkalan Terpantau Terbaru</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {pangkalanProfiles.sort((a,b) => b.total_sesi - a.total_sesi).slice(0, 5).map(p => (
+                {pangkalanTelemetry.slice(0, 5).map(p => (
                   <div key={p.id} style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                    <div style={{ fontWeight: 'bold' }}>{p.nama_pangkalan || p.whatsapp}</div>
-                    <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>{p.total_sesi} Sesi | {p.total_nik_sukses} NIK Sukses</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ fontWeight: 'bold' }}>{p.merchant_name || p.owner_name || 'Pangkalan'}</div>
+                      <span style={{ fontSize: '0.75rem', color: '#38bdf8', padding: '2px 6px', background: 'rgba(56, 189, 248, 0.1)', borderRadius: '4px' }}>
+                        {p.kuota_pertamina_bulanan?.toLocaleString('id-ID')} Tbg
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', marginTop: '4px' }}>
+                      {p.agent_name || 'Agen'} • {p.kota_kabupaten || 'Jawa Barat'}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -825,85 +938,148 @@ export default function AdminPortal() {
         </div>
       )}
 
+      {/* ========================================================================= */}
+      {/* TAB 2: INTELIJEN PANGKALAN & AGEN (INTEL) */}
+      {/* ========================================================================= */}
       {activeTab === 'INTEL' && (
         <div className="animate-fade-in">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '20px' }}>
             <div className="glass-card">
-              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Total Pangkalan Terdaftar</h3>
-              <p style={{ fontSize: '2rem', fontWeight: 800 }}>{pangkalanProfiles.length}</p>
+              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>🏪 Total Pangkalan Terpantau</h3>
+              <p style={{ fontSize: '2rem', fontWeight: 800, color: '#38bdf8' }}>{pangkalanTelemetry.length}</p>
             </div>
             <div className="glass-card">
-              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Pangkalan Aktif (7 hari)</h3>
-              <p style={{ fontSize: '2rem', fontWeight: 800, color: '#4ade80' }}>{pangkalanProfiles.filter(p => p.last_active_at && new Date(p.last_active_at) > new Date(Date.now() - 7*86400000)).length}</p>
+              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>⛽ Total Kuota Pertamina / Bln</h3>
+              <p style={{ fontSize: '2rem', fontWeight: 800, color: '#4ade80' }}>{telemetrySummary.totalTabung.toLocaleString('id-ID')} Tabung</p>
             </div>
             <div className="glass-card">
-              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Rata-rata NIK/Sesi</h3>
-              <p style={{ fontSize: '2rem', fontWeight: 800 }}>{botSessions.length > 0 ? Math.round(botSessions.reduce((a,b)=>a+b.total_nik,0)/botSessions.length) : 0}</p>
+              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>🏢 Total PT Agen Penyalur</h3>
+              <p style={{ fontSize: '2rem', fontWeight: 800 }}>{telemetrySummary.totalAgents} Agen</p>
             </div>
             <div className="glass-card">
-              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Pangkalan Baru Minggu Ini</h3>
-              <p style={{ fontSize: '2rem', fontWeight: 800, color: '#facc15' }}>{pangkalanProfiles.filter(p => p.created_at && new Date(p.created_at) > new Date(Date.now() - 7*86400000)).length}</p>
+              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>💰 Est. Omset Pangkalan Klien</h3>
+              <p style={{ fontSize: '2rem', fontWeight: 800, color: '#facc15' }}>{formatRupiah(telemetrySummary.totalOmset)}</p>
             </div>
           </div>
+
           <div className="glass-card" style={{ padding: '0', overflowX: 'auto', borderRadius: '16px' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.015)' }}>
-                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Nama Pangkalan</th>
-                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>WhatsApp</th>
-                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Kota</th>
-                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Paket</th>
-                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Total NIK Diproses</th>
-                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Status</th>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.02)' }}>
+                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Nama Pangkalan & Pemilik</th>
+                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>PT Agen Penyalur</th>
+                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Alokasi Pertamina</th>
+                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Sisa Kuota</th>
+                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Est. Omset / Laba</th>
+                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Modal Tebus DO</th>
+                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Wilayah & HP</th>
+                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Terakhir Sync</th>
+                  <th style={{ padding: '14px 18px', color: 'hsl(var(--text-secondary))' }}>Aksi</th>
                 </tr>
               </thead>
               <tbody>
-                {pangkalanProfiles.map(p => {
-                  const pOrder = orders.find(o => o.whatsapp === p.whatsapp);
-                  const isAktif = p.last_active_at && new Date(p.last_active_at) > new Date(Date.now() - 3*86400000);
-                  const isTidur = p.last_active_at && !isAktif && new Date(p.last_active_at) > new Date(Date.now() - 14*86400000);
-                  const statusLabel = isAktif ? '🟢 Aktif' : isTidur ? '🟡 Tidur' : '🔴 Hilang';
-                  return (
-                    <tr key={p.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                      <td style={{ padding: '14px 18px', fontWeight: 600 }}>{p.nama_pangkalan || 'Belum Diketahui'} {p.platform === 'android' ? '📱' : '💻'}</td>
-                      <td style={{ padding: '14px 18px' }}><a href={`https://wa.me/${p.whatsapp.replace(/\D/g,'')}`} target="_blank" style={{ color: '#38bdf8' }}>{p.whatsapp}</a></td>
-                      <td style={{ padding: '14px 18px' }}>{p.kota || '-'}</td>
-                      <td style={{ padding: '14px 18px' }}>{pOrder?.paket || '-'}</td>
-                      <td style={{ padding: '14px 18px' }}>{p.total_nik_sukses}</td>
-                      <td style={{ padding: '14px 18px' }}>{statusLabel}</td>
-                    </tr>
-                  )
-                })}
+                {pangkalanTelemetry.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} style={{ padding: '40px', textAlign: 'center', color: 'hsl(var(--text-secondary))' }}>
+                      Belum ada data pangkalan yang disinkronkan.
+                    </td>
+                  </tr>
+                ) : (
+                  pangkalanTelemetry.map(p => {
+                    const phoneClean = (p.phone || '').replace(/\D/g, '');
+                    return (
+                      <tr key={p.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        <td style={{ padding: '14px 18px' }}>
+                          <div style={{ fontWeight: 700, color: '#ffffff' }}>{p.merchant_name || 'Pangkalan'}</div>
+                          <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>Pemilik: {p.owner_name || '-'}</div>
+                          <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '2px' }}>📱 {p.device_model || p.platform || 'Android'}</div>
+                        </td>
+                        <td style={{ padding: '14px 18px' }}>
+                          <span style={{ fontWeight: 600, color: '#38bdf8' }}>{p.agent_name || 'PT. Agen Penyalur'}</span>
+                          <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-secondary))' }}>Jadwal: {p.jadwal_pasokan || 'Selasa & Jumat'}</div>
+                        </td>
+                        <td style={{ padding: '14px 18px' }}>
+                          <span style={{ fontWeight: 700, color: '#4ade80' }}>
+                            {Number(p.kuota_pertamina_bulanan || 0).toLocaleString('id-ID')} Tabung
+                          </span>
+                          <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-secondary))' }}>HET: {formatRupiah(Number(p.het_daerah || 20000))}</div>
+                        </td>
+                        <td style={{ padding: '14px 18px' }}>
+                          <span style={{
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            fontSize: '0.8rem',
+                            fontWeight: 700,
+                            background: Number(p.sisa_kuota_pertamina || 0) <= 150 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)',
+                            color: Number(p.sisa_kuota_pertamina || 0) <= 150 ? '#f87171' : '#4ade80'
+                          }}>
+                            {Number(p.sisa_kuota_pertamina || 0).toLocaleString('id-ID')} Tabung
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 18px' }}>
+                          <div style={{ fontWeight: 700, color: '#facc15' }}>{formatRupiah(Number(p.estimasi_omset_bulanan || 0))}</div>
+                          <div style={{ fontSize: '0.75rem', color: '#4ade80' }}>Laba: {formatRupiah(Number(p.estimasi_laba_bulanan || 0))}</div>
+                        </td>
+                        <td style={{ padding: '14px 18px' }}>
+                          <div style={{ fontWeight: 600, color: '#cbd5e1' }}>{formatRupiah(Number(p.modal_tebus_per_do || 0))}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-secondary))' }}>{p.total_konsumen_unik || 0} Konsumen Unik</div>
+                        </td>
+                        <td style={{ padding: '14px 18px' }}>
+                          <div>{p.kota_kabupaten || 'Kabupaten'}</div>
+                          <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>{p.provinsi || 'Jawa Barat'}</div>
+                        </td>
+                        <td style={{ padding: '14px 18px', fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>
+                          {formatDate(p.last_sync_at)}
+                        </td>
+                        <td style={{ padding: '14px 18px' }}>
+                          {phoneClean && (
+                            <button
+                              className="btn btn-secondary"
+                              onClick={() => window.open(`https://wa.me/${phoneClean}?text=${encodeURIComponent(`Halo Bapak/Ibu ${p.merchant_name || 'Pangkalan'}, perihal kuota dan lisensi Bot MAP Pertamina...`)}`, '_blank')}
+                              style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                            >
+                              💬 Chat WA
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
+      {/* ========================================================================= */}
+      {/* TAB 3: ANALISA KEUANGAN & PASAR (FINANCE) */}
+      {/* ========================================================================= */}
       {activeTab === 'FINANCE' && (
         <div className="animate-fade-in">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '20px' }}>
             <div className="glass-card">
-              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Total Omset Sepanjang Masa</h3>
-              <p style={{ fontSize: '2rem', fontWeight: 800 }}>{formatRupiah(orders.filter(o => o.status === 'PAID' || o.status === 'REDEEMED').reduce((a, b) => a + b.amount, 0))}</p>
+              <h3 style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>💰 Omset Lisensi Bot Lunas</h3>
+              <p style={{ fontSize: '1.8rem', fontWeight: 800, color: 'hsl(var(--success))' }}>{formatRupiah(metrics.revenue)}</p>
             </div>
             <div className="glass-card">
-              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Omset Bulan Ini</h3>
-              <p style={{ fontSize: '2rem', fontWeight: 800 }}>{formatRupiah(orders.filter(o => (o.status === 'PAID' || o.status === 'REDEEMED') && o.paid_at && new Date(o.paid_at).getMonth() === new Date().getMonth()).reduce((a, b) => a + b.amount, 0))}</p>
+              <h3 style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>🏪 Est. Nilai Omset Pangkalan Klien</h3>
+              <p style={{ fontSize: '1.8rem', fontWeight: 800, color: '#38bdf8' }}>{formatRupiah(telemetrySummary.totalOmset)}</p>
             </div>
             <div className="glass-card">
-              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Omset Minggu Ini</h3>
-              <p style={{ fontSize: '2rem', fontWeight: 800 }}>{formatRupiah(orders.filter(o => (o.status === 'PAID' || o.status === 'REDEEMED') && o.paid_at && new Date(o.paid_at) > new Date(Date.now() - 7*86400000)).reduce((a, b) => a + b.amount, 0))}</p>
+              <h3 style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>📦 Est. Total Modal Tebus DO</h3>
+              <p style={{ fontSize: '1.8rem', fontWeight: 800, color: '#facc15' }}>{formatRupiah(telemetrySummary.totalModalDo)}</p>
             </div>
             <div className="glass-card">
-              <h3 style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Omset Hari Ini</h3>
-              <p style={{ fontSize: '2rem', fontWeight: 800 }}>{formatRupiah(orders.filter(o => (o.status === 'PAID' || o.status === 'REDEEMED') && o.paid_at && new Date(o.paid_at).toDateString() === new Date().toDateString()).reduce((a, b) => a + b.amount, 0))}</p>
+              <h3 style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>🎯 Est. Laba Bersih Pangkalan</h3>
+              <p style={{ fontSize: '1.8rem', fontWeight: 800, color: '#a855f7' }}>{formatRupiah(telemetrySummary.totalLaba)}</p>
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-            <div className="glass-card">
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '16px' }}>Omset per Paket</h3>
-              <div style={{ height: '300px' }}>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+            <div className="glass-card" style={{ padding: '24px' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '16px' }}>📊 Proporsi Penjualan Paket Lisensi</h3>
+              <div style={{ height: '260px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={(() => {
@@ -912,7 +1088,7 @@ export default function AdminPortal() {
                         pkgs[o.paket] = (pkgs[o.paket] || 0) + o.amount;
                       });
                       return Object.entries(pkgs).map(([name, value]) => ({name, value}));
-                    })()} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label>
+                    })()} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label>
                       <Cell fill="#38bdf8" />
                       <Cell fill="#4ade80" />
                       <Cell fill="#facc15" />
@@ -923,42 +1099,136 @@ export default function AdminPortal() {
                 </ResponsiveContainer>
               </div>
             </div>
-            <div className="glass-card">
-               <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '16px' }}>Rekomendasi Cerdas</h3>
-               <p style={{ fontSize: '0.9rem', color: 'hsl(var(--text-secondary))', marginBottom: '10px' }}>💡 Berdasarkan data 3 bulan terakhir, kami sarankan follow up pangkalan yang kuotanya sudah lebih dari 80% terpakai.</p>
-               <p style={{ fontSize: '0.9rem', color: 'hsl(var(--text-secondary))' }}>🚀 Paket paling populer: {Object.entries(orders.filter(o => o.status === 'PAID' || o.status === 'REDEEMED').reduce((acc:any, curr) => { acc[curr.paket] = (acc[curr.paket] || 0) + 1; return acc; }, {})).sort((a:any, b:any) => b[1] - a[1])[0]?.[0] || 'Belum ada'}</p>
+
+            <div className="glass-card" style={{ padding: '24px' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '16px' }}>💡 Proyeksi Potensi Monetisasi Bot SaaS</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ padding: '12px', background: 'rgba(56, 189, 248, 0.08)', borderRadius: '10px', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
+                  <div style={{ fontWeight: 700, color: '#38bdf8' }}>Model Fee Rp 50 / Tabung Diproses</div>
+                  <div style={{ fontSize: '1.2rem', fontWeight: 800, marginTop: '4px' }}>
+                    {formatRupiah(telemetrySummary.totalTabung * 50)} <span style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>/ Bulan</span>
+                  </div>
+                </div>
+
+                <div style={{ padding: '12px', background: 'rgba(34, 197, 94, 0.08)', borderRadius: '10px', border: '1px solid rgba(34, 197, 94, 0.2)' }}>
+                  <div style={{ fontWeight: 700, color: '#4ade80' }}>Model Fee Rp 100 / Tabung Diproses</div>
+                  <div style={{ fontSize: '1.2rem', fontWeight: 800, marginTop: '4px' }}>
+                    {formatRupiah(telemetrySummary.totalTabung * 100)} <span style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>/ Bulan</span>
+                  </div>
+                </div>
+
+                <div style={{ padding: '12px', background: 'rgba(234, 179, 8, 0.08)', borderRadius: '10px', border: '1px solid rgba(234, 179, 8, 0.2)' }}>
+                  <div style={{ fontWeight: 700, color: '#facc15' }}>Model Langganan Flat Agen Rp 150.000 / Pangkalan</div>
+                  <div style={{ fontSize: '1.2rem', fontWeight: 800, marginTop: '4px' }}>
+                    {formatRupiah(telemetrySummary.totalPangkalan * 150000)} <span style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>/ Bulan</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       )}
 
+      {/* ========================================================================= */}
+      {/* TAB 4: RADAR PELUANG CUAN & FOLLOW-UP (RADAR) */}
+      {/* ========================================================================= */}
       {activeTab === 'RADAR' && (
         <div className="animate-fade-in">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+            
+            {/* Peluang Multi-Pangkalan / Joki */}
             <div className="glass-card">
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#facc15' }}>⏳ Belum Bayar ({orders.filter(o => o.status === 'PENDING' || o.status === 'EXPIRED').length})</h3>
-              <p style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))', marginBottom: '16px' }}>Potensi: {formatRupiah(orders.filter(o => o.status === 'PENDING' || o.status === 'EXPIRED').reduce((a,b)=>a+b.amount,0))}</p>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#a855f7', marginBottom: '4px' }}>
+                👑 Peluang VIP: Multi-Pangkalan ({telemetrySummary.multiPangkalanOperators.length})
+              </h3>
+              <p style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))', marginBottom: '16px' }}>
+                1 Komputer/HP mengelola lebih dari 1 pangkalan (Potensi Paket Enterprise VIP)
+              </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {orders.filter(o => o.status === 'PENDING' || o.status === 'EXPIRED').map(o => (
-                  <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
-                    <div><div style={{ fontWeight: 600 }}>{o.whatsapp}</div><div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>{o.paket} - {formatRupiah(o.amount)}</div></div>
-                    <button className="btn btn-secondary" onClick={() => window.open(`https://wa.me/${o.whatsapp.replace(/\D/g,'')}?text=${encodeURIComponent(`Halo kak! Pesanan Paket ${o.paket} Anda (${formatRupiah(o.amount)}) masih menunggu pembayaran. Ada yang bisa kami bantu? 😊`)}`)} style={{ fontSize: '0.75rem', padding: '4px 8px' }}>💬 Follow-up</button>
+                {telemetrySummary.multiPangkalanOperators.length === 0 ? (
+                  <p style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Semua pangkalan beroperasi tunggal.</p>
+                ) : (
+                  telemetrySummary.multiPangkalanOperators.map((op, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(168, 85, 247, 0.2)' }}>
+                      <div>
+                        <div style={{ fontWeight: 700 }}>{op.owner}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#a855f7' }}>Mengelola {op.count} Pangkalan • {op.totalTabung.toLocaleString('id-ID')} Tabung</div>
+                      </div>
+                      {op.phone && (
+                        <button
+                          className="btn btn-primary"
+                          onClick={() => window.open(`https://wa.me/${op.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Halo Bapak/Ibu ${op.owner}, kami melihat Anda mengelola ${op.count} pangkalan gas. Apakah tertarik dengan Paket Lisensi Enterprise Unlimited Multi-Pangkalan? 🚀`)}`, '_blank')}
+                          style={{ fontSize: '0.75rem', padding: '6px 10px' }}
+                        >
+                          🚀 Tawari VIP
+                        </button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Peluang Kuota Menipis */}
+            <div className="glass-card">
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#f87171', marginBottom: '4px' }}>
+                ⚡ Peluang Top-Up: Kuota Sedikit ({telemetrySummary.lowQuotaList.length})
+              </h3>
+              <p style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))', marginBottom: '16px' }}>
+                Sisa kuota pangkalan kurang dari 150 tabung (Waktunya tawari isi ulang)
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {telemetrySummary.lowQuotaList.length === 0 ? (
+                  <p style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>Semua pangkalan memiliki kuota aman.</p>
+                ) : (
+                  telemetrySummary.lowQuotaList.map(p => (
+                    <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                      <div>
+                        <div style={{ fontWeight: 700 }}>{p.merchant_name || p.owner_name}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#f87171' }}>Sisa: {p.sisa_kuota_pertamina} Tabung</div>
+                      </div>
+                      {p.phone && (
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => window.open(`https://wa.me/${(p.phone || '').replace(/\D/g, '')}?text=${encodeURIComponent(`Halo Bapak/Ibu ${p.merchant_name || 'Pangkalan'}, sisa kuota bot Anda tinggal ${p.sisa_kuota_pertamina} tabung. Mau top-up kuota sekarang agar input harian lancar? 🔋`)}`, '_blank')}
+                          style={{ fontSize: '0.75rem', padding: '6px 10px' }}
+                        >
+                          ⚡ Tawari Top-Up
+                        </button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Peluang Order Belum Bayar */}
+            <div className="glass-card">
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#facc15', marginBottom: '4px' }}>
+                ⏳ Belum Bayar ({orders.filter(o => o.status === 'PENDING' || o.status === 'EXPIRED').length})
+              </h3>
+              <p style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))', marginBottom: '16px' }}>
+                Potensi Omset: {formatRupiah(orders.filter(o => o.status === 'PENDING' || o.status === 'EXPIRED').reduce((a, b) => a + b.amount, 0))}
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {orders.filter(o => o.status === 'PENDING' || o.status === 'EXPIRED').slice(0, 6).map(o => (
+                  <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{o.whatsapp}</div>
+                      <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>{o.paket} • {formatRupiah(o.amount)}</div>
+                    </div>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => window.open(`https://wa.me/${o.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(`Halo kak! Pesanan Paket ${o.paket} Anda (${formatRupiah(o.amount)}) masih menunggu pembayaran. Ada kendala transfer yang bisa kami bantu? 😊`)}`, '_blank')}
+                      style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                    >
+                      💬 Follow-up
+                    </button>
                   </div>
                 ))}
               </div>
             </div>
-            <div className="glass-card">
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#f87171' }}>😴 Pangkalan Tidur</h3>
-              <p style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))', marginBottom: '16px' }}>Tidak aktif 7-30 hari terakhir</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {pangkalanProfiles.filter(p => p.last_active_at && new Date(p.last_active_at) < new Date(Date.now() - 7*86400000) && new Date(p.last_active_at) > new Date(Date.now() - 30*86400000)).map(p => (
-                  <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
-                    <div><div style={{ fontWeight: 600 }}>{p.nama_pangkalan || p.whatsapp}</div></div>
-                    <button className="btn btn-secondary" onClick={() => window.open(`https://wa.me/${p.whatsapp.replace(/\D/g,'')}?text=${encodeURIComponent(`Halo kak! Sudah lama tidak memakai bot Pertamina. Ada kendala yang bisa kami bantu? 🤝`)}`)} style={{ fontSize: '0.75rem', padding: '4px 8px' }}>💬 Tanya Kendala</button>
-                  </div>
-                ))}
-              </div>
-            </div>
+
           </div>
         </div>
       )}

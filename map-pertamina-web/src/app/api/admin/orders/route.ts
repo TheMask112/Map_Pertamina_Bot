@@ -101,13 +101,25 @@ export async function GET(request: Request) {
         LIMIT 200;
       `;
     } catch (e) {
-      // bot_sessions optional (belum dimigrasi)
+      // bot_sessions optional
+    }
+
+    // Ambil data intelijen telemetry pangkalan dari MyPertamina scrape
+    let pangkalanTelemetry: any[] = [];
+    try {
+      pangkalanTelemetry = await sql`
+        SELECT * FROM pangkalan_telemetry
+        ORDER BY last_sync_at DESC;
+      `;
+    } catch (e) {
+      console.warn('Failed fetching pangkalan_telemetry:', e);
     }
 
     return NextResponse.json({ 
       orders, 
       telegramLinks,
       pangkalanProfiles,
+      pangkalanTelemetry,
       botSessions,
       paketsConfig: CONFIG.pakets 
     });
