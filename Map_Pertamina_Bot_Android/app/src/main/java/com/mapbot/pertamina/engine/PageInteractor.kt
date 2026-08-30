@@ -713,24 +713,26 @@ class PageInteractor(private val wvManager: WebViewManager) {
 
             val bText = getBodyText().lowercase()
 
-            // 0a. Modal "Segera Lengkapi NIB" / Usaha Mikro
-            if (bText.contains("segera lengkapi nib") || 
-                bText.contains("lengkapi nib") || 
-                bText.contains("nanti saja") || 
-                isElementVisibleByText("NANTI SAJA, LANJUT PENJUALAN") || 
-                isElementVisibleByText("NANTI SAJA")) {
+            // 1. Modal "Data Pelanggan belum lengkap" -> WAJIB KLIK UPDATE / PERBARUI DATA
+            val isModalBelumLengkap = bText.contains("data pelanggan belum lengkap") || 
+                                     bText.contains("lengkapi data dahulu") || 
+                                     bText.contains("perbarui data dahulu") ||
+                                     isElementVisibleByText("UPDATE DATA PELANGGAN") ||
+                                     isElementVisibleByText("PERBARUI DATA PELANGGAN")
+
+            if (isModalBelumLengkap) {
                 dismissKeyboard()
-                val clicked = clickButtonByText("NANTI SAJA, LANJUT PENJUALAN") ||
-                              clickButtonByText("NANTI SAJA, LANJUTKAN PENJUALAN") ||
-                              clickButtonByText("NANTI SAJA") ||
-                              clickButtonByText("LANJUT PENJUALAN")
+                val clicked = clickButtonByText("UPDATE DATA PELANGGAN") || 
+                              clickButtonByText("PERBARUI DATA PELANGGAN") ||
+                              clickButtonByText("LENGKAPI DATA") ||
+                              clickButtonByText("UPDATE DATA")
                 if (clicked) {
                     delay(1500)
                     continue
                 }
             }
 
-            // 1. Modal Sukses "Data Pelanggan berhasil diperbarui" (Prioritas Utama)
+            // 2. Modal Sukses "Data Pelanggan berhasil diperbarui"
             if (bText.contains("berhasil diperbarui") || isElementVisibleByText("LANJUTKAN KE TRANSAKSI")) {
                 dismissKeyboard()
                 val clicked = clickButtonByText("LANJUTKAN KE TRANSAKSI") || clickButtonByText("LANJUTKAN")
@@ -740,7 +742,7 @@ class PageInteractor(private val wvManager: WebViewManager) {
                 }
             }
 
-            // 2. Modal Konfirmasi "Pastikan semua data sudah benar" (Prioritas Kedua)
+            // 3. Modal Konfirmasi "Pastikan semua data sudah benar"
             val isKonfirmasi = bText.contains("pastikan semua data") || 
                                isElementVisibleByText("YA, PERBARUI DATA PELANGGAN") ||
                                isElementVisibleByText("YA, PERBARUI")
@@ -756,17 +758,11 @@ class PageInteractor(private val wvManager: WebViewManager) {
                 }
             }
 
-            // 3. Modal "Data Pelanggan belum lengkap"
-            if (bText.contains("data pelanggan belum lengkap") || 
-                bText.contains("lengkapi data dahulu") || 
-                bText.contains("perbarui data dahulu") ||
-                isElementVisibleByText("UPDATE DATA PELANGGAN") ||
-                isElementVisibleByText("PERBARUI DATA PELANGGAN")) {
+            // 4. Modal Khusus "Segera Lengkapi NIB" (Usaha Mikro)
+            if (bText.contains("segera lengkapi nib") || bText.contains("lengkapi nib")) {
                 dismissKeyboard()
-                val clicked = clickButtonByText("UPDATE DATA PELANGGAN") || 
-                              clickButtonByText("PERBARUI DATA PELANGGAN") ||
-                              clickButtonByText("LENGKAPI DATA") ||
-                              clickButtonByText("UPDATE DATA")
+                val clicked = clickButtonByText("NANTI SAJA, LANJUT PENJUALAN") ||
+                              clickButtonByText("NANTI SAJA, LANJUTKAN PENJUALAN")
                 if (clicked) {
                     delay(1500)
                     continue
