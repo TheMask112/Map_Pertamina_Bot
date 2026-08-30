@@ -11,8 +11,8 @@ android {
         applicationId = "com.mapbot.pertamina"
         minSdk = 26
         targetSdk = 35
-        versionCode = 12
-        versionName = "1.2.0"
+        versionCode = 20
+        versionName = "1.3.0-beta"
 
         vectorDrawables {
             useSupportLibrary = true
