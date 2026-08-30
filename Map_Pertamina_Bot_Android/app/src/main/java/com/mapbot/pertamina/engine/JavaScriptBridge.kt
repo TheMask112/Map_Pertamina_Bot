@@ -28,15 +28,6 @@ class JavaScriptBridge {
         Log.d("JSBridge", message)
     }
 
-    private var onMerchantInfoReady: ((json: String) -> Unit)? = null
-
-    @JavascriptInterface
-    fun onMerchantInfo(jsonStr: String) {
-        Log.d("JSBridge", "Live Merchant Info Intercepted: $jsonStr")
-        onMerchantInfoReady?.invoke(jsonStr)
-    }
-
-    fun setOnMerchantInfoReady(cb: (String) -> Unit) { onMerchantInfoReady = cb }
     fun setOnCaptchaImagesReady(cb: (String, String) -> Unit) { onCaptchaImagesReady = cb }
     fun setOnPageTextReady(cb: (String) -> Unit) { onPageTextReady = cb }
     fun setOnElementFound(cb: (Boolean) -> Unit) { onElementFound = cb }

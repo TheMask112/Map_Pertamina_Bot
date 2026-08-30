@@ -2,16 +2,14 @@
 // API Endpoint to Create a New License Order (Integrated with Midtrans QRIS)
 
 import { NextResponse } from 'next/server';
-import { sql, ensureAffiliateTables } from '@/lib/db';
+import { sql } from '@/lib/db';
 import { CONFIG } from '@/lib/config';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
     // hwid opsional (dikirim dari Android/Desktop untuk aktivasi otomatis)
-    // affiliateCode opsional (dikirim dari URL ref / input referral)
-    // customerName, pangkalanName, customerType opsional (untuk database customer follow-up)
-    const { paket, whatsapp, hwid, affiliateCode, customerName, pangkalanName, customerType } = body;
+    const { paket, whatsapp, hwid } = body;
 
     // 1. Validasi input parameter
     if (!paket || !whatsapp) {
@@ -20,8 +18,6 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-
-    await ensureAffiliateTables();
 
     const paketKey = paket.toUpperCase();
     const paketDetail = CONFIG.pakets[paketKey];
@@ -34,32 +30,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // 3. Cek apakah ada kode affiliate valid & hitung harga markup
-    let finalPrice = paketDetail.harga;
-    let validAffiliateCode: string | null = null;
-    let affiliateMarkup = 0;
-
-    if (affiliateCode) {
-      try {
-        const cleanAffCode = String(affiliateCode).trim().toUpperCase();
-        const affRows = await sql`
-          SELECT code, markup_percent, status
-          FROM affiliates
-          WHERE UPPER(code) = ${cleanAffCode} AND status = 'ACTIVE'
-          LIMIT 1
-        `;
-        if (affRows.length > 0) {
-          validAffiliateCode = affRows[0].code;
-          const markupPercent = Math.min(Math.max(affRows[0].markup_percent || 0, 0), 50);
-          finalPrice = Math.round(paketDetail.harga * (1 + markupPercent / 100));
-          affiliateMarkup = finalPrice - paketDetail.harga;
-          console.log(`[API Create Order] Applied affiliate "${validAffiliateCode}" (+${markupPercent}%): Base ${paketDetail.harga} -> Final ${finalPrice}`);
-        }
-      } catch (e) {
-        console.warn('[API Create Order] Error checking affiliate code:', e);
-      }
-    }
-
     const serverKey = process.env.MIDTRANS_SERVER_KEY;
     if (!serverKey || serverKey.includes("your_midtrans_server_key")) {
       console.error('[API Create Order] Midtrans Server Key is missing or default placeholder.');
@@ -69,33 +39,22 @@ export async function POST(request: Request) {
       );
     }
 
-    // 4. Hitung waktu kadaluwarsa (15 menit dari sekarang)
+    // 3. Hitung waktu kadaluwarsa (15 menit dari sekarang)
     const expiresAt = new Date(Date.now() + CONFIG.orderTimeoutMs);
 
-    // 5. Simpan data order awal ke database PostgreSQL (Neon)
+    // 4. Simpan data order awal ke database PostgreSQL (Neon)
+    // hwid disimpan jika dikirim dari Android/Desktop untuk aktivasi otomatis pasca bayar
     const cleanHwid = hwid ? String(hwid).replace(/-/g, '').toUpperCase() : null;
-    const cleanCustomerName = customerName ? String(customerName).trim().slice(0, 100) : null;
-    const cleanPangkalanName = pangkalanName ? String(pangkalanName).trim().slice(0, 150) : null;
-    const cleanCustomerType = customerType ? String(customerType).trim().slice(0, 50) : null;
-
     const result = await sql`
-      INSERT INTO orders (
-        paket, base_amount, amount, whatsapp, hwid, status, expires_at,
-        affiliate_code, affiliate_markup,
-        customer_name, pangkalan_name, customer_type
-      )
-      VALUES (
-        ${paketKey}, ${paketDetail.harga}, ${finalPrice}, ${whatsapp}, ${cleanHwid}, 'PENDING', ${expiresAt},
-        ${validAffiliateCode}, ${affiliateMarkup},
-        ${cleanCustomerName}, ${cleanPangkalanName}, ${cleanCustomerType}
-      )
+      INSERT INTO orders (paket, base_amount, amount, whatsapp, hwid, status, expires_at)
+      VALUES (${paketKey}, ${paketDetail.harga}, ${paketDetail.harga}, ${whatsapp}, ${cleanHwid}, 'PENDING', ${expiresAt})
       RETURNING id, expires_at
     `;
 
     const newOrder = result[0];
     const orderId = newOrder.id;
 
-    // 6. Panggil API Midtrans Snap untuk memunculkan semua metode pembayaran
+    // 5. Panggil API Midtrans Snap untuk memunculkan semua metode pembayaran
     const authHeader = `Basic ${Buffer.from(serverKey + ':').toString('base64')}`;
     
     // Deteksi domain saat ini secara dinamis untuk webhook dan callback redirect
@@ -103,7 +62,7 @@ export async function POST(request: Request) {
     const protocol = host.includes('localhost') ? 'http' : 'https';
     const currentDomain = `${protocol}://${host}`;
     
-    console.log(`[API Create Order] Requesting Midtrans Snap Token for Order: ${orderId}, Amount: ${finalPrice}, Domain: ${currentDomain}`);
+    console.log(`[API Create Order] Requesting Midtrans Snap Token for Order: ${orderId}, Domain: ${currentDomain}`);
     
     const midtransRes = await fetch(`${CONFIG.midtrans.snapUrl}`, {
       method: 'POST',
@@ -115,7 +74,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         transaction_details: {
           order_id: orderId,
-          gross_amount: finalPrice
+          gross_amount: paketDetail.harga
         },
         customer_details: {
           phone: whatsapp

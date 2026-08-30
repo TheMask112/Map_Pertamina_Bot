@@ -14,10 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import android.widget.Toast
-import com.mapbot.pertamina.BuildConfig
 import com.mapbot.pertamina.MainActivity
-import com.mapbot.pertamina.util.AutoUpdater
 import com.mapbot.pertamina.util.LicenseManager
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -26,31 +23,7 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     var showResetDialog by remember { mutableStateOf(false) }
-    var isCheckingUpdate by remember { mutableStateOf(false) }
-    var updateAvailableUrl by remember { mutableStateOf<String?>(null) }
     
-    if (updateAvailableUrl != null) {
-        AlertDialog(
-            onDismissRequest = { updateAvailableUrl = null },
-            title = { Text("Pembaruan Tersedia") },
-            text = { Text("Versi terbaru MAP Bot telah tersedia. Ingin mengunduh dan memasang pembaruan sekarang?") },
-            confirmButton = {
-                Button(onClick = {
-                    val url = updateAvailableUrl!!
-                    updateAvailableUrl = null
-                    AutoUpdater.downloadAndInstallUpdate(context, url)
-                }) {
-                    Text("Unduh & Pasang")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { updateAvailableUrl = null }) {
-                    Text("Nanti")
-                }
-            }
-        )
-    }
-
     if (showResetDialog) {
         AlertDialog(
             onDismissRequest = { showResetDialog = false },
@@ -79,7 +52,7 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Pengaturan & Pembaruan") },
+                title = { Text("Pengaturan & Bantuan") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Kembali")
@@ -96,52 +69,6 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
                 .verticalScroll(scrollState),
             horizontalAlignment = Alignment.Start
         ) {
-            // Section Pembaruan Aplikasi
-            Text("Pembaruan Aplikasi", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text("Versi Terpasang: v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = {
-                        isCheckingUpdate = true
-                        AutoUpdater.checkForUpdates(context, BuildConfig.VERSION_CODE) { hasUpdate, apkUrl ->
-                            (context as? android.app.Activity)?.runOnUiThread {
-                                isCheckingUpdate = false
-                                if (hasUpdate && apkUrl != null) {
-                                    updateAvailableUrl = apkUrl
-                                } else {
-                                    Toast.makeText(context, "Aplikasi sudah versi terbaru (v${BuildConfig.VERSION_NAME})", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    enabled = !isCheckingUpdate
-                ) {
-                    Text(if (isCheckingUpdate) "Memeriksa..." else "Periksa Update")
-                }
-
-                OutlinedButton(
-                    onClick = {
-                        try {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/TheMask112/Map_Pertamina_Bot/releases/latest"))
-                            context.startActivity(intent)
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Unduh APK")
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(24.dp))
-
             Text("Pengaturan Lisensi", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(8.dp))
             Text("Jika kuota tabung sudah habis, Anda harus mereset lisensi untuk memasukkan kode baru.", style = MaterialTheme.typography.bodyMedium)

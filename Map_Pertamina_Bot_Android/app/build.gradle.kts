@@ -11,8 +11,8 @@ android {
         applicationId = "com.mapbot.pertamina"
         minSdk = 26
         targetSdk = 35
-        versionCode = 19
-        versionName = "1.1.9"
+        versionCode = 12
+        versionName = "1.2.0"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -28,7 +28,6 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
