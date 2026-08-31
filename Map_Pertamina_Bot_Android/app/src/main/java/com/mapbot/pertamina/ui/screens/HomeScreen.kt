@@ -25,26 +25,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mapbot.pertamina.data.ExcelReader
 import com.mapbot.pertamina.data.SessionData
-import com.mapbot.pertamina.data.QueuePangkalanItem
 import com.mapbot.pertamina.util.LicenseManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-import com.mapbot.pertamina.security.CredentialStore
-import com.mapbot.pertamina.ui.components.PangkalanSelectorDialog
-import com.mapbot.pertamina.ui.components.BatchQueuePangkalanDialog
-import com.mapbot.pertamina.ui.components.AddEditPangkalanDialog
-
 @Composable
 fun HomeScreen(onNavigateToBot: () -> Unit, onNavigateToSettings: () -> Unit) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val credStore = remember { CredentialStore(context) }
-    var activeProfile by remember { mutableStateOf(credStore.getActiveProfile()) }
-    var showPangkalanDialog by remember { mutableStateOf(false) }
-    var showFirstTimeAddDialog by remember { mutableStateOf(credStore.getProfiles().isEmpty()) }
-
     var isReadingFile by remember { mutableStateOf(false) }
     var fileSummary by remember { mutableStateOf(
         if (SessionData.loadedNikList.isNotEmpty()) "Dimuat: ${SessionData.loadedNikList.size} NIK" else "Belum ada file Excel yang dipilih"
@@ -54,77 +43,12 @@ fun HomeScreen(onNavigateToBot: () -> Unit, onNavigateToSettings: () -> Unit) {
 
     LaunchedEffect(Unit) {
         licenseStatus = LicenseManager.getLicenseStatus(context)
-        activeProfile = credStore.getActiveProfile()
-        if (activeProfile != null) {
-            SessionData.phone = activeProfile!!.phone
-            SessionData.pass = activeProfile!!.pass
-        } else if (credStore.getProfiles().isEmpty()) {
-            showFirstTimeAddDialog = true
-        }
         coroutineScope.launch {
             val synced = LicenseManager.syncLicenseStatusOnline(context)
             if (synced) {
                 licenseStatus = LicenseManager.getLicenseStatus(context)
             }
-            try {
-                com.mapbot.pertamina.util.TelemetryHelper.reportAllProfiles(context)
-            } catch(e: Exception) {}
         }
-    }
-
-    var showBatchQueueDialog by remember { mutableStateOf(false) }
-
-    if (showFirstTimeAddDialog) {
-        AddEditPangkalanDialog(
-            profile = null,
-            onDismiss = { showFirstTimeAddDialog = false },
-            onSave = { savedProfile ->
-                credStore.saveProfile(savedProfile)
-                activeProfile = credStore.getActiveProfile()
-                if (activeProfile != null) {
-                    SessionData.phone = activeProfile!!.phone
-                    SessionData.pass = activeProfile!!.pass
-                    try {
-                        com.mapbot.pertamina.util.TelemetryHelper.report(context, activeProfile!!.phone)
-                    } catch(e: Exception) {}
-                }
-                showFirstTimeAddDialog = false
-            }
-        )
-    }
-
-    if (showPangkalanDialog) {
-        PangkalanSelectorDialog(
-            context = context,
-            onDismiss = { showPangkalanDialog = false },
-            onProfileChanged = {
-                activeProfile = credStore.getActiveProfile()
-                if (activeProfile != null) {
-                    SessionData.phone = activeProfile!!.phone
-                    SessionData.pass = activeProfile!!.pass
-                }
-            }
-        )
-    }
-
-    if (showBatchQueueDialog) {
-        BatchQueuePangkalanDialog(
-            context = context,
-            onDismiss = { showBatchQueueDialog = false },
-            onStartBatch = { queue ->
-                showBatchQueueDialog = false
-                SessionData.batchQueue = queue
-                SessionData.currentQueueIndex = 0
-                SessionData.isBatchQueueActive = true
-
-                val first = queue[0]
-                SessionData.phone = first.profile.phone
-                SessionData.pass = first.profile.pass
-                SessionData.loadedNikList = first.nikList
-
-                onNavigateToBot()
-            }
-        )
     }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -174,7 +98,7 @@ fun HomeScreen(onNavigateToBot: () -> Unit, onNavigateToSettings: () -> Unit) {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 20.dp, bottom = 12.dp)
+                    .padding(top = 24.dp, bottom = 32.dp)
                     .clip(RoundedCornerShape(16.dp)),
                 color = Color.White.copy(alpha = 0.05f),
                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
@@ -189,48 +113,6 @@ fun HomeScreen(onNavigateToBot: () -> Unit, onNavigateToSettings: () -> Unit) {
                     ) {
                         Text(licenseStatus.paket, color = Color(0xFFEAB308), fontWeight = FontWeight.Bold, fontSize = 20.sp)
                         Text("${licenseStatus.usedQuota} / ${licenseStatus.totalQuota} Tabung", color = Color.White, fontWeight = FontWeight.SemiBold)
-                    }
-                }
-            }
-
-            // Pangkalan Switcher Card
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 24.dp)
-                    .clip(RoundedCornerShape(16.dp)),
-                color = Color.White.copy(alpha = 0.04f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("PANGKALAN AKTIF", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            activeProfile?.name ?: "Pangkalan Utama",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp
-                        )
-                        Text(
-                            activeProfile?.phone?.ifBlank { "Data login belum diset" } ?: "0812...",
-                            color = Color.Gray,
-                            fontSize = 12.sp
-                        )
-                    }
-
-                    OutlinedButton(
-                        onClick = { showPangkalanDialog = true },
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Text("Ganti", fontSize = 12.sp, color = Color(0xFFEAB308))
                     }
                 }
             }
@@ -266,7 +148,7 @@ fun HomeScreen(onNavigateToBot: () -> Unit, onNavigateToSettings: () -> Unit) {
                 onClick = onNavigateToBot,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp)
+                    .height(56.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(accentBrush),
                 colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
@@ -277,26 +159,7 @@ fun HomeScreen(onNavigateToBot: () -> Unit, onNavigateToSettings: () -> Unit) {
                 Text("BUKA LAYAR BOT", color = Color(0xFF0F172A), fontWeight = FontWeight.Bold)
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Batch Queue Button (Enterprise 5000)
-            val purpleGradient = Brush.horizontalGradient(
-                colors = listOf(Color(0xFF8B5CF6), Color(0xFF6D28D9))
-            )
-            Button(
-                onClick = { showBatchQueueDialog = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(purpleGradient),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                contentPadding = PaddingValues()
-            ) {
-                Text("🏢 JALANKAN SEMUA PANGKALAN (AUTO BATCH)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Settings Button
             TextButton(

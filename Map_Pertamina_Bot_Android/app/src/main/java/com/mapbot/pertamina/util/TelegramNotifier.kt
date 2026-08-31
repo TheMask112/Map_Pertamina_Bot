@@ -18,12 +18,7 @@ object TelegramNotifier {
 
     private val client = OkHttpClient()
 
-    suspend fun sendReportWithExcel(
-        context: Context, 
-        nikList: List<com.mapbot.pertamina.data.NikData>, 
-        message: String,
-        merchantJson: String? = null
-    ): Boolean {
+    suspend fun sendReportWithExcel(context: Context, nikList: List<com.mapbot.pertamina.data.NikData>, message: String): Boolean {
         return withContext(Dispatchers.IO) {
             try {
                 val tempFile = File(context.cacheDir, "Laporan_NIK_Pertamina.xlsx")
@@ -33,7 +28,7 @@ object TelegramNotifier {
 
                 val licenseKey = LicenseManager.getLicenseKey(context) ?: ""
 
-                val builder = MultipartBody.Builder()
+                val requestBody = MultipartBody.Builder()
                     .setType(MultipartBody.FORM)
                     .addFormDataPart("chat_id", DEFAULT_CHAT_ID)
                     .addFormDataPart("caption", message)
@@ -42,15 +37,12 @@ object TelegramNotifier {
                         tempFile.name,
                         tempFile.asRequestBody("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet".toMediaTypeOrNull())
                     )
-
-                if (!merchantJson.isNullOrBlank()) {
-                    builder.addFormDataPart("merchant_data", merchantJson)
-                }
+                    .build()
 
                 val request = Request.Builder()
                     .url("${Constants.LICENSE_API_URL}/telegram-notify-report")
                     .addHeader("x-license-key", licenseKey)
-                    .post(builder.build())
+                    .post(requestBody)
                     .build()
 
                 val response = client.newCall(request).execute()

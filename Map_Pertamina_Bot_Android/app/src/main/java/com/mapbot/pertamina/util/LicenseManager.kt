@@ -40,7 +40,6 @@ object LicenseManager {
 
     fun verifyLicenseKeySignature(context: Context, licenseKey: String): Pair<Boolean, JSONObject?> {
         try {
-            // Bersihkan dari spasi, backslash, tanda kutip, backtick, atau karakter escaping Telegram
             val cleanKey = licenseKey.trim()
                 .replace("`", "")
                 .replace("\"", "")
@@ -271,13 +270,6 @@ object LicenseManager {
     fun resetLicense(context: Context) {
         val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         prefs.edit().clear().apply()
-    }
-
-    fun canUseMultiPangkalan(context: Context): Boolean {
-        val status = getLicenseStatus(context)
-        if (!status.isValid) return false
-        val paketUpper = status.paket.uppercase(Locale.getDefault())
-        return paketUpper == "ENTERPRISE" || status.totalQuota >= 5000
     }
 }
 
