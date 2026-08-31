@@ -999,17 +999,61 @@ def _ensure_logged_in(page, stop_event, pause_event, on_progress, force_relogin=
     return True
 
 
+def load_excel_data(data_file: str) -> pd.DataFrame:
+    """
+    Membaca file Excel secara cerdas & tahan banting.
+    Mampu mendeteksi kolom NIK di posisi kolom mana pun (dengan atau tanpa header),
+    serta otomatis membersihkan format angka scientific, float .0, tanda kutip, dan spasi.
+    """
+    if not os.path.exists(data_file):
+        raise FileNotFoundError(f"File '{data_file}' tidak ditemukan!")
+
+    # 1. Coba baca dengan header=None terlebih dahulu
+    df_raw = pd.read_excel(data_file, header=None)
+    if len(df_raw) == 0:
+        return df_raw
+
+    # 2. Cari kolom mana yang memiliki jumlah data 16-digit terbanyak
+    best_col = None
+    best_score = 0
+    for col in df_raw.columns:
+        count_16 = sum(1 for val in df_raw[col] if len("".join(c for c in str(val) if c.isdigit())) == 16)
+        if count_16 > best_score:
+            best_score = count_16
+            best_col = col
+
+    # 3. Jika ditemukan kolom dengan 16-digit NIK
+    if best_col is not None and best_score > 0:
+        first_val = str(df_raw[best_col].iloc[0])
+        first_digits = "".join(c for c in first_val if c.isdigit())
+        if len(first_digits) != 16:
+            # Baris 0 adalah header teks (misal 'NIK', 'No KTP', dll)
+            df = df_raw.iloc[1:].copy().reset_index(drop=True)
+        else:
+            df = df_raw.copy()
+        df.rename(columns={best_col: "NIK"}, inplace=True)
+        return df
+
+    # 4. Fallback jika format standar
+    df_std = pd.read_excel(data_file)
+    nik_col = find_nik_column(df_std)
+    if nik_col is not None and nik_col in df_std.columns:
+        df_std.rename(columns={nik_col: "NIK"}, inplace=True)
+        return df_std
+
+    return df_raw
+
+
 def health_check(data_file: str, hwid: str = None) -> tuple[bool, str]:
     """Validasi sebelum bot mulai. Returns (ok, error_message)."""
     # 1. Cek file Excel
     if not os.path.exists(data_file):
         return False, f"File '{data_file}' tidak ditemukan!"
     try:
-        df = pd.read_excel(data_file)
+        df = load_excel_data(data_file)
         if len(df) == 0:
             return False, "File Excel kosong!"
-        nik_col = find_nik_column(df)
-        if not nik_col:
+        if "NIK" not in df.columns:
             return False, "Kolom NIK tidak ditemukan di file Excel!"
     except Exception as e:
         return False, f"Gagal membaca file Excel: {e}"
@@ -1063,21 +1107,7 @@ def run_bot(
     if os.path.exists(RESULT_FILE):
         try:
             df_existing = pd.read_excel(RESULT_FILE)
-            # Baca file input asli dan cari kolom NIK otomatis
-            df_input_raw = pd.read_excel(data_file)
-            nik_col = find_nik_column(df_input_raw)
-            
-            nik_col_str = str(nik_col).strip()
-            if nik_col_str.endswith(".0"):
-                nik_col_str = nik_col_str[:-2]
-            digits = "".join(c for c in nik_col_str if c.isdigit())
-            
-            if len(digits) == 16:
-                df_input = pd.read_excel(data_file, header=None)
-                df_input.rename(columns={0: "NIK"}, inplace=True)
-            else:
-                df_input = df_input_raw.copy()
-                df_input.rename(columns={nik_col: "NIK"}, inplace=True)
+            df_input = load_excel_data(data_file)
 
             # Validasi: Jika set NIK di input SAMA PERSIS dengan NIK di hasil_proses.xlsx, maka resume
             set_existing = set("".join(c for c in str(n) if c.isdigit()) for n in df_existing["NIK"] if str(n).strip())
@@ -1097,20 +1127,7 @@ def run_bot(
             print(f"[ERROR] File {data_file} tidak ditemukan!")
             return
 
-        df_test_raw = pd.read_excel(data_file)
-        nik_col = find_nik_column(df_test_raw)
-        
-        nik_col_str = str(nik_col).strip()
-        if nik_col_str.endswith(".0"):
-            nik_col_str = nik_col_str[:-2]
-        digits = "".join(c for c in nik_col_str if c.isdigit())
-        
-        if len(digits) == 16:
-            df = pd.read_excel(data_file, header=None)
-            df.rename(columns={0: "NIK"}, inplace=True)
-        else:
-            df = df_test_raw.copy()
-            df.rename(columns={nik_col: "NIK"}, inplace=True)
+        df = load_excel_data(data_file)
 
         if "Status" not in df.columns:
             df["Status"] = STATUS_BELUM
