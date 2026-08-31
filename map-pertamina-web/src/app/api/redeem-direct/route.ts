@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 import { CONFIG } from '@/lib/config';
 import { generateLicenseKey } from '@/lib/keygen';
+import { sendTelegramToAdmin } from '@/lib/notify';
 
 const ipCache = new Map<string, { count: number, resetTime: number }>();
 
@@ -100,7 +101,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Terjadi konflik saat meredeem voucher. Silakan coba lagi.' }, { status: 409 });
     }
 
-    // 6. Sukses
+    // 6. Notifikasi Telegram ke Admin (Non-blocking)
+    try {
+      const redeemMsg = 
+        `🔑 *LISENSI BERHASIL DIAKTIFKAN (REDEEM)* 🔑\n\n` +
+        `📦 Paket: *${order.paket}* (${paketDetail.kuota.toLocaleString('id-ID')} Tabung)\n` +
+        `🎫 Voucher: \`${voucherCode.toUpperCase()}\`\n` +
+        `💻 HWID: \`${cleanHwid}\`\n` +
+        `🕒 Waktu: *${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB*`;
+      sendTelegramToAdmin(redeemMsg).catch(err => console.warn('[Telegram Redeem Notify] Error:', err));
+    } catch (e) {
+      console.warn('[Telegram Redeem Notify] Failed:', e);
+    }
+
+    // 7. Sukses
     return NextResponse.json({
       success: true,
       licenseKey: licenseKey,

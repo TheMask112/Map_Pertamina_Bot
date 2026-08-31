@@ -40,7 +40,17 @@ object LicenseManager {
 
     fun verifyLicenseKeySignature(context: Context, licenseKey: String): Pair<Boolean, JSONObject?> {
         try {
-            val parts = licenseKey.trim().split(".")
+            // Bersihkan dari spasi, backslash, tanda kutip, backtick, atau karakter escaping Telegram
+            val cleanKey = licenseKey.trim()
+                .replace("`", "")
+                .replace("\"", "")
+                .replace("'", "")
+                .replace("\\", "")
+                .replace("\n", "")
+                .replace("\r", "")
+                .trim()
+
+            val parts = cleanKey.split(".")
             if (parts.size != 2) return Pair(false, null)
 
             val jsonB64 = parts[0]
