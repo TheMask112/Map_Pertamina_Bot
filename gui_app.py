@@ -11,7 +11,7 @@ import subprocess
 import time
 import winsound
 
-from map_bot_visual import run_bot, health_check, RESULT_FILE, SUKSES_FILE, GAGAL_FILE, find_nik_column, STATUS_SKIP
+from map_bot_visual import run_bot, health_check, load_excel_data, RESULT_FILE, SUKSES_FILE, GAGAL_FILE, find_nik_column, STATUS_SKIP
 from license_manager import (
     get_hwid,
     verify_license,
@@ -657,25 +657,9 @@ class MainScreen(ctk.CTkFrame):
             return "".join(c for c in s if c.isdigit())
 
         try:
-            import pandas as pd
-            if not os.path.exists(self.selected_file):
+            df = load_excel_data(self.selected_file)
+            if len(df) == 0 or "NIK" not in df.columns:
                 return
-
-            df = pd.read_excel(self.selected_file)
-            if len(df) == 0:
-                return
-
-            # Normalize NIK column name
-            nik_col = find_nik_column(df)
-            nik_col_str = str(nik_col).strip()
-            if nik_col_str.endswith(".0"):
-                nik_col_str = nik_col_str[:-2]
-            digits = "".join(c for c in nik_col_str if c.isdigit())
-            if len(digits) == 16:
-                df = pd.read_excel(self.selected_file, header=None)
-                df.rename(columns={0: "NIK"}, inplace=True)
-            else:
-                df.rename(columns={nik_col: "NIK"}, inplace=True)
 
             # Cek jika ada hasil_proses.xlsx untuk lookup status & keterangan
             status_map = {}
