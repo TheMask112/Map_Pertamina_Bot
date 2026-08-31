@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 import { CONFIG } from '@/lib/config';
+import { sendTelegramToAdmin } from '@/lib/notify';
 
 export async function POST(request: Request) {
   try {
@@ -122,6 +123,21 @@ export async function POST(request: Request) {
 
     // Ambil redirect_url juga (untuk Android Chrome Custom Tabs)
     const redirectUrl = midtransData.redirect_url || '';
+
+    // Kirim notifikasi pesanan baru ke Admin Telegram (Non-blocking)
+    try {
+      const newOrderMsg = 
+        `🛒 *PESANAN BARU DIBUAT (MENUNGGU PEMBAYARAN)* 🛒\n\n` +
+        `📦 Paket: *${paketDetail.nama}* (${paketDetail.kuota.toLocaleString('id-ID')} Tabung)\n` +
+        `💵 Nominal: *Rp ${paketDetail.harga.toLocaleString('id-ID')}*\n` +
+        `📱 WhatsApp: *${whatsapp}*\n` +
+        `🆔 Order ID: \`${orderId}\`\n` +
+        (cleanHwid ? `💻 HWID: \`${cleanHwid}\`\n` : '') +
+        `⏳ Kadaluwarsa: *15 Menit*`;
+      sendTelegramToAdmin(newOrderMsg).catch(err => console.warn('[Telegram New Order] Error:', err));
+    } catch (e) {
+      console.warn('[Telegram New Order] Failed:', e);
+    }
 
     return NextResponse.json({
       orderId: orderId,

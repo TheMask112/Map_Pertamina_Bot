@@ -8,6 +8,7 @@ import { CONFIG } from '@/lib/config';
 import { generateVoucherCode } from '@/lib/voucher';
 import { generateLicenseKey } from '@/lib/keygen';
 import { sendWhatsApp, getVoucherMessageTemplate } from '@/lib/fonnte';
+import { sendTelegramToAdmin } from '@/lib/notify';
 
 export async function POST(request: Request) {
   try {
@@ -125,12 +126,25 @@ export async function POST(request: Request) {
         }
       }
 
-      // Kirim WhatsApp ke Pembeli & Admin (Non-blocking / Resilient)
+      // Kirim Notifikasi Telegram ke Admin & WhatsApp (Non-blocking / Resilient)
       try {
         const customerMsg = autoLicenseKey
           ? `✅ *Pembayaran ${paketNama} berhasil!*\n\nLisensi Anda sudah AKTIF otomatis di perangkat Anda.\n\n🔑 Backup License Key:\n\`${autoLicenseKey}\`\n\nTerima kasih sudah menggunakan Bot MAP Pertamina! 🚀`
           : getVoucherMessageTemplate(paketNama, kuota, updatedOrder.amount, voucherCode);
         await sendWhatsApp(updatedOrder.whatsapp, customerMsg);
+
+        // Kirim Notifikasi Telegram ke Admin
+        const tgAdminMsg = 
+          `💰 *NOTIFIKASI PEMBELIAN LISENSI MASUK!* 💰\n\n` +
+          `📦 Paket: *${paketNama}* (${kuota.toLocaleString('id-ID')} Tabung)\n` +
+          `💵 Nominal: *Rp ${updatedOrder.amount.toLocaleString('id-ID')}*\n` +
+          `📱 WhatsApp Pembeli: *${updatedOrder.whatsapp}*\n` +
+          `🎫 Kode Voucher: \`${voucherCode}\`\n` +
+          (autoLicenseKey ? `🔑 Auto License Key:\n\`${autoLicenseKey}\`\n` : '') +
+          (updatedOrder.hwid ? `💻 HWID: \`${updatedOrder.hwid}\`\n` : '') +
+          `🆔 Order ID: \`${order_id}\`\n\n` +
+          `✅ _Sistem berhasil memverifikasi pembayaran Midtrans secara otomatis._`;
+        await sendTelegramToAdmin(tgAdminMsg);
 
         const adminPhone = process.env.ADMIN_PHONE;
         if (adminPhone) {
@@ -144,7 +158,7 @@ export async function POST(request: Request) {
           await sendWhatsApp(adminPhone, adminMsg);
         }
       } catch (waError) {
-        console.warn('[Webhook Midtrans] Error saat mengirim notifikasi WA:', waError);
+        console.warn('[Webhook Midtrans] Error saat mengirim notifikasi:', waError);
       }
 
       return NextResponse.json({

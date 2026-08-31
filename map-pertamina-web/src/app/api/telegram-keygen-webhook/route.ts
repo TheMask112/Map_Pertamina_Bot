@@ -160,7 +160,7 @@ export async function POST(request: Request) {
           `📦 *Kuota*: \`${kuota.toLocaleString()} Tabung\`\n` +
           "⏳ *Masa Aktif*: `Tanpa Batas (Lifetime)`\n\n" +
           "🔑 *LICENSE KEY* (Klik untuk salin):\n" +
-          `\`${key}\``;
+          `\`\`\`\n${key}\n\`\`\``;
         await sendMessage(chatId, resText, messageId);
       } catch (err: any) {
         await sendMessage(chatId, `❌ Gagal membuat lisensi: ${err.message}`, messageId);
@@ -212,7 +212,7 @@ export async function POST(request: Request) {
           `📦 *Kuota*: \`${kuota.toLocaleString()} Tabung\`\n` +
           `⏳ *Masa Aktif*: \`${hari} Hari\`\n\n` +
           "🔑 *LICENSE KEY* (Klik untuk salin):\n" +
-          `\`${key}\``;
+          `\`\`\`\n${key}\n\`\`\``;
         await sendMessage(chatId, resText, messageId);
       } catch (err: any) {
         await sendMessage(chatId, `❌ Gagal membuat lisensi: ${err.message}`, messageId);

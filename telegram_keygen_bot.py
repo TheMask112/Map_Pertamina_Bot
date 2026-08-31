@@ -131,7 +131,7 @@ def keygen_handler(message):
             f"📦 *Kuota*: `{kuota:,} Tabung`\n"
             f"⏳ *Masa Aktif*: `Tanpa Batas (Lifetime)`\n\n"
             "🔑 *LICENSE KEY* (Klik untuk salin):\n"
-            f"`{key}`"
+            f"```\n{key}\n```"
         )
         bot.reply_to(message, res_text, parse_mode="Markdown")
         
@@ -162,7 +162,7 @@ def keygen_custom_handler(message):
             f"📦 *Kuota*: `{kuota:,} Tabung`\n"
             f"⏳ *Masa Aktif*: `{hari} Hari`\n\n"
             "🔑 *LICENSE KEY* (Klik untuk salin):\n"
-            f"`{key}`"
+            f"```\n{key}\n```"
         )
         bot.reply_to(message, res_text, parse_mode="Markdown")
         
