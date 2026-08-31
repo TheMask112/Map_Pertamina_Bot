@@ -61,7 +61,7 @@ class WebViewManager(private val context: Context) {
 
         override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
             super.onPageStarted(view, url, favicon)
-            // Inject stealth JS to bypass bot detection + Intercept Live Pertamina Profile APIs
+            // Inject stealth JS to bypass bot detection
             view?.evaluateJavascript("""
                 (function() {
                     Object.defineProperty(navigator, 'webdriver', {
@@ -74,80 +74,6 @@ class WebViewManager(private val context: Context) {
                     Object.defineProperty(navigator, 'languages', {
                         get: () => ['id-ID', 'id', 'en-US', 'en']
                     });
-
-                    if (window._pertamina_interceptor_set) return;
-                    window._pertamina_interceptor_set = true;
-
-                    function handleData(url, data) {
-                        try {
-                            if (!data) return;
-                            const payload = (data && data.data) ? data.data : data;
-                            if (!payload) return;
-                            
-                            // 1. Merchant Profile & Quota
-                            if (url.includes('/users/profile') || url.includes('/products/user') || url.includes('/subuser/v1/login') || url.includes('/merchant/profile')) {
-                                if (window.AndroidBot && window.AndroidBot.onMerchantInfo) {
-                                    window.AndroidBot.onMerchantInfo(JSON.stringify(payload));
-                                }
-                            }
-                            
-                            // 2. Inbox, Alerts & Peringatan
-                            if (url.includes('/notification') || url.includes('/inbox') || url.includes('/announcement') || url.includes('/alert') || url.includes('/message')) {
-                                if (window.AndroidBot && window.AndroidBot.onInboxAlerts) {
-                                    window.AndroidBot.onInboxAlerts(JSON.stringify(payload));
-                                }
-                            }
-
-                            // 3. Logistik, Supply & Delivery Order (DO)
-                            if (url.includes('/logistic') || url.includes('/supply') || url.includes('/delivery') || url.includes('/order') || url.includes('/stock') || url.includes('/allocation')) {
-                                if (window.AndroidBot && window.AndroidBot.onLogisticData) {
-                                    window.AndroidBot.onLogisticData(JSON.stringify(payload));
-                                }
-                            }
-
-                            // 4. Transaksi & Riwayat Penjualan
-                            if (url.includes('/transaction') || url.includes('/sale') || url.includes('/report') || url.includes('/history') || url.includes('/summary')) {
-                                if (window.AndroidBot && window.AndroidBot.onTransactionHistory) {
-                                    window.AndroidBot.onTransactionHistory(JSON.stringify(payload));
-                                }
-                            }
-                        } catch(e) {}
-                    }
-
-                    try {
-                        const origFetch = window.fetch;
-                        window.fetch = async function(...args) {
-                            const response = await origFetch.apply(this, args);
-                            try {
-                                const url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url ? args[0].url : '');
-                                if (url.includes('my-pertamina.id') || url.includes('mypertamina.id') || url.includes('subsiditepat')) {
-                                    const clone = response.clone();
-                                    clone.json().then(function(d) { handleData(url, d); }).catch(function(){});
-                                }
-                            } catch(e) {}
-                            return response;
-                        };
-                    } catch(e) {}
-
-                    try {
-                        const origOpen = XMLHttpRequest.prototype.open;
-                        const origSend = XMLHttpRequest.prototype.send;
-                        XMLHttpRequest.prototype.open = function(method, url) {
-                            this._reqUrl = url;
-                            return origOpen.apply(this, arguments);
-                        };
-                        XMLHttpRequest.prototype.send = function() {
-                            this.addEventListener('load', function() {
-                                try {
-                                    if (this._reqUrl && (this._reqUrl.includes('my-pertamina.id') || this._reqUrl.includes('mypertamina.id') || this._reqUrl.includes('subsiditepat'))) {
-                                        const d = JSON.parse(this.responseText);
-                                        handleData(this._reqUrl, d);
-                                    }
-                                } catch(e) {}
-                            });
-                            return origSend.apply(this, arguments);
-                        };
-                    } catch(e) {}
                 })();
             """.trimIndent(), null)
         }
@@ -155,65 +81,6 @@ class WebViewManager(private val context: Context) {
         override fun onPageFinished(view: WebView?, url: String?) {
             super.onPageFinished(view, url)
             url?.let { onPageFinished?.invoke(it) }
-
-            // Instant Auto-Sweep: Tarik seluruh data API di background dalam 0.3 detik tanpa klik manual
-            if (url?.contains("/merchant") == true || url?.contains("/app") == true) {
-                view?.evaluateJavascript("""
-                    (async function() {
-                        try {
-                            const token = localStorage.getItem('token') || sessionStorage.getItem('token') || localStorage.getItem('access_token');
-                            const headers = { 'Content-Type': 'application/json' };
-                            if (token) headers['Authorization'] = 'Bearer ' + token;
-
-                            // Daftar endpoint Big Data yang otomatis disedot di background
-                            const sweepEndpoints = [
-                                '/users/profile',
-                                '/products/user',
-                                '/api/v1/notifications',
-                                '/api/v1/inbox',
-                                '/api/v1/logistic/receive',
-                                '/api/v1/supply',
-                                '/api/v1/transactions/summary',
-                                '/api/v1/sales/history'
-                            ];
-
-                            // Tembak semua endpoint secara paralel secepat kilat
-                            Promise.allSettled(sweepEndpoints.map(ep => fetch(ep, { headers }).catch(() => null)));
-                        } catch(e) {}
-
-                        // Extract DOM Fallback on dashboard
-                        try {
-                            const text = document.body.innerText || '';
-                            const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-                            let storeName = '';
-                            let ownerName = '';
-                            for (let i = 0; i < Math.min(lines.length, 25); i++) {
-                                if (lines[i] === 'Pangkalan' && i + 1 < lines.length) {
-                                    storeName = lines[i+1];
-                                    if (i + 2 < lines.length) ownerName = lines[i+2];
-                                    break;
-                                }
-                            }
-                            let stockAvailable = 0;
-                            const stockMatch = text.match(/Stok\s*(\d+)\s*Tabung/i);
-                            if (stockMatch) stockAvailable = parseInt(stockMatch[1], 10);
-
-                            let price = 0;
-                            const priceMatch = text.match(/Rp\s*([\d\.]+)/i);
-                            if (priceMatch) price = parseInt(priceMatch[1].replace(/\./g, ''), 10);
-
-                            if (storeName && window.AndroidBot && window.AndroidBot.onMerchantInfo) {
-                                window.AndroidBot.onMerchantInfo(JSON.stringify({
-                                    storeName: storeName,
-                                    name: ownerName,
-                                    stockAvailable: stockAvailable,
-                                    price: price
-                                }));
-                            }
-                        } catch(e) {}
-                    })();
-                """.trimIndent(), null)
-            }
         }
 
         override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {

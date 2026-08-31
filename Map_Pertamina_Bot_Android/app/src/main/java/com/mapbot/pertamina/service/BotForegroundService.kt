@@ -53,7 +53,7 @@ class BotForegroundService : Service() {
             PowerManager.PARTIAL_WAKE_LOCK,
             "MapBot::BackgroundExecution"
         )
-        wakeLock?.acquire(6 * 60 * 60 * 1000L /*6 jam penuh tanpa terputus*/)
+        wakeLock?.acquire(10 * 60 * 1000L /*10 minutes*/)
         
         BotManager.initialize(this)
         attachFloatingWebView()
