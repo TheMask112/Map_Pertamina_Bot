@@ -8,14 +8,6 @@ import base64
 import cv2
 from datetime import datetime
 
-try:
-    if hasattr(sys.stdout, 'reconfigure'):
-        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-    if hasattr(sys.stderr, 'reconfigure'):
-        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
-except Exception:
-    pass
-
 # Tentukan BASE_DIR sejak awal (frozen/unfrozen)
 if getattr(sys, 'frozen', False):
     BASE_DIR = os.path.dirname(sys.executable)
@@ -42,10 +34,10 @@ BROWSER_DATA = os.path.join(BASE_DIR, "browser_data")
 # Selectors
 # ============================================================
 BTN_CATAT_PENJUALAN = "text='Catat Penjualan'"
-INPUT_NIK           = "input[placeholder*='16 digit' i], input[placeholder*='NIK' i], input[type='search']"
-BTN_LANJUTKAN       = "button:has-text('LANJUTKAN PENJUALAN'), button:has-text('Lanjut')"
-BTN_CEK             = "button:has-text('CEK PESANAN')"
-BTN_PROSES          = "button:has-text('PROSES PENJUALAN')"
+INPUT_NIK           = "input[placeholder='Masukkan 16 digit NIK Pelanggan']"
+BTN_LANJUTKAN       = "text='LANJUTKAN PENJUALAN'"
+BTN_CEK             = "text='CEK PESANAN'"
+BTN_PROSES          = "text='PROSES PENJUALAN'"
 
 CAPTCHA_POPUP       = "text='Cocokan Gambar untuk Proses Keamanan Penjualan'"
 SLIDER_HANDLE       = ".rc-slider-captcha-control-button"
@@ -161,6 +153,82 @@ def _poll_telegram_command(whatsapp: str) -> str:
     except Exception:
         pass
     return None
+
+
+def _report_session_to_server(
+    whatsapp: str,
+    session_start: datetime,
+    session_end: datetime,
+    total_nik: int,
+    nik_sukses: int,
+    nik_gagal: int,
+    nik_tidak_terdaftar: int = 0,
+    nik_kuota_habis: int = 0,
+    nik_meninggal: int = 0,
+    nik_dibawah_umur: int = 0,
+    nik_tidak_aktif: int = 0,
+    captcha_total: int = 0,
+    captcha_sukses: int = 0,
+    jumlah_tabung: int = 1,
+    avg_seconds_per_nik: float = 0.0,
+    batch_number: int = 1,
+    error_summary: str = "",
+    nama_pangkalan: str = "",
+):
+    """Kirim laporan sesi bot ke server untuk analitik dashboard admin."""
+    try:
+        import urllib.request
+        import json
+        from license_manager import get_hwid, verify_license
+
+        hwid = get_hwid()
+        valid, _, payload = verify_license(hwid)
+        license_key = payload.get("license_key", "") if (valid and payload) else ""
+
+        if not license_key:
+            return
+
+        duration = int((session_end - session_start).total_seconds())
+
+        url = "https://map-pertamina-web.vercel.app/api/report-session"
+        data = {
+            "whatsapp": whatsapp,
+            "nama_pangkalan": nama_pangkalan,
+            "platform": "DESKTOP",
+            "app_version": "1.0.0",
+            "started_at": session_start.isoformat(),
+            "ended_at": session_end.isoformat(),
+            "duration_seconds": duration,
+            "total_nik": total_nik,
+            "nik_sukses": nik_sukses,
+            "nik_gagal": nik_gagal,
+            "nik_tidak_terdaftar": nik_tidak_terdaftar,
+            "nik_kuota_habis": nik_kuota_habis,
+            "nik_meninggal": nik_meninggal,
+            "nik_dibawah_umur": nik_dibawah_umur,
+            "nik_tidak_aktif": nik_tidak_aktif,
+            "captcha_total": captcha_total,
+            "captcha_sukses": captcha_sukses,
+            "jumlah_tabung": jumlah_tabung,
+            "avg_seconds_per_nik": avg_seconds_per_nik,
+            "batch_number": batch_number,
+            "error_summary": error_summary[:500] if error_summary else "",
+            "hwid": hwid,
+        }
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(data).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "X-License-Key": license_key,
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as response:
+            response.read()
+        print("[INFO] Laporan sesi berhasil dikirim ke server.")
+    except Exception as e:
+        print(f"[WARN] Gagal mengirim laporan sesi ke server: {e}")
 
 
 def find_nik_column(df: pd.DataFrame) -> str:
@@ -437,23 +505,6 @@ def _check_critical_nik_errors(page) -> tuple[bool, str, str]:
                     return True, STATUS_SKIP, "Status NIK tidak aktif atau ditangguhkan"
             except:
                 pass
-
-        # 6. Cek Stok Tabung Pangkalan Kosong
-        stok_keywords = [
-            "stok tabung kosong",
-            "stok tabung yang dapat dijual kosong",
-            "lakukan penebusan",
-            "stok kosong"
-        ]
-        for kw in stok_keywords:
-            if kw in body_text or kw in html_content:
-                return True, STATUS_ERROR, "Stok tabung pangkalan kosong (silakan lakukan penebusan)"
-            try:
-                loc = page.locator(f"text='{kw}'")
-                if loc.count() > 0 and any(loc.nth(i).is_visible() for i in range(loc.count())):
-                    return True, STATUS_ERROR, "Stok tabung pangkalan kosong (silakan lakukan penebusan)"
-            except:
-                pass
                 
     except Exception as e:
         print(f"[WARN] Error saat check_critical_nik_errors: {e}")
@@ -461,522 +512,55 @@ def _check_critical_nik_errors(page) -> tuple[bool, str, str]:
     return False, "", ""
 
 
-# Database Pemetaan Kode Wilayah NIK 4-digit ke Nama Kabupaten / Kota (Lengkap 38 Provinsi se-Indonesia)
+# Database Pemetaan Kode Wilayah NIK 4-digit ke Nama Kabupaten / Kota
 KODE_WILAYAH_KOTA = {
-    "1101": "ACEH SELATAN",
-    "1102": "ACEH TENGGARA",
-    "1103": "ACEH TIMUR",
-    "1104": "ACEH TENGAH",
-    "1105": "ACEH BARAT",
-    "1106": "ACEH BESAR",
-    "1107": "PIDIE",
-    "1108": "ACEH UTARA",
-    "1109": "SIMEULUE",
-    "1110": "ACEH SINGKIL",
-    "1111": "BIREUEN",
-    "1112": "ACEH BARAT DAYA",
-    "1113": "GAYO LUES",
-    "1114": "ACEH JAYA",
-    "1115": "NAGAN RAYA",
-    "1116": "ACEH TAMIANG",
-    "1117": "BENER MERIAH",
-    "1118": "PIDIE JAYA",
-    "1171": "KOTA BANDA ACEH",
-    "1172": "KOTA SABANG",
-    "1173": "KOTA LHOKSEUMAWE",
-    "1174": "KOTA LANGSA",
-    "1175": "KOTA SUBULUSSALAM",
-    "1201": "TAPANULI TENGAH",
-    "1202": "TAPANULI UTARA",
-    "1203": "TAPANULI SELATAN",
-    "1204": "NIAS",
-    "1205": "LANGKAT",
-    "1206": "KARO",
-    "1207": "DELI SERDANG",
-    "1208": "SIMALUNGUN",
-    "1209": "ASAHAN",
-    "1210": "LABUHANBATU",
-    "1211": "DAIRI",
-    "1212": "TOBA",
-    "1213": "MANDAILING NATAL",
-    "1214": "NIAS SELATAN",
-    "1215": "PAKPAK BHARAT",
-    "1216": "HUMBANG HASUNDUTAN",
-    "1217": "SAMOSIR",
-    "1218": "SERDANG BEDAGAI",
-    "1219": "BATU BARA",
-    "1220": "PADANG LAWAS UTARA",
-    "1221": "PADANG LAWAS",
-    "1222": "LABUHANBATU SELATAN",
-    "1223": "LABUHANBATU UTARA",
-    "1224": "NIAS UTARA",
-    "1225": "NIAS BARAT",
-    "1271": "KOTA MEDAN",
-    "1272": "KOTA PEMATANGSIANTAR",
-    "1273": "KOTA SIBOLGA",
-    "1274": "KOTA TANJUNGBALAI",
-    "1275": "KOTA BINJAI",
-    "1276": "KOTA TEBING TINGGI",
-    "1277": "KOTA PADANGSIDIMPUAN",
-    "1278": "KOTA GUNUNGSITOLI",
-    "1301": "PESISIR SELATAN",
-    "1302": "SOLOK",
-    "1303": "SIJUNJUNG",
-    "1304": "TANAH DATAR",
-    "1305": "PADANG PARIAMAN",
-    "1306": "AGAM",
-    "1307": "LIMA PULUH KOTA",
-    "1308": "PASAMAN",
-    "1309": "KEPULAUAN MENTAWAI",
-    "1310": "DHARMASRAYA",
-    "1311": "SOLOK SELATAN",
-    "1312": "PASAMAN BARAT",
-    "1371": "KOTA PADANG",
-    "1372": "KOTA SOLOK",
-    "1373": "KOTA SAWAHLUNTO",
-    "1374": "KOTA PADANG PANJANG",
-    "1375": "KOTA BUKITTINGGI",
-    "1376": "KOTA PAYAKUMBUH",
-    "1377": "KOTA PARIAMAN",
-    "1401": "KAMPAR",
-    "1402": "INDRAGIRI HULU",
-    "1403": "BENGKALIS",
-    "1404": "INDRAGIRI HILIR",
-    "1405": "PELALAWAN",
-    "1406": "ROKAN HULU",
-    "1407": "ROKAN HILIR",
-    "1408": "SIAK",
-    "1409": "KUANTAN SINGINGI",
-    "1410": "KEPULAUAN MERANTI",
-    "1471": "KOTA PEKANBARU",
-    "1472": "KOTA DUMAI",
-    "1501": "KERINCI",
-    "1502": "MERANGIN",
-    "1503": "SAROLANGUN",
-    "1504": "BATANGHARI",
-    "1505": "MUARO JAMBI",
-    "1506": "TANJUNG JABUNG BARAT",
-    "1507": "TANJUNG JABUNG TIMUR",
-    "1508": "BUNGO",
-    "1509": "TEBO",
-    "1571": "KOTA JAMBI",
-    "1572": "KOTA SUNGAI PENUH",
-    "1601": "OGAN KOMERING ULU",
-    "1602": "OGAN KOMERING ILIR",
-    "1603": "MUARA ENIM",
-    "1604": "LAHAT",
-    "1605": "MUSI RAWAS",
-    "1606": "MUSI BANYUASIN",
-    "1607": "BANYUASIN",
-    "1608": "OGAN KOMERING ULU TIMUR",
-    "1609": "OGAN KOMERING ULU SELATAN",
-    "1610": "OGAN ILIR",
-    "1611": "EMPAT LAWANG",
-    "1612": "PENUKAL ABAB LEMATANG ILIR",
-    "1613": "MUSI RAWAS UTARA",
-    "1671": "KOTA PALEMBANG",
-    "1672": "KOTA PAGAR ALAM",
-    "1673": "KOTA LUBUK LINGGAU",
-    "1674": "KOTA PRABUMULIH",
-    "1701": "BENGKULU SELATAN",
-    "1702": "REJANG LEBONG",
-    "1703": "BENGKULU UTARA",
-    "1704": "KAUR",
-    "1705": "SELUMA",
-    "1706": "MUKOMUKO",
-    "1707": "LEBONG",
-    "1708": "KEPAHIANG",
-    "1709": "BENGKULU TENGAH",
-    "1771": "KOTA BENGKULU",
-    "1801": "LAMPUNG SELATAN",
-    "1802": "LAMPUNG TENGAH",
-    "1803": "LAMPUNG UTARA",
-    "1804": "LAMPUNG BARAT",
-    "1805": "TULANG BAWANG",
-    "1806": "TANGGAMUS",
-    "1807": "LAMPUNG TIMUR",
-    "1808": "WAY KANAN",
-    "1809": "PESAWARAN",
-    "1810": "PRINGSEWU",
-    "1811": "MESUJI",
-    "1812": "TULANG BAWANG BARAT",
-    "1813": "PESISIR BARAT",
-    "1871": "KOTA BANDAR LAMPUNG",
-    "1872": "KOTA METRO",
-    "1901": "BANGKA",
-    "1902": "BELITUNG",
-    "1903": "BANGKA SELATAN",
-    "1904": "BANGKA TENGAH",
-    "1905": "BANGKA BARAT",
-    "1906": "BELITUNG TIMUR",
-    "1971": "KOTA PANGKAL PINANG",
-    "2101": "BINTAN",
-    "2102": "KARIMUN",
-    "2103": "NATUNA",
-    "2104": "LINGGA",
-    "2105": "KEPULAUAN ANAMBAS",
-    "2171": "KOTA BATAM",
-    "2172": "KOTA TANJUNG PINANG",
-    "3101": "ADMINISTRASI KEPULAUAN SERIBU",
-    "3171": "KOTA ADMINISTRASI JAKARTA PUSAT",
-    "3172": "KOTA ADMINISTRASI JAKARTA UTARA",
-    "3173": "KOTA ADMINISTRASI JAKARTA BARAT",
-    "3174": "KOTA ADMINISTRASI JAKARTA SELATAN",
-    "3175": "KOTA ADMINISTRASI JAKARTA TIMUR",
-    "3201": "BOGOR",
-    "3202": "SUKABUMI",
-    "3203": "CIANJUR",
-    "3204": "BANDUNG",
-    "3205": "GARUT",
-    "3206": "TASIKMALAYA",
-    "3207": "CIAMIS",
-    "3208": "KUNINGAN",
-    "3209": "CIREBON",
-    "3210": "MAJALENGKA",
-    "3211": "SUMEDANG",
-    "3212": "INDRAMAYU",
-    "3213": "SUBANG",
-    "3214": "PURWAKARTA",
-    "3215": "KARAWANG",
-    "3216": "BEKASI",
-    "3217": "BANDUNG BARAT",
-    "3218": "PANGANDARAN",
-    "3271": "KOTA BOGOR",
-    "3272": "KOTA SUKABUMI",
-    "3273": "KOTA BANDUNG",
-    "3274": "KOTA CIREBON",
-    "3275": "KOTA BEKASI",
-    "3276": "KOTA DEPOK",
-    "3277": "KOTA CIMAHI",
-    "3278": "KOTA TASIKMALAYA",
-    "3279": "KOTA BANJAR",
-    "3301": "CILACAP",
-    "3302": "BANYUMAS",
-    "3303": "PURBALINGGA",
-    "3304": "BANJARNEGARA",
-    "3305": "KEBUMEN",
-    "3306": "PURWOREJO",
-    "3307": "WONOSOBO",
-    "3308": "MAGELANG",
-    "3309": "BOYOLALI",
-    "3310": "KLATEN",
-    "3311": "SUKOHARJO",
-    "3312": "WONOGIRI",
-    "3313": "KARANGANYAR",
-    "3314": "SRAGEN",
-    "3315": "GROBOGAN",
-    "3316": "BLORA",
-    "3317": "REMBANG",
-    "3318": "PATI",
-    "3319": "KUDUS",
-    "3320": "JEPARA",
-    "3321": "DEMAK",
-    "3322": "SEMARANG",
-    "3323": "TEMANGGUNG",
-    "3324": "KENDAL",
-    "3325": "BATANG",
-    "3326": "PEKALONGAN",
-    "3327": "PEMALANG",
-    "3328": "TEGAL",
-    "3329": "BREBES",
-    "3371": "KOTA MAGELANG",
-    "3372": "KOTA SURAKARTA",
-    "3373": "KOTA SALATIGA",
-    "3374": "KOTA SEMARANG",
-    "3375": "KOTA PEKALONGAN",
-    "3376": "KOTA TEGAL",
-    "3401": "KULON PROGO",
-    "3402": "BANTUL",
-    "3403": "GUNUNGKIDUL",
-    "3404": "SLEMAN",
-    "3471": "KOTA YOGYAKARTA",
-    "3501": "PACITAN",
-    "3502": "PONOROGO",
-    "3503": "TRENGGALEK",
-    "3504": "TULUNGAGUNG",
-    "3505": "BLITAR",
-    "3506": "KEDIRI",
-    "3507": "MALANG",
-    "3508": "LUMAJANG",
-    "3509": "JEMBER",
-    "3510": "BANYUWANGI",
-    "3511": "BONDOWOSO",
-    "3512": "SITUBONDO",
-    "3513": "PROBOLINGGO",
-    "3514": "PASURUAN",
-    "3515": "SIDOARJO",
-    "3516": "MOJOKERTO",
-    "3517": "JOMBANG",
-    "3518": "NGANJUK",
-    "3519": "MADIUN",
-    "3520": "MAGETAN",
-    "3521": "NGAWI",
-    "3522": "BOJONEGORO",
-    "3523": "TUBAN",
-    "3524": "LAMONGAN",
-    "3525": "GRESIK",
-    "3526": "BANGKALAN",
-    "3527": "SAMPANG",
-    "3528": "PAMEKASAN",
-    "3529": "SUMENEP",
-    "3571": "KOTA KEDIRI",
-    "3572": "KOTA BLITAR",
-    "3573": "KOTA MALANG",
-    "3574": "KOTA PROBOLINGGO",
-    "3575": "KOTA PASURUAN",
-    "3576": "KOTA MOJOKERTO",
-    "3577": "KOTA MADIUN",
-    "3578": "KOTA SURABAYA",
-    "3579": "KOTA BATU",
-    "3601": "PANDEGLANG",
-    "3602": "LEBAK",
-    "3603": "TANGERANG",
-    "3604": "SERANG",
-    "3671": "KOTA TANGERANG",
-    "3672": "KOTA CILEGON",
-    "3673": "KOTA SERANG",
+    # DKI Jakarta (31)
+    "3101": "KEPULAUAN SERIBU", "3171": "JAKARTA SELATAN", "3172": "JAKARTA TIMUR", 
+    "3173": "JAKARTA PUSAT", "3174": "JAKARTA BARAT", "3175": "JAKARTA UTARA",
+    # Jawa Barat (32)
+    "3201": "BOGOR", "3202": "SUKABUMI", "3203": "CIANJUR", "3204": "BANDUNG", 
+    "3205": "GARUT", "3206": "TASIKMALAYA", "3207": "CIAMIS", "3208": "KUNINGAN", 
+    "3209": "CIREBON", "3210": "MAJALENGKA", "3211": "SUMEDANG", "3212": "INDRAMAYU", 
+    "3213": "SUBANG", "3214": "PURWAKARTA", "3215": "KARAWANG", "3216": "BEKASI", 
+    "3217": "BANDUNG BARAT", "3218": "PANGANDARAN", "3271": "KOTA BOGOR", 
+    "3272": "KOTA SUKABUMI", "3273": "KOTA BANDUNG", "3274": "KOTA CIREBON", 
+    "3275": "KOTA BEKASI", "3276": "KOTA DEPOK", "3277": "KOTA CIMAHI", 
+    "3278": "KOTA TASIKMALAYA", "3279": "KOTA BANJAR",
+    # Banten (36)
+    "3601": "PANDEGLANG", "3602": "LEBAK", "3603": "TANGERANG", "3604": "SERANG", 
+    "3671": "KOTA TANGERANG", "3672": "KOTA CILEGON", "3673": "KOTA SERANG", 
     "3674": "KOTA TANGERANG SELATAN",
-    "5101": "JEMBRANA",
-    "5102": "TABANAN",
-    "5103": "BADUNG",
-    "5104": "GIANYAR",
-    "5105": "KLUNGKUNG",
-    "5106": "BANGLI",
-    "5107": "KARANGASEM",
-    "5108": "BULELENG",
-    "5171": "KOTA DENPASAR",
-    "5201": "LOMBOK BARAT",
-    "5202": "LOMBOK TENGAH",
-    "5203": "LOMBOK TIMUR",
-    "5204": "SUMBAWA",
-    "5205": "DOMPU",
-    "5206": "BIMA",
-    "5207": "SUMBAWA BARAT",
-    "5208": "LOMBOK UTARA",
-    "5271": "KOTA MATARAM",
-    "5272": "KOTA BIMA",
-    "5301": "KUPANG",
-    "5302": "TIMOR TENGAH SELATAN",
-    "5303": "TIMOR TENGAH UTARA",
-    "5304": "BELU",
-    "5305": "ALOR",
-    "5306": "FLORES TIMUR",
-    "5307": "SIKKA",
-    "5308": "ENDE",
-    "5309": "NGADA",
-    "5310": "MANGGARAI",
-    "5311": "SUMBA TIMUR",
-    "5312": "SUMBA BARAT",
-    "5313": "LEMBATA",
-    "5314": "ROTE NDAO",
-    "5315": "MANGGARAI BARAT",
-    "5316": "NAGEKEO",
-    "5317": "SUMBA TENGAH",
-    "5318": "SUMBA BARAT DAYA",
-    "5319": "MANGGARAI TIMUR",
-    "5320": "SABU RAIJUA",
-    "5321": "MALAKA",
-    "5371": "KOTA KUPANG",
-    "6101": "SAMBAS",
-    "6102": "MEMPAWAH",
-    "6103": "SANGGAU",
-    "6104": "KETAPANG",
-    "6105": "SINTANG",
-    "6106": "KAPUAS HULU",
-    "6107": "BENGKAYANG",
-    "6108": "LANDAK",
-    "6109": "SEKADAU",
-    "6110": "MELAWI",
-    "6111": "KAYONG UTARA",
-    "6112": "KUBU RAYA",
-    "6171": "KOTA PONTIANAK",
-    "6172": "KOTA SINGKAWANG",
-    "6201": "KOTAWARINGIN BARAT",
-    "6202": "KOTAWARINGIN TIMUR",
-    "6203": "KAPUAS",
-    "6204": "BARITO SELATAN",
-    "6205": "BARITO UTARA",
-    "6206": "KATINGAN",
-    "6207": "SERUYAN",
-    "6208": "SUKAMARA",
-    "6209": "LAMANDAU",
-    "6210": "GUNUNG MAS",
-    "6211": "PULANG PISAU",
-    "6212": "MURUNG RAYA",
-    "6213": "BARITO TIMUR",
-    "6271": "KOTA PALANGKARAYA",
-    "6301": "TANAH LAUT",
-    "6302": "KOTABARU",
-    "6303": "BANJAR",
-    "6304": "BARITO KUALA",
-    "6305": "TAPIN",
-    "6306": "HULU SUNGAI SELATAN",
-    "6307": "HULU SUNGAI TENGAH",
-    "6308": "HULU SUNGAI UTARA",
-    "6309": "TABALONG",
-    "6310": "TANAH BUMBU",
-    "6311": "BALANGAN",
-    "6371": "KOTA BANJARMASIN",
-    "6372": "KOTA BANJARBARU",
-    "6401": "PASER",
-    "6402": "KUTAI KARTANEGARA",
-    "6403": "BERAU",
-    "6407": "KUTAI BARAT",
-    "6408": "KUTAI TIMUR",
-    "6409": "PENAJAM PASER UTARA",
-    "6411": "MAHAKAM ULU",
-    "6471": "KOTA BALIKPAPAN",
-    "6472": "KOTA SAMARINDA",
-    "6474": "KOTA BONTANG",
-    "6501": "BULUNGAN",
-    "6502": "MALINAU",
-    "6503": "NUNUKAN",
-    "6504": "TANA TIDUNG",
-    "6571": "KOTA TARAKAN",
-    "7101": "BOLAANG MONGONDOW",
-    "7102": "MINAHASA",
-    "7103": "KEPULAUAN SANGIHE",
-    "7104": "KEPULAUAN TALAUD",
-    "7105": "MINAHASA SELATAN",
-    "7106": "MINAHASA UTARA",
-    "7107": "MINAHASA TENGGARA",
-    "7108": "BOLAANG MONGONDOW UTARA",
-    "7109": "KEP. SIAU TAGULANDANG BIARO",
-    "7110": "BOLAANG MONGONDOW TIMUR",
-    "7111": "BOLAANG MONGONDOW SELATAN",
-    "7171": "KOTA MANADO",
-    "7172": "KOTA BITUNG",
-    "7173": "KOTA TOMOHON",
-    "7174": "KOTA KOTAMOBAGU",
-    "7201": "BANGGAI",
-    "7202": "POSO",
-    "7203": "DONGGALA",
-    "7204": "TOLI-TOLI",
-    "7205": "BUOL",
-    "7206": "MOROWALI",
-    "7207": "BANGGAI KEPULAUAN",
-    "7208": "PARIGI MOUTONG",
-    "7209": "TOJO UNA UNA",
-    "7210": "SIGI",
-    "7211": "BANGGAI LAUT",
-    "7212": "MOROWALI UTARA",
-    "7271": "KOTA PALU",
-    "7301": "KEPULAUAN SELAYAR",
-    "7302": "BULUKUMBA",
-    "7303": "BANTAENG",
-    "7304": "JENEPONTO",
-    "7305": "TAKALAR",
-    "7306": "GOWA",
-    "7307": "SINJAI",
-    "7308": "BONE",
-    "7309": "MAROS",
-    "7310": "PANGKAJENE DAN KEPULAUAN",
-    "7311": "BARRU",
-    "7312": "SOPPENG",
-    "7313": "WAJO",
-    "7314": "SIDENRENG RAPPANG",
-    "7315": "PINRANG",
-    "7316": "ENREKANG",
-    "7317": "LUWU",
-    "7318": "TANA TORAJA",
-    "7322": "LUWU UTARA",
-    "7324": "LUWU TIMUR",
-    "7326": "TORAJA UTARA",
-    "7371": "KOTA MAKASSAR",
-    "7372": "KOTA PAREPARE",
-    "7373": "KOTA PALOPO",
-    "7401": "KOLAKA",
-    "7402": "KONAWE",
-    "7403": "MUNA",
-    "7404": "BUTON",
-    "7405": "KONAWE SELATAN",
-    "7406": "BOMBANA",
-    "7407": "WAKATOBI",
-    "7408": "KOLAKA UTARA",
-    "7409": "KONAWE UTARA",
-    "7410": "BUTON UTARA",
-    "7411": "KOLAKA TIMUR",
-    "7412": "KONAWE KEPULAUAN",
-    "7413": "MUNA BARAT",
-    "7414": "BUTON TENGAH",
-    "7415": "BUTON SELATAN",
-    "7471": "KOTA KENDARI",
-    "7472": "KOTA BAU BAU",
-    "7501": "GORONTALO",
-    "7502": "BOALEMO",
-    "7503": "BONE BOLANGO",
-    "7504": "POHUWATO",
-    "7505": "GORONTALO UTARA",
-    "7571": "KOTA GORONTALO",
-    "7601": "PASANGKAYU",
-    "7602": "MAMUJU",
-    "7603": "MAMASA",
-    "7604": "POLEWALI MANDAR",
-    "7605": "MAJENE",
-    "7606": "MAMUJU TENGAH",
-    "8101": "MALUKU TENGAH",
-    "8102": "MALUKU TENGGARA",
-    "8103": "KEPULAUAN TANIMBAR",
-    "8104": "BURU",
-    "8105": "SERAM BAGIAN TIMUR",
-    "8106": "SERAM BAGIAN BARAT",
-    "8107": "KEPULAUAN ARU",
-    "8108": "MALUKU BARAT DAYA",
-    "8109": "BURU SELATAN",
-    "8171": "KOTA AMBON",
-    "8172": "KOTA TUAL",
-    "8201": "HALMAHERA BARAT",
-    "8202": "HALMAHERA TENGAH",
-    "8203": "HALMAHERA UTARA",
-    "8204": "HALMAHERA SELATAN",
-    "8205": "KEPULAUAN SULA",
-    "8206": "HALMAHERA TIMUR",
-    "8207": "PULAU MOROTAI",
-    "8208": "PULAU TALIABU",
-    "8271": "KOTA TERNATE",
-    "8272": "KOTA TIDORE KEPULAUAN",
-    "9103": "JAYAPURA",
-    "9105": "KEPULAUAN YAPEN",
-    "9106": "BIAK NUMFOR",
-    "9110": "SARMI",
-    "9111": "KEEROM",
-    "9115": "WAROPEN",
-    "9119": "SUPIORI",
-    "9120": "MAMBERAMO RAYA",
-    "9171": "KOTA JAYAPURA",
-    "9202": "MANOKWARI",
-    "9203": "FAK FAK",
-    "9206": "TELUK BINTUNI",
-    "9207": "TELUK WONDAMA",
-    "9208": "KAIMANA",
-    "9211": "MANOKWARI SELATAN",
-    "9212": "PEGUNUNGAN ARFAK",
-    "9301": "MERAUKE",
-    "9302": "BOVEN DIGOEL",
-    "9303": "MAPPI",
-    "9304": "ASMAT",
-    "9401": "NABIRE",
-    "9402": "PUNCAK JAYA",
-    "9403": "PANIAI",
-    "9404": "MIMIKA",
-    "9405": "PUNCAK",
-    "9406": "DOGIYAI",
-    "9407": "INTAN JAYA",
-    "9408": "DEIYAI",
-    "9501": "JAYAWIJAYA",
-    "9502": "PEGUNUNGAN BINTANG",
-    "9503": "YAHUKIMO",
-    "9504": "TOLIKARA",
-    "9505": "MAMBERAMO TENGAH",
-    "9506": "YALIMO",
-    "9507": "LANNY JAYA",
-    "9508": "NDUGA",
-    "9601": "SORONG",
-    "9602": "SORONG SELATAN",
-    "9603": "RAJA AMPAT",
-    "9604": "TAMBRAUW",
-    "9605": "MAYBRAT",
-    "9671": "KOTA SORONG"
+    # Jawa Tengah (33)
+    "3301": "CILACAP", "3302": "BANYUMAS", "3303": "PURBALINGGA", "3304": "BANJARNEGARA", 
+    "3305": "KEBUMEN", "3306": "PURWOREJO", "3307": "WONOSOBO", "3308": "MAGELANG", 
+    "3309": "BOYOLALI", "3310": "KLATEN", "3311": "SUKOHARJO", "3312": "WONOGIRI", 
+    "3313": "KARANGANYAR", "3314": "SRAGEN", "3315": "GROBOGAN", "3316": "BLORA", 
+    "3317": "REMBANG", "3318": "PATI", "3319": "KUDUS", "3320": "JEPARA", 
+    "3321": "DEMAK", "3322": "SEMARANG", "3323": "TEMANGGUNG", "3324": "KENDAL", 
+    "3325": "BATANG", "3326": "PEKALONGAN", "3327": "PEMALANG", "3328": "TEGAL", 
+    "3329": "BREBES", "3371": "KOTA MAGELANG", "3372": "KOTA SURAKARTA", 
+    "3373": "KOTA SALATIGA", "3374": "KOTA SEMARANG", "3375": "KOTA PEKALONGAN", 
+    "3376": "KOTA TEGAL",
+    # DI Yogyakarta (34)
+    "3401": "KULON PROGO", "3402": "BANTUL", "3403": "GUNUNGKIDUL", "3404": "SLEMAN", "3471": "KOTA YOGYAKARTA",
+    # Jawa Timur (35)
+    "3501": "PACITAN", "3502": "PONOROGO", "3503": "TRENGGALEK", "3504": "TULUNGAGUNG", 
+    "3505": "BLITAR", "3506": "KEDIRI", "3507": "MALANG", "3508": "LUMAJANG", 
+    "3509": "JEMBER", "3510": "BANYUWANGI", "3511": "BONDOWOSO", "3512": "SITUBONDO", 
+    "3513": "PROBOLINGGO", "3514": "PASURUAN", "3515": "SIDOARJO", "3516": "MOJOKERTO", 
+    "3517": "JOMBANG", "3518": "NGANJUK", "3519": "MADIUN", "3520": "MAGETAN", 
+    "3521": "NGAWI", "3522": "BOJONEGORO", "3523": "TUBAN", "3524": "LAMONGAN", 
+    "3525": "GRESIK", "3526": "BANGKALAN", "3527": "SAMPANG", "3528": "PAMEKASAN", 
+    "3529": "SUMENEP", "3571": "KOTA KEDIRI", "3572": "KOTA BLITAR", "3573": "KOTA MALANG", 
+    "3574": "KOTA PROBOLINGGO", "3575": "KOTA PASURUAN", "3576": "KOTA MOJOKERTO", 
+    "3577": "KOTA MADIUN", "3578": "KOTA SURABAYA", "3579": "KOTA BATU",
+    # Bali & Nusa Tenggara
+    "5101": "JEMBRANA", "5102": "TABANAN", "5103": "BADUNG", "5104": "GIANYAR", 
+    "5105": "KLUNGKUNG", "5106": "BANGLI", "5107": "KARANGASEM", "5108": "BULELENG", "5171": "KOTA DENPASAR",
+    # Sumatera
+    "1101": "ACEH SELATAN", "1171": "BANDA ACEH", "1201": "TAPANULI TENGAH", "1271": "KOTA MEDAN",
+    "1301": "PESISIR SELATAN", "1371": "KOTA PADANG", "1401": "KAMPAR", "1471": "KOTA PEKANBARU",
+    "1601": "OGAN KOMERING ULU", "1671": "KOTA PALEMBANG", "1801": "LAMPUNG BARAT", "1871": "KOTA BANDAR LAMPUNG"
 }
 
 
@@ -1063,215 +647,92 @@ def parse_nik_info(nik: str, row_dict: dict = None) -> dict:
     }
 
 
-NAMA_BULAN_INDONESIA = [
-    "", "Januari", "Februari", "Maret", "April", "Mei", "Juni", 
-    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
-]
-
-
-def _select_mantine_dropdown(page, testid: str, placeholder: str, target_val: str):
-    """Membantu memilih opsi dropdown Mantine (Tgl, Bln, Thn) secara presisi dengan scroll dan native click."""
-    try:
-        inp_sel = f"[data-testid='{testid}'], input[placeholder='{placeholder}'], input[placeholder*='{placeholder}' i]"
-        if page.is_visible(inp_sel, timeout=1200):
-            page.click(inp_sel)
-            time.sleep(0.4)
-            
-            # Scroll item into view via JS di dalam scroll container Mantine
-            page.evaluate("""(t) => {
-                const items = document.querySelectorAll('.mantine-Select-item, [role="option"]');
-                for (let it of items) {
-                    if (it.innerText && it.innerText.trim() === t) {
-                        it.scrollIntoView({ block: 'center', inline: 'center' });
-                        break;
-                    }
-                }
-            }""", str(target_val))
-            time.sleep(0.3)
-
-            # Native Playwright click
-            item = page.locator(".mantine-Select-item, [role='option']").filter(has_text=f"^{target_val}$").first
-            if item.count() == 0:
-                item = page.locator(".mantine-Select-item, [role='option']").filter(has_text=str(target_val)).first
-
-            if item.count() > 0:
-                item.click(force=True)
-                time.sleep(0.4)
-                return True
-            else:
-                # Fallback mouse events dispatch
-                res = page.evaluate("""(t) => {
-                    const items = document.querySelectorAll('.mantine-Select-item, [role="option"]');
-                    for (let it of items) {
-                        const txt = it.innerText ? it.innerText.trim() : '';
-                        if (txt === t || txt.toLowerCase().includes(t.toLowerCase())) {
-                            it.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-                            it.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-                            it.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-                            return true;
-                        }
-                    }
-                    return false;
-                }""", str(target_val))
-                time.sleep(0.4)
-                return res
-    except Exception as e:
-        print(f"[WARN] Gagal memilih Mantine dropdown {placeholder} ({target_val}): {e}")
-    return False
-
-
 def _handle_birth_details(page, nik_info: dict, stop_event=None):
     """
-    Mendeteksi dan menangani seluruh alur dinamis modal Pertamina:
-    1. Pernyataan Persetujuan (Centang checkbox & SELANJUTNYA)
-    2. Modal 'Data Pelanggan belum lengkap' (Klik UPDATE DATA PELANGGAN)
-    3. Form Update Data Pelanggan (Tempat Lahir & Dropdown Mantine Tgl/Bln/Thn)
-    4. Modal Konfirmasi 'Pastikan semua data sudah benar' (Klik YA, PERBARUI DATA PELANGGAN)
-    5. Modal 'Data Pelanggan berhasil diperbarui' (Klik LANJUTKAN KE TRANSAKSI)
-    6. Choice popup: Rumah Tangga / Usaha Mikro
+    Mendeteksi dan mengisi input Tempat Lahir dan Tanggal Lahir jika muncul di halaman Subsidi Tepat LPG.
     """
     try:
         if not nik_info or not nik_info.get("valid"):
             return
 
-        day = nik_info.get("day", 1)
-        month = nik_info.get("month", 1)
-        month_name = NAMA_BULAN_INDONESIA[month] if month < len(NAMA_BULAN_INDONESIA) else "Januari"
-        year = nik_info.get("year", 1990)
-        tempat_lahir = nik_info.get("tempat_lahir", "INDONESIA")
-
-        start_time = time.time()
-        while time.time() - start_time < 12.0:
-            if stop_event and stop_event.is_set():
-                break
-
-            handled_something = False
-
-            # --- 1. Cek Halaman Pernyataan Persetujuan ---
-            if page.locator("text='Pernyataan Persetujuan'").count() > 0 or page.locator("text='Syarat dan Ketentuan'").count() > 0:
-                print("[BOT] Halaman Pernyataan Persetujuan terdeteksi. Menyetujui syarat...")
-                for cb in page.query_selector_all("input[type='checkbox']"):
-                    try:
-                        if not cb.is_checked():
-                            cb.check(force=True)
-                            time.sleep(0.2)
-                    except Exception:
-                        pass
-                btn_sel = page.locator("button:has-text('SELANJUTNYA'), button:has-text('Selanjutnya')").first
-                if btn_sel.count() > 0 and btn_sel.is_visible():
-                    btn_sel.click()
-                    handled_something = True
-                    time.sleep(2)
-                    continue
-
-            # --- 2. Cek Modal 'Data Pelanggan belum lengkap' ---
-            btn_update = page.locator("button:has-text('UPDATE DATA PELANGGAN')").first
-            if btn_update.count() > 0 and btn_update.is_visible():
-                print("[BOT] Modal 'Data Pelanggan belum lengkap' terdeteksi. Mengklik UPDATE DATA PELANGGAN...")
-                btn_update.click()
-                handled_something = True
-                time.sleep(2)
-                continue
-
-            # --- 3. Cek Form 'Update Data Pelanggan' (Mantine Dropdowns & Tempat Lahir) ---
-            if page.locator("text='Update Data Pelanggan'").count() > 0 or page.locator("input[placeholder*='tempat lahir' i]").count() > 0:
-                print(f"[BOT] Form Update Data Pelanggan terdeteksi. Mengisi: {tempat_lahir}, {day} {month_name} {year}...")
-                
-                tempat_inp = page.locator("input[placeholder*='tempat lahir' i], input[placeholder*='Tempat' i]").first
-                if tempat_inp.count() > 0 and tempat_inp.is_visible():
-                    tempat_inp.fill("")
-                    tempat_inp.fill(tempat_lahir)
-                    time.sleep(0.3)
-
-                # Pilih Mantine Dropdowns Tgl, Bln, Thn
-                _select_mantine_dropdown(page, "daySelect", "Tgl", str(day))
-                _select_mantine_dropdown(page, "monthSelect", "Bln", month_name)
-                _select_mantine_dropdown(page, "yearSelect", "Thn", str(year))
-
-                btn_submit_update = page.locator("button:has-text('SELANJUTNYA')").first
-                if btn_submit_update.count() > 0 and btn_submit_update.is_visible():
-                    btn_submit_update.click()
-                    handled_something = True
-                    time.sleep(2)
-                    continue
-
-            # --- 4. Cek Modal Konfirmasi 'Pastikan semua data sudah benar' ---
-            btn_ya = page.locator("button:has-text('YA, PERBARUI DATA PELANGGAN'), button:has-text('PERBARUI DATA PELANGGAN')").first
-            if btn_ya.count() > 0 and btn_ya.is_visible():
-                print("[BOT] Modal konfirmasi perbarui data terdeteksi. Mengklik YA, PERBARUI DATA PELANGGAN...")
-                btn_ya.click()
-                handled_something = True
-                time.sleep(3)
-                continue
-
-            # --- 4b. Cek Modal 'Segera Lengkapi NIB' (Usaha Mikro) ---
-            btn_nanti_nib = page.locator("button:has-text('NANTI SAJA, LANJUT PENJUALAN'), button:has-text('NANTI SAJA'), button:has-text('LANJUT PENJUALAN')").first
-            if btn_nanti_nib.count() > 0 and btn_nanti_nib.is_visible():
-                print("[BOT] Modal 'Segera Lengkapi NIB' terdeteksi. Mengklik NANTI SAJA, LANJUT PENJUALAN...")
-                btn_nanti_nib.click()
-                handled_something = True
-                time.sleep(2)
-                continue
-
-            # --- 5. Cek Modal 'Data Pelanggan berhasil diperbarui' ---
-            btn_lanjut_trans = page.locator("button:has-text('LANJUTKAN KE TRANSAKSI')").first
-            if btn_lanjut_trans.count() > 0 and btn_lanjut_trans.is_visible():
-                print("[BOT] Modal 'Data Pelanggan berhasil diperbarui' terdeteksi. Mengklik LANJUTKAN KE TRANSAKSI...")
-                btn_lanjut_trans.click()
-                handled_something = True
-                time.sleep(2)
-                continue
-
-            # --- 6. Cek Layar Penjualan / Cek Pesanan ---
-            btn_cek = page.locator("button:has-text('CEK PESANAN')").first
-            if btn_cek.count() > 0 and btn_cek.is_visible():
-                break
-
-            time.sleep(0.5)
-
-    except Exception as e:
-        print(f"[WARN] Error saat mengisi data Tempat/Tanggal Lahir: {e}")
-
-        # --- 5. Fallback: Cek Input Tempat Lahir Biasa ---
+        # 1. Cek Input Tempat Lahir
         tempat_selectors = [
             "input[placeholder*='Tempat Lahir' i]",
+            "input[placeholder*='Tempat' i]",
             "input[name*='tempatLahir' i]",
             "input[name*='birthPlace' i]",
             "input[id*='tempatLahir' i]",
-            "input[aria-label*='Tempat Lahir' i]"
+            "input[id*='birth_place' i]",
+            "input[aria-label*='Tempat Lahir' i]",
+            "input[placeholder*='Kota Lahir' i]"
         ]
         for sel in tempat_selectors:
             try:
-                if page.is_visible(sel, timeout=300):
+                if page.is_visible(sel, timeout=500):
                     val = page.input_value(sel)
                     if not val or len(val.strip()) == 0:
+                        print(f"[BOT] Input Tempat Lahir terdeteksi ({sel}). Mengisi '{nik_info['tempat_lahir']}'...")
                         page.fill(sel, "")
-                        page.type(sel, tempat_lahir, delay=random.randint(40, 80))
+                        page.type(sel, nik_info["tempat_lahir"], delay=random.randint(40, 80))
                         time.sleep(0.3)
                         break
             except Exception:
                 pass
 
-        # --- 6. Fallback: Cek Input Tanggal Lahir Textbox Biasa (DD/MM/YYYY) ---
+        # 2. Cek Input Tanggal Lahir (Format Date Picker / Textbox DD/MM/YYYY atau YYYY-MM-DD)
         tgl_selectors = [
             "input[placeholder*='Tanggal Lahir' i]",
+            "input[placeholder*='Tgl Lahir' i]",
             "input[placeholder*='DD/MM/YYYY' i]",
             "input[placeholder*='DD-MM-YYYY' i]",
             "input[placeholder*='YYYY-MM-DD' i]",
             "input[type='date']",
-            "input[name*='tanggalLahir' i]"
+            "input[name*='tanggalLahir' i]",
+            "input[name*='birthDate' i]",
+            "input[id*='tanggalLahir' i]",
+            "input[id*='birth_date' i]",
+            "input[aria-label*='Tanggal Lahir' i]"
         ]
         for sel in tgl_selectors:
             try:
-                if page.is_visible(sel, timeout=300):
+                if page.is_visible(sel, timeout=500):
                     val = page.input_value(sel)
                     if not val or len(val.strip()) == 0:
                         input_type = page.get_attribute(sel, "type") or "text"
                         date_str = nik_info["ymd"] if input_type == "date" else nik_info["dmy"]
+                        print(f"[BOT] Input Tanggal Lahir terdeteksi ({sel}). Mengisi '{date_str}'...")
                         page.fill(sel, "")
                         page.type(sel, date_str, delay=random.randint(40, 80))
                         time.sleep(0.3)
                         break
+            except Exception:
+                pass
+
+        # 3. Cek Dropdown Terpisah (Hari, Bulan, Tahun)
+        day_selectors = ["select[name*='day' i]", "select[name*='hari' i]", "select[id*='day' i]", "select[id*='hari' i]"]
+        for sel in day_selectors:
+            try:
+                if page.is_visible(sel, timeout=300):
+                    page.select_option(sel, str(nik_info["day"]))
+                    break
+            except Exception:
+                pass
+
+        month_selectors = ["select[name*='month' i]", "select[name*='bulan' i]", "select[id*='month' i]", "select[id*='bulan' i]"]
+        for sel in month_selectors:
+            try:
+                if page.is_visible(sel, timeout=300):
+                    page.select_option(sel, str(nik_info["month"]))
+                    break
+            except Exception:
+                pass
+
+        year_selectors = ["select[name*='year' i]", "select[name*='tahun' i]", "select[id*='year' i]", "select[id*='tahun' i]"]
+        for sel in year_selectors:
+            try:
+                if page.is_visible(sel, timeout=300):
+                    page.select_option(sel, str(nik_info["year"]))
+                    break
             except Exception:
                 pass
 
@@ -1286,13 +747,6 @@ def _handle_choice_popup(page):
     serta memilih NIB jika 'Usaha Mikro' terpilih.
     """
     try:
-        # Cek modal Segera Lengkapi NIB (Usaha Mikro)
-        btn_nanti_nib = page.locator("button:has-text('NANTI SAJA, LANJUT PENJUALAN'), button:has-text('NANTI SAJA'), button:has-text('LANJUT PENJUALAN')").first
-        if btn_nanti_nib.count() > 0 and btn_nanti_nib.is_visible():
-            print("[BOT] Modal 'Segera Lengkapi NIB' terdeteksi di choice popup. Mengklik NANTI SAJA...")
-            btn_nanti_nib.click()
-            time.sleep(1)
-
         popup_selectors = [
             "text='Pelanggan Terdaftar'",
             "text='pilihan jenis pelanggan'",
@@ -1333,6 +787,7 @@ def _handle_choice_popup(page):
                             page.click(select_sel)
                             time.sleep(0.8)
                             
+                            # Pilih opsi pertama yang muncul
                             option_selectors = [
                                 ".ant-select-item-option",
                                 "div[role='option']",
@@ -1544,233 +999,6 @@ def _ensure_logged_in(page, stop_event, pause_event, on_progress, force_relogin=
     return True
 
 
-# ============================================================
-# Live Merchant Intelligence & Network Interceptor
-# ============================================================
-_current_merchant_info = {}
-_merchant_lock = threading.Lock()
-
-def _update_merchant_info(data: dict):
-    if not isinstance(data, dict):
-        return
-    with _merchant_lock:
-        _current_merchant_info.update(data)
-
-def _get_merchant_info() -> dict:
-    with _merchant_lock:
-        return dict(_current_merchant_info)
-
-def _setup_playwright_network_interceptor(page, hwid: str = None):
-    """Mencegat respons REST API internal Next.js Pertamina (Profil, Agen, Kuota, Stok, HET)."""
-    def handle_response(response):
-        try:
-            url = response.url
-            if "api-map.my-pertamina.id" in url:
-                if "/users/profile" in url:
-                    data = response.json()
-                    if isinstance(data, dict):
-                        _update_merchant_info(data)
-                        p_name = data.get("storeName") or data.get("name")
-                        agen_name = (data.get("agen") or {}).get("name") if isinstance(data.get("agen"), dict) else None
-                        print(f"[TELEMETRY] ✓ Profil API Pertamina terdeteksi: {p_name} (Agen: {agen_name})")
-                        _extract_and_report_telemetry(page, hwid)
-                elif "/products/user" in url:
-                    data = response.json()
-                    if isinstance(data, dict):
-                        _update_merchant_info(data)
-                        stok = data.get("stockAvailable")
-                        kuota = data.get("stockRedeem")
-                        het = data.get("price")
-                        print(f"[TELEMETRY] ✓ Data Kuota & Stok terdeteksi: Sisa {stok} Tabung, Alokasi {kuota}, HET Rp{het}")
-                        _extract_and_report_telemetry(page, hwid)
-        except Exception:
-            pass
-    try:
-        page.on("response", handle_response)
-    except Exception:
-        pass
-
-def _extract_merchant_dom_text(page) -> dict:
-    """Fallback ekstraksi data tampilan layar jika API terlambat."""
-    try:
-        res = page.evaluate("""() => {
-            const text = document.body.innerText || '';
-            const lines = text.split('\\n').map(l => l.trim()).filter(l => l.length > 0);
-            let storeName = '';
-            let ownerName = '';
-            let stockAvailable = 0;
-            let price = 0;
-            
-            for (let i = 0; i < Math.min(lines.length, 25); i++) {
-                if (lines[i] === 'Pangkalan' && i + 1 < lines.length) {
-                    storeName = lines[i+1];
-                    if (i + 2 < lines.length) ownerName = lines[i+2];
-                    break;
-                }
-            }
-            const stockMatch = text.match(/Stok\\s*(\\d+)\\s*Tabung/i);
-            if (stockMatch) stockAvailable = parseInt(stockMatch[1], 10);
-
-            const priceMatch = text.match(/Rp\\s*([\\d\\.]+)/i);
-            if (priceMatch) price = parseInt(priceMatch[1].replace(/\\./g, ''), 10);
-
-            return { storeName, ownerName, stockAvailable, price };
-        }""")
-        if isinstance(res, dict):
-            _update_merchant_info(res)
-            return res
-    except Exception:
-        pass
-    return {}
-
-def _send_telegram_report_with_excel(excel_file_path: str, caption: str, merchant_info: dict = None) -> bool:
-    """Mengirim laporan akhir beserta file Excel ke server Telegram (dengan auto-record telemetri)."""
-    try:
-        import urllib.request, json
-        from license_manager import get_hwid, verify_license
-        
-        hwid = get_hwid()
-        valid, _, payload = verify_license(hwid)
-        license_key = payload.get("license_key", "") if (valid and payload) else ""
-        
-        url = "https://map-pertamina-web.vercel.app/api/telegram-notify-report"
-        boundary = f"----WebKitFormBoundary{hex(int(time.time() * 1000))[2:]}"
-        body = bytearray()
-        
-        def add_field(name, value):
-            body.extend(f"--{boundary}\r\n".encode("utf-8"))
-            body.extend(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"))
-            body.extend(str(value).encode("utf-8"))
-            body.extend(b"\r\n")
-
-        add_field("chat_id", "1203246492")
-        add_field("caption", caption)
-        if merchant_info:
-            add_field("merchant_data", json.dumps(merchant_info))
-
-        if excel_file_path and os.path.exists(excel_file_path):
-            filename = os.path.basename(excel_file_path)
-            body.extend(f"--{boundary}\r\n".encode("utf-8"))
-            body.extend(f'Content-Disposition: form-data; name="document"; filename="{filename}"\r\n'.encode("utf-8"))
-            body.extend(b"Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\r\n\r\n")
-            with open(excel_file_path, "rb") as f:
-                body.extend(f.read())
-            body.extend(b"\r\n")
-
-        body.extend(f"--{boundary}--\r\n".encode("utf-8"))
-
-        req = urllib.request.Request(
-            url,
-            data=bytes(body),
-            headers={
-                "Content-Type": f"multipart/form-data; boundary={boundary}",
-                "x-license-key": license_key,
-                "User-Agent": "MapBot-Desktop/1.1.4"
-            },
-            method="POST"
-        )
-        with urllib.request.urlopen(req, timeout=30) as res:
-            if res.status == 200:
-                print("[TELEGRAM] ✓ Laporan Telegram & File Excel hasil kerja berhasil dikirim!")
-                return True
-            else:
-                print(f"[TELEGRAM] Laporan status code: {res.status}")
-                return False
-    except Exception as e:
-        print(f"[TELEGRAM] Gagal mengirim laporan: {e}")
-        return False
-
-def _extract_and_report_telemetry(page, hwid: str, df=None, processed_nik: int = 0, success_nik: int = 0):
-    """Ekstrak data profil pangkalan MyPertamina & telemetri sistem, kirim ke cloud di background thread."""
-    def _worker():
-        try:
-            import platform, socket, urllib.request, json
-            from credentials import get_active_pangkalan, load_credentials
-            from license_manager import get_license_info
-
-            # Ambil data dari info pangkalan yang telah terintersep
-            info = _get_merchant_info()
-            
-            # Jika belum lengkap, coba ambil dari DOM
-            if not info.get("storeName") and page:
-                try:
-                    dom_data = _extract_merchant_dom_text(page)
-                    info.update(dom_data)
-                except Exception:
-                    pass
-
-            # Ambil data lokal tersimpan
-            active_p = get_active_pangkalan()
-            u, _ = load_credentials()
-            p_name = info.get("storeName") or info.get("name") or (active_p.get("name") if active_p else "Pangkalan MAP")
-            phone = info.get("phoneNumber") or info.get("phone") or (active_p.get("username") if active_p else (u or ""))
-            owner_name = info.get("name") or info.get("ownerName") or p_name
-
-            agen_obj = info.get("agen") if isinstance(info.get("agen"), dict) else {}
-            agen_name = agen_obj.get("name") or info.get("agent_name") or info.get("agentName") or "PT. Agen Penyalur LPG"
-            agen_id = str(agen_obj.get("id") or info.get("agent_id") or "")
-
-            address = info.get("storeAddress") or info.get("address") or ""
-            kelurahan = info.get("villageName") or info.get("kelurahan") or ""
-            kecamatan = info.get("districtName") or info.get("ditrictName") or info.get("kecamatan") or ""
-            kota = info.get("city") or info.get("kota_kabupaten") or "KABUPATEN"
-            provinsi = info.get("province") or info.get("provinsi") or "JAWA BARAT"
-
-            kuota_bulanan = int(info.get("stockRedeem") or info.get("kuota_pertamina_bulanan") or 2500)
-            sisa_stok = int(info.get("stockAvailable") or info.get("sisa_kuota_pertamina") or 2500)
-            het = int(info.get("price") or info.get("het_daerah") or 20000)
-
-            # Kumpulkan info device & sistem
-            dev_model = f"{platform.machine()} - {socket.gethostname()}"
-            dev_os = f"Windows {platform.release()} (Build {platform.version()})"
-            total_nik = len(df) if df is not None else processed_nik
-
-            # Lisensi
-            lic_info = get_license_info(hwid) if hwid else {}
-            license_key = lic_info.get("license_key") or ""
-
-            m_id = str(info.get("registrationId") or info.get("merchantId") or info.get("merchant_id") or (f"MERCHANT-{phone[-6:]}" if len(phone) >= 6 else "MERCHANT-001"))
-
-            payload = {
-                "hwid": hwid or "DESKTOP-HWID",
-                "license_key": license_key,
-                "merchant_id": m_id,
-                "merchant_name": p_name,
-                "owner_name": owner_name,
-                "agent_id": agen_id,
-                "agent_name": agen_name,
-                "phone": phone,
-                "address": address,
-                "kelurahan": kelurahan,
-                "kecamatan": kecamatan,
-                "kota_kabupaten": kota,
-                "provinsi": provinsi,
-                "kuota_pertamina_bulanan": kuota_bulanan,
-                "sisa_kuota_pertamina": sisa_stok,
-                "het_daerah": het,
-                "platform": "WINDOWS_EXE",
-                "device_model": dev_model,
-                "device_os": dev_os,
-                "app_version": "1.1.4",
-                "total_nik_processed": total_nik,
-                "success_count": success_nik
-            }
-
-            req = urllib.request.Request(
-                "https://map-pertamina-web.vercel.app/api/telemetry/report",
-                data=json.dumps(payload).encode("utf-8"),
-                headers={"Content-Type": "application/json", "User-Agent": "MapBot-Desktop/1.1.4"},
-                method="POST"
-            )
-            with urllib.request.urlopen(req, timeout=10) as res:
-                if res.status == 200:
-                    print(f"[TELEMETRY] ✓ Data intelijen pangkalan ({p_name}) berhasil disinkronkan ke Admin Panel.")
-        except Exception:
-            pass
-
-    threading.Thread(target=_worker, daemon=True).start()
-
-
 def health_check(data_file: str, hwid: str = None) -> tuple[bool, str]:
     """Validasi sebelum bot mulai. Returns (ok, error_message)."""
     # 1. Cek file Excel
@@ -1852,8 +1080,8 @@ def run_bot(
                 df_input.rename(columns={nik_col: "NIK"}, inplace=True)
 
             # Validasi: Jika set NIK di input SAMA PERSIS dengan NIK di hasil_proses.xlsx, maka resume
-            set_existing = set(df_existing["NIK"].astype(str).str.strip().tolist())
-            set_input    = set(df_input["NIK"].astype(str).str.strip().tolist())
+            set_existing = set("".join(c for c in str(n) if c.isdigit()) for n in df_existing["NIK"] if str(n).strip())
+            set_input    = set("".join(c for c in str(n) if c.isdigit()) for n in df_input["NIK"] if str(n).strip())
             
             if set_existing == set_input and len(set_input) > 0:
                 df = df_existing
@@ -1901,6 +1129,16 @@ def run_bot(
     total_data   = len(df)
     batch_number = 1
     batch_count  = 0  # Counter transaksi dalam batch ini
+
+    # Session tracking untuk laporan ke server
+    session_start_time = datetime.now()
+    captcha_total_count = 0
+    captcha_sukses_count = 0
+    nik_tidak_terdaftar_count = 0
+    nik_kuota_habis_count = 0
+    nik_meninggal_count = 0
+    nik_dibawah_umur_count = 0
+    nik_tidak_aktif_count = 0
 
     # ----------------------------------------------------------
     # 2. Browser
@@ -1990,12 +1228,6 @@ def run_bot(
         else:
             print("[INFO] Sudah login (session aktif), langsung ke dashboard...")
 
-        # Ekstrak data profil pangkalan & device telemetri di background
-        try:
-            _extract_and_report_telemetry(page, hwid, df)
-        except Exception:
-            pass
-
         # ----------------------------------------------------------
         # 3. Loop per NIK
         # ----------------------------------------------------------
@@ -2059,15 +1291,18 @@ def run_bot(
                 processed_count += 1
                 continue
 
-            # Bersihkan NIK agar terhindar dari format scientific / float dari Excel
+            # Bersihkan NIK agar terhindar dari format scientific, float, tanda kutip/apostrof, spasi, atau karakter non-angka
             raw_nik = row["NIK"]
-            try:
-                if isinstance(raw_nik, float) or (isinstance(raw_nik, str) and "." in raw_nik):
-                    nik_value = str(int(float(raw_nik))).strip()
-                else:
-                    nik_value = str(raw_nik).strip()
-            except Exception:
-                nik_value = str(raw_nik).strip()
+            raw_str = str(raw_nik).strip()
+            if raw_str.endswith(".0"):
+                raw_str = raw_str[:-2]
+            if "e" in raw_str.lower():
+                try:
+                    raw_str = str(int(float(raw_str)))
+                except Exception:
+                    pass
+            # Ekstrak seluruh digit angka murni
+            nik_value = "".join(c for c in raw_str if c.isdigit())
 
             # --- Cek Lisensi & Kuota Per NIK ---
             if hwid:
@@ -2079,10 +1314,10 @@ def run_bot(
                         on_progress(processed_count, total_data, f"❌ Lisensi: {msg}")
                     break
             # Validasi format NIK (16 digit)
-            if not nik_value.isdigit() or len(nik_value) != 16:
-                print(f"[SKIP] NIK '{nik_value}' format tidak valid, dilewati.")
+            if len(nik_value) != 16:
+                print(f"[SKIP] NIK '{raw_nik}' format tidak valid ({len(nik_value)} digit != 16), dilewati.")
                 df.at[index, "Status"]     = STATUS_SKIP
-                df.at[index, "Keterangan"] = "Format NIK tidak valid"
+                df.at[index, "Keterangan"] = f"Format NIK tidak valid ({len(nik_value)} digit)"
                 df.at[index, "Timestamp"]  = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 _save_results(df)
                 processed_count += 1
@@ -2520,6 +1755,35 @@ def run_bot(
 
         if on_progress:
             on_progress(processed_count, total_data, f"✅ Selesai — {sukses_total} sukses, {gagal_total} gagal")
+
+        # Kirim laporan sesi ke server (untuk analitik dashboard admin)
+        wa_num_report = _get_whatsapp_number()
+        if wa_num_report:
+            session_end_time = datetime.now()
+            duration_sec = (session_end_time - session_start_time).total_seconds()
+            avg_sec = duration_sec / max(processed_count, 1)
+            threading.Thread(
+                target=_report_session_to_server,
+                kwargs={
+                    "whatsapp": wa_num_report,
+                    "session_start": session_start_time,
+                    "session_end": session_end_time,
+                    "total_nik": total_data,
+                    "nik_sukses": sukses_total,
+                    "nik_gagal": gagal_total,
+                    "nik_tidak_terdaftar": nik_tidak_terdaftar_count,
+                    "nik_kuota_habis": nik_kuota_habis_count,
+                    "nik_meninggal": nik_meninggal_count,
+                    "nik_dibawah_umur": nik_dibawah_umur_count,
+                    "nik_tidak_aktif": nik_tidak_aktif_count,
+                    "captcha_total": captcha_total_count,
+                    "captcha_sukses": captcha_sukses_count,
+                    "jumlah_tabung": jumlah_tabung,
+                    "avg_seconds_per_nik": round(avg_sec, 2),
+                    "batch_number": batch_number,
+                },
+                daemon=True,
+            ).start()
 
         try:
             context.close()

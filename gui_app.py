@@ -654,7 +654,7 @@ class MainScreen(ctk.CTkFrame):
                     s = str(int(float(s)))
                 except Exception:
                     pass
-            return s
+            return "".join(c for c in s if c.isdigit())
 
         try:
             import pandas as pd
