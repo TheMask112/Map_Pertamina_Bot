@@ -4,7 +4,7 @@ import android.util.Log
 import kotlinx.coroutines.delay
 
 object ChoicePopupHandler {
-    suspend fun handle(pageInteractor: PageInteractor) {
+    suspend fun handle(pageInteractor: PageInteractor, preferUm: Boolean = false): String {
         val popupTexts = listOf("Pelanggan Terdaftar", "pilihan jenis pelanggan", "TEKAN pilihan jenis")
         var isPopup = false
 
@@ -15,15 +15,16 @@ object ChoicePopupHandler {
             }
         }
 
-        if (!isPopup) return
+        if (!isPopup) return ""
 
         Log.d("ChoicePopup", "Popup jenis pelanggan terdeteksi")
 
         var chosenType = ""
-        for (opt in listOf("Rumah Tangga", "Usaha Mikro")) {
+        val optionsToTry = if (preferUm) listOf("Usaha Mikro", "Rumah Tangga") else listOf("Rumah Tangga", "Usaha Mikro")
+        for (opt in optionsToTry) {
             if (pageInteractor.clickButtonByText(opt)) {
                 chosenType = opt
-                Log.d("ChoicePopup", "Memilih: $opt")
+                Log.d("ChoicePopup", "Memilih: $opt (prioritas preferUm=$preferUm)")
                 delay(800)
                 break
             }
@@ -53,5 +54,8 @@ object ChoicePopupHandler {
                 break
             }
         }
+
+        return chosenType
     }
 }
+

@@ -5,6 +5,7 @@ import com.mapbot.pertamina.captcha.CaptchaExtractor
 import com.mapbot.pertamina.captcha.CaptchaSolver
 import com.mapbot.pertamina.captcha.TouchSimulator
 import com.mapbot.pertamina.data.NikData
+import com.mapbot.pertamina.data.SessionData
 import com.mapbot.pertamina.util.Constants
 import com.mapbot.pertamina.util.LicenseManager
 import kotlinx.coroutines.*
@@ -187,7 +188,9 @@ class BotEngine(
             // Step 3a: Handle Birth Details & Modals
             log("Memeriksa modal & data pelanggan...")
             pageInteractor.handleBirthDetails(nikData.nik)
-            ChoicePopupHandler.handle(pageInteractor)
+            val chosenType = ChoicePopupHandler.handle(pageInteractor, preferUm = SessionData.enableUmSplit)
+            val isUm = (chosenType == "Usaha Mikro") || nikData.kategori.contains("UM", ignoreCase = true) || nikData.kategori.contains("USAHA", ignoreCase = true)
+            val targetTabung = if (SessionData.enableUmSplit && isUm) SessionData.tabungUm else SessionData.tabungRt
 
             // Tunggu hingga layar penjualan (CEK PESANAN) muncul atau error terdeteksi
             var reachedSales = false
@@ -223,8 +226,9 @@ class BotEngine(
                 delay(1000)
             }
 
-            // Step 4: Tambahkan 1 tabung SEBELUM CEK PESANAN
-            pageInteractor.addTabung(1)
+            // Step 4: Tambahkan tabung SEBELUM CEK PESANAN
+            log("Mengatur tabung: ${if (isUm) "Usaha Mikro" else "Rumah Tangga"} ($targetTabung Tabung)...")
+            pageInteractor.addTabung(targetTabung)
             delay(600)
 
             // Step 4b: Klik CEK PESANAN
@@ -370,18 +374,19 @@ class BotEngine(
                 }
                 
                 if (isSuccess) {
-                    log("✅ SUKSES LUNAS: ${nikData.nik}")
+                    val tipeLabel = if (isUm) "Usaha Mikro" else "Rumah Tangga"
+                    log("✅ SUKSES LUNAS: ${nikData.nik} ($tipeLabel - $targetTabung Tabung)")
                     nikData.status = Constants.STATUS_SUKSES
-                    nikData.keterangan = "Sukses"
+                    nikData.keterangan = "Sukses ($tipeLabel - $targetTabung Tabung)"
                     nikData.timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
 
-                    // Potong kuota HANYA setelah transaksi terverifikasi 100% sukses
-                    val localConsumed = LicenseManager.consumeQuota(appContext, 1)
+                    // Potong kuota HANYA setelah transaksi terverifikasi 100% sukses berbasis targetTabung
+                    val localConsumed = LicenseManager.consumeQuota(appContext, targetTabung)
                     if (localConsumed) {
-                        log("Kuota lokal berhasil dipotong.")
+                        log("Kuota lokal berhasil dipotong ($targetTabung tabung).")
                     }
                     try {
-                        LicenseManager.consumeQuotaOnline(appContext, 1)
+                        LicenseManager.consumeQuotaOnline(appContext, targetTabung)
                     } catch (_: Exception) {}
                 } else {
                     val fullText = pageInteractor.getBodyText()

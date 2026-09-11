@@ -291,18 +291,40 @@ class MainScreen(ctk.CTkFrame):
         sg = ctk.CTkFrame(setting_card, fg_color="transparent")
         sg.pack(fill="x", padx=16, pady=(0, 14))
 
-        ctk.CTkLabel(sg, text="Jumlah tabung:", font=ctk.CTkFont(size=12), text_color=C_MUTED).grid(row=0, column=0, sticky="w", pady=4)
+        ctk.CTkLabel(sg, text="Tabung Rumah Tangga:", font=ctk.CTkFont(size=12), text_color=C_MUTED).grid(row=0, column=0, sticky="w", pady=4)
         self.combo_tabung = ctk.CTkComboBox(
             sg,
             values=["1", "2", "3", "4", "5"],
-            width=80, height=32,
+            width=80, height=30,
             fg_color=C_BG, border_color=C_BORDER, button_color=C_ACCENT,
             text_color=C_TEXT, font=ctk.CTkFont(size=12),
         )
         self.combo_tabung.set("1")
         self.combo_tabung.grid(row=0, column=1, padx=(12, 0), pady=4, sticky="w")
 
-        ctk.CTkLabel(sg, text="Batas per batch:", font=ctk.CTkFont(size=12), text_color=C_MUTED).grid(row=1, column=0, sticky="w", pady=4)
+        ctk.CTkLabel(sg, text="Tabung Usaha Mikro:", font=ctk.CTkFont(size=12), text_color=C_MUTED).grid(row=1, column=0, sticky="w", pady=4)
+        self.combo_tabung_um = ctk.CTkComboBox(
+            sg,
+            values=["1", "2", "3", "4", "5"],
+            width=80, height=30,
+            fg_color=C_BG, border_color=C_BORDER, button_color=C_ACCENT,
+            text_color=C_TEXT, font=ctk.CTkFont(size=12),
+        )
+        self.combo_tabung_um.set("2")
+        self.combo_tabung_um.grid(row=1, column=1, padx=(12, 0), pady=4, sticky="w")
+
+        self.chk_split_um = ctk.CTkCheckBox(
+            sg,
+            text="Otomatis bedakan tabung UM vs RT (Prioritas UM)",
+            font=ctk.CTkFont(size=11),
+            text_color=C_GOLD,
+            fg_color=C_ACCENT,
+            hover_color=C_ACCENT2,
+        )
+        self.chk_split_um.select()
+        self.chk_split_um.grid(row=2, column=0, columnspan=2, sticky="w", pady=(2, 6))
+
+        ctk.CTkLabel(sg, text="Batas per batch:", font=ctk.CTkFont(size=12), text_color=C_MUTED).grid(row=3, column=0, sticky="w", pady=4)
         self.combo_batch = ctk.CTkComboBox(
             sg,
             values=["Tanpa Batas", "50 Data", "100 Data", "200 Data"],
@@ -311,16 +333,16 @@ class MainScreen(ctk.CTkFrame):
             text_color=C_TEXT, font=ctk.CTkFont(size=12),
         )
         self.combo_batch.set("Tanpa Batas")
-        self.combo_batch.grid(row=1, column=1, padx=(12, 0), pady=4)
+        self.combo_batch.grid(row=3, column=1, padx=(12, 0), pady=4)
 
-        ctk.CTkLabel(sg, text="Jeda antar batch:", font=ctk.CTkFont(size=12), text_color=C_MUTED).grid(row=2, column=0, sticky="w", pady=4)
+        ctk.CTkLabel(sg, text="Jeda antar batch:", font=ctk.CTkFont(size=12), text_color=C_MUTED).grid(row=4, column=0, sticky="w", pady=4)
         self.lbl_jeda_info = ctk.CTkLabel(
             sg, text="Manual (klik 'Lanjutkan')",
             font=ctk.CTkFont(size=12), text_color=C_MUTED,
         )
-        self.lbl_jeda_info.grid(row=2, column=1, padx=(12, 0), sticky="w")
+        self.lbl_jeda_info.grid(row=4, column=1, padx=(12, 0), sticky="w")
 
-        ctk.CTkLabel(sg, text="Mode Captcha:", font=ctk.CTkFont(size=12), text_color=C_MUTED).grid(row=3, column=0, sticky="w", pady=4)
+        ctk.CTkLabel(sg, text="Mode Captcha:", font=ctk.CTkFont(size=12), text_color=C_MUTED).grid(row=5, column=0, sticky="w", pady=4)
         self.combo_captcha = ctk.CTkComboBox(
             sg,
             values=["Auto (Bot)", "Manual (User)"],
@@ -329,15 +351,15 @@ class MainScreen(ctk.CTkFrame):
             text_color=C_TEXT, font=ctk.CTkFont(size=12),
         )
         self.combo_captcha.set("Auto (Bot)")
-        self.combo_captcha.grid(row=3, column=1, padx=(12, 0), pady=4)
+        self.combo_captcha.grid(row=5, column=1, padx=(12, 0), pady=4)
 
         # Separator line
-        ctk.CTkFrame(sg, fg_color=C_BORDER, height=1).grid(row=4, column=0, columnspan=2, sticky="ew", pady=(6, 6))
+        ctk.CTkFrame(sg, fg_color=C_BORDER, height=1).grid(row=6, column=0, columnspan=2, sticky="ew", pady=(6, 6))
 
         # Multi-Pangkalan Profile Row
-        ctk.CTkLabel(sg, text="Pangkalan:", font=ctk.CTkFont(size=12, weight="bold"), text_color=C_GOLD).grid(row=5, column=0, sticky="w", pady=4)
+        ctk.CTkLabel(sg, text="Pangkalan:", font=ctk.CTkFont(size=12, weight="bold"), text_color=C_GOLD).grid(row=7, column=0, sticky="w", pady=4)
         p_frame = ctk.CTkFrame(sg, fg_color="transparent")
-        p_frame.grid(row=5, column=1, sticky="w", pady=4)
+        p_frame.grid(row=7, column=1, sticky="w", pady=4)
 
         self.combo_pangkalan = ctk.CTkComboBox(
             p_frame,
@@ -364,30 +386,30 @@ class MainScreen(ctk.CTkFrame):
         )
         self.btn_del_pangkalan.pack(side="left", padx=2)
 
-        ctk.CTkLabel(sg, text="Username/HP:", font=ctk.CTkFont(size=12), text_color=C_MUTED).grid(row=6, column=0, sticky="w", pady=4)
+        ctk.CTkLabel(sg, text="Username/HP:", font=ctk.CTkFont(size=12), text_color=C_MUTED).grid(row=8, column=0, sticky="w", pady=4)
         self.entry_username = ctk.CTkEntry(
             sg, width=200, height=32,
             fg_color=C_BG, border_color=C_BORDER, text_color=C_TEXT,
             font=ctk.CTkFont(size=12),
             placeholder_text="Nomor HP atau Email",
         )
-        self.entry_username.grid(row=6, column=1, padx=(12, 0), pady=4, sticky="w")
+        self.entry_username.grid(row=8, column=1, padx=(12, 0), pady=4, sticky="w")
 
-        ctk.CTkLabel(sg, text="PIN:", font=ctk.CTkFont(size=12), text_color=C_MUTED).grid(row=7, column=0, sticky="w", pady=4)
+        ctk.CTkLabel(sg, text="PIN:", font=ctk.CTkFont(size=12), text_color=C_MUTED).grid(row=9, column=0, sticky="w", pady=4)
         self.entry_password = ctk.CTkEntry(
             sg, width=200, height=32, show="*",
             fg_color=C_BG, border_color=C_BORDER, text_color=C_TEXT,
             font=ctk.CTkFont(size=12),
             placeholder_text="PIN (6 digit)",
         )
-        self.entry_password.grid(row=7, column=1, padx=(12, 0), pady=4, sticky="w")
+        self.entry_password.grid(row=9, column=1, padx=(12, 0), pady=4, sticky="w")
 
         ctk.CTkButton(
             sg, text="Simpan Profil Pangkalan", height=28, width=170,
             fg_color=C_BORDER, hover_color=C_BG, text_color=C_MUTED,
             font=ctk.CTkFont(size=11),
             command=self._save_credentials,
-        ).grid(row=8, column=0, columnspan=2, pady=(4, 8), sticky="e")
+        ).grid(row=10, column=0, columnspan=2, pady=(4, 8), sticky="e")
 
         self._load_saved_credentials()
         btn_card = ctk.CTkFrame(left, fg_color="transparent")
@@ -445,6 +467,30 @@ class MainScreen(ctk.CTkFrame):
             command=self._open_batch_runner_dialog,
         )
         self.btn_batch.pack(fill="x", pady=(0, 6))
+
+        # Baris Tombol Fitur Baru: Pemindai Cepat NIK & Cek Legalitas NIB OSS
+        tools_row = ctk.CTkFrame(left, fg_color="transparent")
+        tools_row.pack(fill="x", pady=(0, 6))
+
+        self.btn_fast_filter = ctk.CTkButton(
+            tools_row,
+            text="⚡ Scan NIK Cepat (REST)",
+            height=34,
+            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            fg_color=C_ACCENT, hover_color=C_ACCENT2,
+            command=self._open_fast_filter_dialog,
+        )
+        self.btn_fast_filter.pack(side="left", expand=True, fill="x", padx=(0, 4))
+
+        self.btn_nib_checker = ctk.CTkButton(
+            tools_row,
+            text="🏢 Cek NIB Usaha Mikro (OSS)",
+            height=34,
+            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            fg_color="#0D9488", hover_color="#0F766E",
+            command=self._open_nib_checker_dialog,
+        )
+        self.btn_nib_checker.pack(side="left", expand=True, fill="x", padx=(4, 0))
 
         # ── STATUS BAR ────────────────────────────────────────
         self.lbl_status = ctk.CTkLabel(
@@ -868,6 +914,18 @@ class MainScreen(ctk.CTkFrame):
         except (ValueError, AttributeError):
             return 1
 
+    def _get_jumlah_tabung_um(self) -> int:
+        try:
+            return int(self.combo_tabung_um.get())
+        except (ValueError, AttributeError):
+            return 2
+
+    def _get_split_um_rt(self) -> bool:
+        try:
+            return bool(self.chk_split_um.get())
+        except (ValueError, AttributeError):
+            return True
+
     def _get_captcha_mode(self) -> str:
         """Get captcha mode: 'auto' or 'manual'"""
         val = self.combo_captcha.get()
@@ -1106,14 +1164,16 @@ class MainScreen(ctk.CTkFrame):
 
             print("[BROWSER] Chromium siap digunakan!")
             run_bot(
-                data_file     = self.selected_file,
-                stop_event    = self.stop_event,
-                pause_event   = self.pause_event,
-                batch_limit   = self._get_batch_limit(),
-                jumlah_tabung = self._get_jumlah_tabung(),
-                on_progress   = self._on_progress,
-                hwid          = self.hwid,
-                captcha_mode  = self._get_captcha_mode(),
+                data_file        = self.selected_file,
+                stop_event       = self.stop_event,
+                pause_event      = self.pause_event,
+                batch_limit      = self._get_batch_limit(),
+                jumlah_tabung    = self._get_jumlah_tabung(),
+                jumlah_tabung_um = self._get_jumlah_tabung_um(),
+                split_um_rt      = self._get_split_um_rt(),
+                on_progress      = self._on_progress,
+                hwid             = self.hwid,
+                captcha_mode     = self._get_captcha_mode(),
             )
 
         except Exception as e:
@@ -1285,14 +1345,16 @@ class MainScreen(ctk.CTkFrame):
 
                 # Jalankan bot untuk pangkalan ini
                 run_bot(
-                    data_file     = excel_path,
-                    stop_event    = self.stop_event,
-                    pause_event   = self.pause_event,
-                    batch_limit   = self._get_batch_limit(),
-                    jumlah_tabung = self._get_jumlah_tabung(),
-                    on_progress   = self._on_progress,
-                    hwid          = self.hwid,
-                    captcha_mode  = self._get_captcha_mode(),
+                    data_file        = excel_path,
+                    stop_event       = self.stop_event,
+                    pause_event      = self.pause_event,
+                    batch_limit      = self._get_batch_limit(),
+                    jumlah_tabung    = self._get_jumlah_tabung(),
+                    jumlah_tabung_um = self._get_jumlah_tabung_um(),
+                    split_um_rt      = self._get_split_um_rt(),
+                    on_progress      = self._on_progress,
+                    hwid             = self.hwid,
+                    captcha_mode     = self._get_captcha_mode(),
                 )
 
                 if self.stop_event.is_set():
@@ -1313,6 +1375,295 @@ class MainScreen(ctk.CTkFrame):
         finally:
             self.after(0, self._on_bot_finished)
             self.after(0, lambda: self.btn_batch.configure(state="normal"))
+
+    def _open_fast_filter_dialog(self):
+        """Membuka dialog Pemindai & Filter NIK Cepat berbasis REST API."""
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("⚡ Pemindai NIK Cepat (REST Scanner)")
+        dialog.geometry("640x520")
+        dialog.transient(self)
+        dialog.grab_set()
+
+        dialog.update_idletasks()
+        x = self.winfo_x() + (self.winfo_width() - 640) // 2
+        y = self.winfo_y() + (self.winfo_height() - 520) // 2
+        dialog.geometry(f"+{max(0, x)}+{max(0, y)}")
+
+        frame = ctk.CTkFrame(dialog, fg_color=C_PANEL, corner_radius=12, border_color=C_BORDER, border_width=1)
+        frame.pack(fill="both", expand=True, padx=16, pady=16)
+
+        ctk.CTkLabel(
+            frame,
+            text="⚡ Pemindai NIK Super Cepat (REST API)",
+            font=ctk.CTkFont(family="Segoe UI", size=16, weight="bold"),
+            text_color=C_GOLD,
+        ).pack(pady=(16, 4))
+
+        ctk.CTkLabel(
+            frame,
+            text="Memindai ratusan NIK dalam hitungan detik tanpa membuka browser.\nOtomatis memisahkan Rumah Tangga, Usaha Mikro, dan NIK Invalid/Belum Terdaftar.",
+            font=ctk.CTkFont(size=11),
+            text_color=C_MUTED,
+            justify="center",
+        ).pack(pady=(0, 14))
+
+        # File selector
+        file_box = ctk.CTkFrame(frame, fg_color="transparent")
+        file_box.pack(fill="x", padx=20, pady=(0, 10))
+
+        entry_file = ctk.CTkEntry(file_box, font=ctk.CTkFont(size=11), fg_color=C_BG, border_color=C_BORDER, text_color=C_TEXT)
+        entry_file.insert(0, self.selected_file if os.path.exists(self.selected_file) else "data_pelanggan.xlsx")
+        entry_file.pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+        def _browse():
+            fn = filedialog.askopenfilename(
+                title="Pilih File Excel NIK",
+                filetypes=[("Excel Files", "*.xlsx *.xls"), ("All Files", "*.*")]
+            )
+            if fn:
+                entry_file.delete(0, "end")
+                entry_file.insert(0, fn)
+
+        ctk.CTkButton(file_box, text="📁 Browse", width=80, height=32, fg_color=C_BORDER, hover_color=C_BG, text_color=C_TEXT, command=_browse).pack(side="left")
+
+        # Stats Cards Row
+        stats_frame = ctk.CTkFrame(frame, fg_color=C_BG, corner_radius=8, border_color=C_BORDER, border_width=1)
+        stats_frame.pack(fill="x", padx=20, pady=(0, 12))
+
+        lbl_scan_status = ctk.CTkLabel(frame, text="● Siap melakukan pemindaian", font=ctk.CTkFont(size=12, weight="bold"), text_color=C_MUTED)
+        lbl_scan_status.pack(pady=(0, 6))
+
+        pbar = ctk.CTkProgressBar(frame, height=6, fg_color=C_BORDER, progress_color=C_ACCENT)
+        pbar.pack(fill="x", padx=20, pady=(0, 8))
+        pbar.set(0)
+
+        # Counter display
+        c_grid = ctk.CTkFrame(stats_frame, fg_color="transparent")
+        c_grid.pack(fill="x", padx=10, pady=10)
+
+        def _make_stat_box(parent, title, color):
+            box = ctk.CTkFrame(parent, fg_color=C_PANEL, corner_radius=6, border_color=C_BORDER, border_width=1)
+            box.pack(side="left", expand=True, fill="both", padx=4)
+            ctk.CTkLabel(box, text=title, font=ctk.CTkFont(size=10), text_color=C_MUTED).pack(pady=(4, 0))
+            val_lbl = ctk.CTkLabel(box, text="0", font=ctk.CTkFont(size=15, weight="bold"), text_color=color)
+            val_lbl.pack(pady=(0, 4))
+            return val_lbl
+
+        c_total = _make_stat_box(c_grid, "Total Scan", C_TEXT)
+        c_rt = _make_stat_box(c_grid, "Rumah Tangga", C_ACCENT)
+        c_um = _make_stat_box(c_grid, "Usaha Mikro", C_GOLD)
+        c_inv = _make_stat_box(c_grid, "Invalid / Belum", C_DANGER)
+
+        lbl_log = ctk.CTkLabel(frame, text="", font=ctk.CTkFont(family="Consolas", size=10), text_color=C_MUTED)
+        lbl_log.pack(pady=(0, 10))
+
+        # Control Buttons
+        btn_action_frame = ctk.CTkFrame(frame, fg_color="transparent")
+        btn_action_frame.pack(fill="x", padx=20, pady=(0, 10))
+
+        btn_start_scan = ctk.CTkButton(
+            btn_action_frame,
+            text="🚀 MULAI SCAN CEPAT",
+            height=38,
+            font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
+            fg_color=C_ACCENT, hover_color=C_ACCENT2
+        )
+        btn_start_scan.pack(side="left", expand=True, fill="x", padx=(0, 4))
+
+        btn_open_ready = ctk.CTkButton(
+            btn_action_frame,
+            text="📂 Buka Hasil Filter",
+            height=38,
+            font=ctk.CTkFont(size=12),
+            fg_color=C_BORDER, hover_color=C_BG, text_color=C_TEXT,
+            state="disabled"
+        )
+        btn_open_ready.pack(side="left", padx=(4, 0))
+
+        # Scanning logic
+        scan_stop_event = threading.Event()
+
+        def _do_scan():
+            from fast_filter_service import run_fast_filter
+            import tkinter.messagebox as mb
+
+            target_file = entry_file.get().strip()
+            if not os.path.exists(target_file):
+                dialog.after(0, lambda: mb.showerror("Error", f"File '{target_file}' tidak ditemukan!"))
+                dialog.after(0, lambda: btn_start_scan.configure(state="normal", text="🚀 MULAI SCAN CEPAT"))
+                return
+
+            def _progress_cb(proc, tot, rt, um, inv, desc):
+                def _ui():
+                    c_total.configure(text=str(proc))
+                    c_rt.configure(text=str(rt))
+                    c_um.configure(text=str(um))
+                    c_inv.configure(text=str(inv))
+                    if tot > 0:
+                        pbar.set(proc / tot)
+                    lbl_log.configure(text=desc[:60])
+                dialog.after(0, _ui)
+
+            try:
+                dialog.after(0, lambda: lbl_scan_status.configure(text="⚙ Sedang memindai via REST API...", text_color=C_GOLD))
+                t0 = time.time()
+                tot, valid, inv, msg = run_fast_filter(
+                    input_file=target_file,
+                    output_report_file="hasil_filter_nik.xlsx",
+                    output_ready_file="data_siap_proses.xlsx",
+                    max_workers=8,
+                    on_progress=_progress_cb,
+                    stop_event=scan_stop_event
+                )
+                dur = round(time.time() - t0, 1)
+
+                def _finish():
+                    lbl_scan_status.configure(text=f"✓ Selesai dalam {dur} detik! ({valid} NIK Valid)", text_color=C_SUCCESS)
+                    btn_start_scan.configure(state="normal", text="🔄 Scan Ulang")
+                    btn_open_ready.configure(state="normal", command=lambda: os.startfile(os.path.abspath("data_siap_proses.xlsx")))
+
+                    use_ready = mb.askyesno(
+                        "Scan Selesai",
+                        f"Pemindaian selesai dalam {dur} detik!\n\n"
+                        f"Total Dipindai: {tot}\n"
+                        f"NIK Valid (Siap Proses): {valid}\n"
+                        f"NIK Invalid / Belum Terdaftar: {inv}\n\n"
+                        f"File 'data_siap_proses.xlsx' dan 'hasil_filter_nik.xlsx' berhasil dibuat.\n\n"
+                        f"Gunakan file 'data_siap_proses.xlsx' sebagai input bot sekarang?"
+                    )
+                    if use_ready and os.path.exists("data_siap_proses.xlsx"):
+                        self.selected_file = "data_siap_proses.xlsx"
+                        self.lbl_file.configure(text="data_siap_proses.xlsx")
+                        self._load_nik_data()
+                        dialog.destroy()
+
+                dialog.after(0, _finish)
+            except Exception as ex:
+                def _err():
+                    lbl_scan_status.configure(text=f"Error: {ex}", text_color=C_DANGER)
+                    btn_start_scan.configure(state="normal", text="🚀 MULAI SCAN CEPAT")
+                dialog.after(0, _err)
+
+        def _on_start_clicked():
+            btn_start_scan.configure(state="disabled", text="⏳ Memindai...")
+            scan_stop_event.clear()
+            threading.Thread(target=_do_scan, daemon=True).start()
+
+        btn_start_scan.configure(command=_on_start_clicked)
+
+    def _open_nib_checker_dialog(self):
+        """Membuka dialog Pengecekan Legalitas NIB Usaha Mikro via OSS."""
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("🏢 Pengecekan Legalitas NIB Usaha Mikro (OSS)")
+        dialog.geometry("560x520")
+        dialog.transient(self)
+        dialog.grab_set()
+
+        dialog.update_idletasks()
+        x = self.winfo_x() + (self.winfo_width() - 560) // 2
+        y = self.winfo_y() + (self.winfo_height() - 520) // 2
+        dialog.geometry(f"+{max(0, x)}+{max(0, y)}")
+
+        frame = ctk.CTkFrame(dialog, fg_color=C_PANEL, corner_radius=12, border_color=C_BORDER, border_width=1)
+        frame.pack(fill="both", expand=True, padx=16, pady=16)
+
+        ctk.CTkLabel(
+            frame,
+            text="🏢 Verifikasi NIB Usaha Mikro (OSS)",
+            font=ctk.CTkFont(family="Segoe UI", size=16, weight="bold"),
+            text_color=C_GOLD,
+        ).pack(pady=(16, 4))
+
+        ctk.CTkLabel(
+            frame,
+            text="Cek data perizinan usaha langsung ke database OSS Indonesia & validasi\nkelayakan subsidi LPG 3kg berdasarkan SK Dirjen Migas No.B-2461/MG.05/DJM/2022.",
+            font=ctk.CTkFont(size=11),
+            text_color=C_MUTED,
+            justify="center",
+        ).pack(pady=(0, 14))
+
+        input_box = ctk.CTkFrame(frame, fg_color="transparent")
+        input_box.pack(fill="x", padx=20, pady=(0, 12))
+
+        entry_nib = ctk.CTkEntry(
+            input_box,
+            placeholder_text="Masukkan nomor NIB...",
+            font=ctk.CTkFont(size=12),
+            fg_color=C_BG, border_color=C_BORDER, text_color=C_TEXT
+        )
+        entry_nib.pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+        btn_check = ctk.CTkButton(
+            input_box,
+            text="🔍 Periksa NIB",
+            width=110, height=34,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color=C_ACCENT, hover_color=C_ACCENT2
+        )
+        btn_check.pack(side="left")
+
+        # Result card
+        res_card = ctk.CTkFrame(frame, fg_color=C_BG, corner_radius=8, border_color=C_BORDER, border_width=1)
+        res_card.pack(fill="both", expand=True, padx=20, pady=(0, 16))
+
+        lbl_status_badge = ctk.CTkLabel(res_card, text="Masukkan nomor NIB di atas untuk memeriksa", font=ctk.CTkFont(size=12, weight="bold"), text_color=C_MUTED)
+        lbl_status_badge.pack(pady=(16, 12))
+
+        info_box = ctk.CTkFrame(res_card, fg_color="transparent")
+        info_box.pack(fill="both", expand=True, padx=16, pady=(0, 12))
+
+        def _add_info_row(parent, label):
+            r = ctk.CTkFrame(parent, fg_color="transparent")
+            r.pack(fill="x", pady=3)
+            ctk.CTkLabel(r, text=label, width=130, anchor="w", font=ctk.CTkFont(size=11), text_color=C_MUTED).pack(side="left")
+            val = ctk.CTkLabel(r, text="-", anchor="w", font=ctk.CTkFont(size=11, weight="bold"), text_color=C_TEXT, wraplength=320, justify="left")
+            val.pack(side="left", fill="x", expand=True)
+            return val
+
+        lbl_name = _add_info_row(info_box, "Nama Usaha:")
+        lbl_kbli = _add_info_row(info_box, "KBLI:")
+        lbl_kbli_desc = _add_info_row(info_box, "Uraian Bidang:")
+        lbl_status_nib = _add_info_row(info_box, "Status Legalitas:")
+        lbl_reason = _add_info_row(info_box, "Kelayakan Subsidi:")
+
+        def _do_check():
+            from nib_service import check_nib_oss
+            nib_val = entry_nib.get().strip()
+            if not nib_val:
+                lbl_status_badge.configure(text="⚠ Nomor NIB tidak boleh kosong!", text_color=C_WARNING)
+                return
+
+            btn_check.configure(state="disabled", text="Memeriksa...")
+            lbl_status_badge.configure(text="⏳ Menghubungi server OSS...", text_color=C_GOLD)
+
+            def _worker():
+                res = check_nib_oss(nib_val)
+                def _update():
+                    btn_check.configure(state="normal", text="🔍 Periksa NIB")
+                    if res.get("success"):
+                        lbl_name.configure(text=res.get("business_name", "-"))
+                        lbl_kbli.configure(text=res.get("kbli", "-"))
+                        lbl_kbli_desc.configure(text=res.get("kbli_description", "-"))
+                        lbl_status_nib.configure(text=res.get("status_nib", "AKTIF"))
+                        
+                        if res.get("is_banned"):
+                            lbl_status_badge.configure(text="⛔ DILARANG MENGGUNAKAN SUBSIDI 3 KG", text_color=C_DANGER)
+                            lbl_reason.configure(text=res.get("banned_reason", "-"), text_color=C_DANGER)
+                        else:
+                            lbl_status_badge.configure(text="🟢 TERDAFTAR & BERHAK SUBSIDI USAHA MIKRO", text_color=C_SUCCESS)
+                            lbl_reason.configure(text="Memenuhi syarat SK Dirjen Migas", text_color=C_SUCCESS)
+                    else:
+                        lbl_status_badge.configure(text=f"❌ {res.get('message', 'NIB Tidak Ditemukan')}", text_color=C_DANGER)
+                        lbl_name.configure(text="-")
+                        lbl_kbli.configure(text="-")
+                        lbl_kbli_desc.configure(text="-")
+                        lbl_status_nib.configure(text="-")
+                        lbl_reason.configure(text="-")
+                dialog.after(0, _update)
+
+            threading.Thread(target=_worker, daemon=True).start()
+
+        btn_check.configure(command=_do_check)
 
     def _on_progress(self, current: int, total: int, status_text: str):
         """Callback dari bot → update UI (thread-safe via after)."""

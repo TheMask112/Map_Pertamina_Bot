@@ -853,11 +853,12 @@ def _handle_birth_details(page, nik_info: dict, stop_event=None):
         print(f"[WARN] Error saat auto-handle Tempat/Tanggal Lahir: {e}")
 
 
-def _handle_choice_popup(page):
+def _handle_choice_popup(page, prefer_um: bool = False) -> str:
     """
     Menangani popup pilihan jenis pelanggan ('Pelanggan Terdaftar')
-    dengan memilih opsi default 'Rumah Tangga' atau 'Usaha Mikro'
+    dengan memilih opsi 'Rumah Tangga' atau 'Usaha Mikro' (bisa diprioritaskan lewat prefer_um)
     serta memilih NIB jika 'Usaha Mikro' terpilih.
+    Returns: nama opsi yang terpilih (misal 'Rumah Tangga' atau 'Usaha Mikro')
     """
     try:
         popup_selectors = [
@@ -873,9 +874,10 @@ def _handle_choice_popup(page):
         
         if is_popup:
             print("[BOT] Choice popup 'Pelanggan Terdaftar' terdeteksi.")
-            # Klik "Rumah Tangga" atau "Usaha Mikro"
+            # Urutan pilihan berdasarkan prefer_um
+            options_to_try = ["text='Usaha Mikro'", "text='Rumah Tangga'"] if prefer_um else ["text='Rumah Tangga'", "text='Usaha Mikro'"]
             chosen_opt = None
-            for opt in ["text='Rumah Tangga'", "text='Usaha Mikro'"]:
+            for opt in options_to_try:
                 if page.is_visible(opt, timeout=1000):
                     print(f"[BOT] Memilih jenis pelanggan: {opt}")
                     page.click(opt)
@@ -925,8 +927,12 @@ def _handle_choice_popup(page):
                     page.click(btn)
                     time.sleep(0.5)
                     break
+
+            return "Usaha Mikro" if chosen_opt == "text='Usaha Mikro'" else "Rumah Tangga"
     except Exception as e:
         print(f"[WARN] Error saat menghandle choice popup: {e}")
+
+    return ""
 
 
 def _check_nik_error(page) -> bool:
@@ -1225,6 +1231,8 @@ def run_bot(
     pause_event: threading.Event | None = None,
     batch_limit: int = 0,
     jumlah_tabung: int = 1,
+    jumlah_tabung_um: int = 2,
+    split_um_rt: bool = False,
     on_progress=None,
     hwid: str = None,
     captcha_mode: str = CAPTCHA_AUTO,
@@ -1233,13 +1241,15 @@ def run_bot(
     Jalankan bot.
 
     Args:
-        data_file:     Path ke file Excel input
-        stop_event:    threading.Event untuk stop bot
-        pause_event:   threading.Event — di-set berarti pause, clear = lanjut
-        batch_limit:   0 = tidak ada limit. N = pause setiap N data sukses
-        jumlah_tabung: Jumlah tabung LPG per transaksi (1-5)
-        on_progress:   callback(current, total, status_text) untuk update UI
-        hwid:          Hardware ID (untuk consume quota license)
+        data_file:        Path ke file Excel input
+        stop_event:       threading.Event untuk stop bot
+        pause_event:      threading.Event — di-set berarti pause, clear = lanjut
+        batch_limit:      0 = tidak ada limit. N = pause setiap N data sukses
+        jumlah_tabung:    Jumlah tabung LPG Rumah Tangga per transaksi (1-5)
+        jumlah_tabung_um: Jumlah tabung LPG Usaha Mikro per transaksi (1-5)
+        split_um_rt:      Jika True, otomatis prioritaskan Usaha Mikro & gunakan jumlah_tabung_um
+        on_progress:      callback(current, total, status_text) untuk update UI
+        hwid:             Hardware ID (untuk consume quota license)
     """
     # ----------------------------------------------------------
     # 1. Load Data
@@ -1545,10 +1555,16 @@ def run_bot(
 
                 # --- Handle Birth Details & Choice Popup (jika ada) ---
                 _handle_birth_details(page, nik_info, stop_event)
-                _handle_choice_popup(page)
+                chosen_type = _handle_choice_popup(page, prefer_um=split_um_rt)
                 _handle_birth_details(page, nik_info, stop_event)
                 if not _interruptible_sleep(1.0, stop_event):
                     break
+
+                # Deteksi kategori (Usaha Mikro vs Rumah Tangga)
+                row_dict = row.to_dict()
+                excel_cat = str(row_dict.get("Kategori", "") or row_dict.get("kategori", "") or row_dict.get("Tipe", "") or row_dict.get("Jenis", "")).upper()
+                is_um = ("USAHA" in excel_cat or "MIKRO" in excel_cat or "UM" in excel_cat) or (chosen_type == "Usaha Mikro")
+                target_tabung = jumlah_tabung_um if (split_um_rt and is_um) else jumlah_tabung
 
                 # --- Step 3b: Cek apakah ada error kritis (tidak terdaftar, meninggal, umur, kuota) ---
                 is_err, err_status, err_desc = _check_critical_nik_errors(page)
@@ -1589,7 +1605,7 @@ def run_bot(
                     break
 
                 # --- Step 4b: Input Jumlah Tabung (Klik '+' sebelum Cek Pesanan) ---
-                if jumlah_tabung > 1:
+                if target_tabung > 1:
                     try:
                         plus_selectors = [
                             "[data-testid='actionIcon2']",
@@ -1604,8 +1620,9 @@ def run_bot(
                                 break
                         
                         if plus_btn:
-                            clicks_needed = jumlah_tabung - 1
-                            print(f"[BOT] Menambah jumlah tabung menjadi {jumlah_tabung} (mengklik '+' sebanyak {clicks_needed}x)...")
+                            clicks_needed = target_tabung - 1
+                            tipe_label = "Usaha Mikro" if is_um else "Rumah Tangga"
+                            print(f"[BOT] Menambah jumlah tabung ({tipe_label}) menjadi {target_tabung} (mengklik '+' sebanyak {clicks_needed}x)...")
                             for c in range(clicks_needed):
                                 if _check_stop(stop_event):
                                     break
@@ -1816,25 +1833,26 @@ def run_bot(
                 # Consume quota secepat mungkin (anti-bypass Hentikan) berbasis jumlah tabung
                 if hwid:
                     from license_manager import consume_quota
-                    consume_quota(hwid, jumlah_tabung)
+                    consume_quota(hwid, target_tabung)
                 
                 # Verifikasi sukses transaksi lebih kuat
                 _interruptible_sleep(1.5, stop_event)
                 try:
                     body_text = page.evaluate("() => document.body.innerText").lower()
                     success_keywords = ["lunas", "berhasil", "penjualan berhasil", "sukses", "selesai"]
+                    tipe_label = "Usaha Mikro" if is_um else "Rumah Tangga"
                     if any(kw in body_text for kw in success_keywords):
-                        print(f"[OK] NIK {nik_value} berhasil diproses & terverifikasi!")
+                        print(f"[OK] NIK {nik_value} ({tipe_label} - {target_tabung} Tabung) berhasil diproses & terverifikasi!")
                         df.at[index, "Status"]     = STATUS_SUKSES
-                        df.at[index, "Keterangan"] = "Transaksi berhasil & terverifikasi"
+                        df.at[index, "Keterangan"] = f"Transaksi berhasil ({tipe_label} - {target_tabung} Tabung)"
                     else:
                         print(f"[WARN] Captcha terlewati tapi konfirmasi sukses tidak ditemukan pada halaman untuk NIK {nik_value}!")
                         df.at[index, "Status"]     = STATUS_SUKSES
-                        df.at[index, "Keterangan"] = "Transaksi berhasil (tanpa teks konfirmasi)"
+                        df.at[index, "Keterangan"] = f"Transaksi berhasil ({tipe_label} - {target_tabung} Tabung, tanpa teks konfirmasi)"
                 except Exception as e:
                     print(f"[WARN] Gagal memverifikasi teks halaman: {e}")
                     df.at[index, "Status"]     = STATUS_SUKSES
-                    df.at[index, "Keterangan"] = "Transaksi berhasil"
+                    df.at[index, "Keterangan"] = f"Transaksi berhasil ({target_tabung} Tabung)"
                 df.at[index, "Timestamp"]  = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 df.at[index, "Batch"]      = f"Batch-{batch_number}"
                 _save_results(df)

@@ -141,7 +141,107 @@ fun HomeScreen(onNavigateToBot: () -> Unit, onNavigateToSettings: () -> Unit) {
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            // Card Pengaturan Tabung RT & UM
+            var tabungRtState by remember { mutableStateOf(SessionData.tabungRt) }
+            var tabungUmState by remember { mutableStateOf(SessionData.tabungUm) }
+            var enableUmSplitState by remember { mutableStateOf(SessionData.enableUmSplit) }
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp)
+                    .clip(RoundedCornerShape(16.dp)),
+                color = Color.White.copy(alpha = 0.05f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text("PENGATURAN TRANSAKSI", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Spacer(modifier = Modifier.height(10.dp))
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Tabung Rumah Tangga", color = Color.White, fontSize = 13.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            listOf(1, 2, 3).forEach { qty ->
+                                val isSelected = tabungRtState == qty
+                                Surface(
+                                    onClick = {
+                                        tabungRtState = qty
+                                        SessionData.tabungRt = qty
+                                    },
+                                    modifier = Modifier.padding(horizontal = 2.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isSelected) Color(0xFFEAB308) else Color.White.copy(alpha = 0.08f),
+                                    border = BorderStroke(1.dp, if (isSelected) Color(0xFFF59E0B) else Color.White.copy(alpha = 0.15f))
+                                ) {
+                                    Text(
+                                        text = "$qty",
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) Color(0xFF0F172A) else Color.White,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Tabung Usaha Mikro", color = Color.White, fontSize = 13.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            listOf(1, 2, 3, 4).forEach { qty ->
+                                val isSelected = tabungUmState == qty
+                                Surface(
+                                    onClick = {
+                                        tabungUmState = qty
+                                        SessionData.tabungUm = qty
+                                    },
+                                    modifier = Modifier.padding(horizontal = 2.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isSelected) Color(0xFFEAB308) else Color.White.copy(alpha = 0.08f),
+                                    border = BorderStroke(1.dp, if (isSelected) Color(0xFFF59E0B) else Color.White.copy(alpha = 0.15f))
+                                ) {
+                                    Text(
+                                        text = "$qty",
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) Color(0xFF0F172A) else Color.White,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Pisahkan UM vs RT (Prioritas UM)", color = Color(0xFFEAB308), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Switch(
+                            checked = enableUmSplitState,
+                            onCheckedChange = {
+                                enableUmSplitState = it
+                                SessionData.enableUmSplit = it
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Start Bot Button
             Button(

@@ -8,7 +8,16 @@ data class NikData(
     var status: String = Constants.STATUS_BELUM,
     var keterangan: String = "",
     var timestamp: String = "",
-    var batch: String = ""
+    var batch: String = "",
+    var kategori: String = ""
+)
+
+data class QueuePangkalanItem(
+    val profile: com.mapbot.pertamina.security.PangkalanProfile,
+    var nikList: List<NikData> = emptyList(),
+    var fileName: String = "Excel",
+    var isChecked: Boolean = true,
+    var status: String = "Menunggu"
 )
 
 data class BotUiState(

@@ -56,17 +56,19 @@ class FastNikChecker(private val wvManager: WebViewManager) {
                         headers['Authorization'] = 'Bearer ' + token;
                     }
 
-                    // Coba endpoint verifikasi subsiditepat
+                    // Endpoint verifikasi resmi Pertamina MAP
                     var endpoints = [
-                        '/api/v1/consumer/check?nik=' + '$nik',
-                        '/api/lpg/cek-nik?nik=' + '$nik',
-                        '/api/merchant/verify-nik'
+                        'https://api-map.my-pertamina.id/general/customer-service/v1/verify-nik?nationalityId=' + '$nik',
+                        '/general/customer-service/v1/verify-nik?nationalityId=' + '$nik'
                     ];
 
-                    var res = await fetch(endpoints[0], { 
-                        method: 'GET',
-                        headers: headers 
-                    }).catch(() => null);
+                    var res = null;
+                    for (var u of endpoints) {
+                        try {
+                            res = await fetch(u, { method: 'GET', headers: headers });
+                            if (res && res.ok) break;
+                        } catch(e) {}
+                    }
 
                     if (res && res.ok) {
                         var json = await res.json();
@@ -96,22 +98,29 @@ class FastNikChecker(private val wvManager: WebViewManager) {
             val json = JSONObject(rawJson)
             val dataObj = json.optJSONObject("data") ?: json
 
-            val statusSubsidi = dataObj.optString("status_subsidi", "").uppercase()
-            val sisaKuota = dataObj.optInt("sisa_kuota_bulan_ini", -1)
-            val nama = dataObj.optString("nama", "")
-            val tipe = dataObj.optString("tipe_konsumen", "")
+            val nama = dataObj.optString("name", "")
+            val customerTypesArr = dataObj.optJSONArray("customerTypes")
+            var kategori = "Rumah Tangga"
+            if (customerTypesArr != null) {
+                for (j in 0 until customerTypesArr.length()) {
+                    val t = customerTypesArr.optJSONObject(j)?.optString("name", "") ?: ""
+                    if (t.contains("Usaha", ignoreCase = true) || t.contains("Mikro", ignoreCase = true)) {
+                        kategori = "Usaha Mikro"
+                        break
+                    }
+                }
+            }
+            nikData.kategori = kategori
 
-            if (statusSubsidi.contains("TIDAK") || statusSubsidi.contains("INVALID")) {
+            val statusCode = json.optInt("status", 200)
+            if (statusCode == 404 || rawJson.contains("tidak ditemukan", ignoreCase = true)) {
                 nikData.status = Constants.STATUS_NIK_INVALID
-                nikData.keterangan = "[BETA] Tidak terdaftar"
-            } else if (sisaKuota == 0) {
-                nikData.status = Constants.STATUS_SKIP
-                nikData.keterangan = "[BETA] Kuota bulanan 0 (Habis)"
-            } else if (sisaKuota > 0) {
-                nikData.keterangan = "[BETA] Siap (Sisa: $sisaKuota tabung | $tipe | $nama)"
+                nikData.keterangan = "[BETA] Belum terdaftar"
+            } else {
+                nikData.keterangan = "[BETA] Terdaftar: $nama ($kategori)"
             }
         } catch (e: Exception) {
-            nikData.keterangan = "Siap Diproses (Normal)"
+            nikData.keterangan = "Siap Diproses"
         }
     }
 }

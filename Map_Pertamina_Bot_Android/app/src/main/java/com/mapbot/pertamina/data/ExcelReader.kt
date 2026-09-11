@@ -24,13 +24,16 @@ object ExcelReader {
             val sheet = workbook.getSheetAt(0)
             
             var nikColIdx = -1
+            var kategoriColIdx = -1
             val headerRow = sheet.getRow(0)
             if (headerRow != null) {
                 for (cell in headerRow) {
                     val txt = getCellStringValue(cell)
-                    if (txt.contains("NIK", ignoreCase = true) || txt.contains("KTP", ignoreCase = true)) {
+                    if (nikColIdx == -1 && (txt.contains("NIK", ignoreCase = true) || txt.contains("KTP", ignoreCase = true))) {
                         nikColIdx = cell.columnIndex
-                        break
+                    }
+                    if (kategoriColIdx == -1 && (txt.contains("Kategori", ignoreCase = true) || txt.contains("Tipe", ignoreCase = true) || txt.contains("Jenis", ignoreCase = true))) {
+                        kategoriColIdx = cell.columnIndex
                     }
                 }
             }
@@ -64,7 +67,10 @@ object ExcelReader {
                 val rawVal = getCellStringValue(cell)
                 val nikStr = rawVal.replace(Regex("[^0-9]"), "")
                 if (nikStr.length == 16) {
-                    nikList.add(NikData(index = i, nik = nikStr))
+                    val katStr = if (kategoriColIdx != -1) {
+                        row.getCell(kategoriColIdx)?.let { getCellStringValue(it) } ?: ""
+                    } else ""
+                    nikList.add(NikData(index = i, nik = nikStr, kategori = katStr))
                 }
             }
             workbook.close()

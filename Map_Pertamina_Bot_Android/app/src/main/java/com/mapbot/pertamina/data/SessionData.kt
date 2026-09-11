@@ -5,4 +5,8 @@ object SessionData {
     var selectedFileName: String = ""
     var phone: String = ""
     var pass: String = ""
+    var tabungRt: Int = 1
+    var tabungUm: Int = 2
+    var enableUmSplit: Boolean = true
 }
+
