@@ -242,7 +242,7 @@ class MainScreen(ctk.CTkFrame):
 
         ctk.CTkLabel(
             title_frame,
-            text=" v1.0.8 ",
+            text=" v1.4.0 ",
             font=ctk.CTkFont(family="Consolas", size=10, weight="bold"),
             fg_color=C_BORDER,
             text_color=C_GOLD,
@@ -1729,6 +1729,8 @@ class MainScreen(ctk.CTkFrame):
         tb.pack(fill="both", expand=True, padx=16, pady=(0, 12))
 
         changelog_path = os.path.join(self.BASE_DIR, "CHANGELOG.md")
+        if not os.path.exists(changelog_path) and hasattr(sys, "_MEIPASS"):
+            changelog_path = os.path.join(sys._MEIPASS, "CHANGELOG.md")
         content = "File CHANGELOG.md tidak ditemukan."
         if os.path.exists(changelog_path):
             try:
