@@ -230,12 +230,24 @@ class MainScreen(ctk.CTkFrame):
         topbar.pack(fill="x")
         topbar.pack_propagate(False)
 
+        title_frame = ctk.CTkFrame(topbar, fg_color="transparent")
+        title_frame.pack(side="left", padx=20)
+
         ctk.CTkLabel(
-            topbar,
+            title_frame,
             text="⛽  BOT MAP PERTAMINA",
             font=ctk.CTkFont(family="Segoe UI", size=16, weight="bold"),
             text_color=C_ACCENT,
-        ).pack(side="left", padx=20)
+        ).pack(side="left")
+
+        ctk.CTkLabel(
+            title_frame,
+            text=" v1.0.8 ",
+            font=ctk.CTkFont(family="Consolas", size=10, weight="bold"),
+            fg_color=C_BORDER,
+            text_color=C_GOLD,
+            corner_radius=4,
+        ).pack(side="left", padx=(8, 0))
 
         self.lbl_paket = ctk.CTkLabel(
             topbar, text="",
@@ -252,6 +264,15 @@ class MainScreen(ctk.CTkFrame):
             command=self._toggle_theme,
         )
         self.btn_theme.pack(side="right", padx=4)
+
+        # Changelog button
+        self.btn_changelog = ctk.CTkButton(
+            topbar, text="📜 Catatan Rilis", width=110, height=30,
+            fg_color=C_BORDER, hover_color=C_BG, text_color=C_MUTED,
+            font=ctk.CTkFont(size=11),
+            command=self._open_changelog_dialog,
+        )
+        self.btn_changelog.pack(side="right", padx=4)
 
         # ── BODY ─────────────────────────────────────────────
         body = ctk.CTkFrame(self, fg_color=C_BG)
@@ -1664,6 +1685,71 @@ class MainScreen(ctk.CTkFrame):
             threading.Thread(target=_worker, daemon=True).start()
 
         btn_check.configure(command=_do_check)
+
+    def _open_changelog_dialog(self):
+        """Membuka dialog Catatan Rilis (Changelog) untuk melihat riwayat versi."""
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("📜 Catatan Rilis & Riwayat Versi (Changelog)")
+        dialog.geometry("640x540")
+        dialog.transient(self)
+        dialog.grab_set()
+
+        dialog.update_idletasks()
+        x = self.winfo_x() + (self.winfo_width() - 640) // 2
+        y = self.winfo_y() + (self.winfo_height() - 540) // 2
+        dialog.geometry(f"+{max(0, x)}+{max(0, y)}")
+
+        frame = ctk.CTkFrame(dialog, fg_color=C_PANEL, corner_radius=12, border_color=C_BORDER, border_width=1)
+        frame.pack(fill="both", expand=True, padx=16, pady=16)
+
+        ctk.CTkLabel(
+            frame,
+            text="📜 Catatan Rilis & Riwayat Versi",
+            font=ctk.CTkFont(family="Segoe UI", size=16, weight="bold"),
+            text_color=C_GOLD,
+        ).pack(pady=(16, 4))
+
+        ctk.CTkLabel(
+            frame,
+            text="Setiap pembaruan terdokumentasi rapi sesuai standar Semantic Versioning.",
+            font=ctk.CTkFont(size=11),
+            text_color=C_MUTED,
+        ).pack(pady=(0, 10))
+
+        tb = ctk.CTkTextbox(
+            frame,
+            fg_color=C_BG,
+            border_color=C_BORDER,
+            border_width=1,
+            corner_radius=8,
+            font=ctk.CTkFont(family="Consolas", size=11),
+            text_color=C_TEXT,
+            wrap="word",
+        )
+        tb.pack(fill="both", expand=True, padx=16, pady=(0, 12))
+
+        changelog_path = os.path.join(self.BASE_DIR, "CHANGELOG.md")
+        content = "File CHANGELOG.md tidak ditemukan."
+        if os.path.exists(changelog_path):
+            try:
+                with open(changelog_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+            except Exception as e:
+                content = f"Gagal membaca CHANGELOG: {e}"
+
+        tb.insert("1.0", content)
+        tb.configure(state="disabled")
+
+        ctk.CTkButton(
+            frame,
+            text="Tutup",
+            width=100,
+            height=32,
+            fg_color=C_BORDER,
+            hover_color=C_BG,
+            text_color=C_TEXT,
+            command=dialog.destroy,
+        ).pack(pady=(0, 14))
 
     def _on_progress(self, current: int, total: int, status_text: str):
         """Callback dari bot → update UI (thread-safe via after)."""
