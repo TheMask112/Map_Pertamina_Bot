@@ -20,10 +20,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Lisensi tidak valid atau tidak aktif.' }, { status: 403 });
     }
 
-    const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-    if (!TELEGRAM_BOT_TOKEN) {
-      throw new Error('TELEGRAM_BOT_TOKEN environment variable is not defined!');
-    }
+    const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8675950415:AAGNM0X-nmOn-FQCZGAFIHZ2Sd9JIq6oVyk';
 
     // 2. Parse form data
     const formData = await request.formData();

@@ -23,7 +23,21 @@ export async function sendTelegramToAdmin(message: string): Promise<boolean> {
         parse_mode: 'Markdown',
       }),
     });
-    return res.ok;
+    if (!res.ok) {
+      // Fallback: jika formatting Markdown gagal di-parse oleh Telegram, kirim ulang sebagai Plain Text
+      console.warn('[Telegram Admin] Markdown delivery failed, attempting plain text fallback...');
+      const fallbackRes = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: adminChatId,
+          text: message.replace(/[*_`]/g, ''),
+        }),
+      });
+      return fallbackRes.ok;
+    }
+
+    return true;
   } catch (err) {
     console.error('[Telegram Admin Error]', err);
     return false;

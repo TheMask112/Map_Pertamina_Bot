@@ -28,16 +28,36 @@ object ExcelReader {
             if (headerRow != null) {
                 for (cell in headerRow) {
                     val txt = getCellStringValue(cell)
-                    if (txt.contains("NIK", ignoreCase = true)) {
+                    if (txt.contains("NIK", ignoreCase = true) || txt.contains("KTP", ignoreCase = true)) {
                         nikColIdx = cell.columnIndex
                         break
                     }
                 }
             }
 
-            if (nikColIdx == -1) nikColIdx = 0
+            // Fallback: Pindai kolom mana yang memiliki kepadatan 16-digit terbanyak (tahan tanpa header / kolom no di depan)
+            if (nikColIdx == -1) {
+                val colScores = mutableMapOf<Int, Int>()
+                val maxScanRow = minOf(30, sheet.lastRowNum)
+                for (r in 0..maxScanRow) {
+                    val row = sheet.getRow(r) ?: continue
+                    for (c in 0..row.lastCellNum) {
+                        val cell = row.getCell(c) ?: continue
+                        val digits = getCellStringValue(cell).replace(Regex("[^0-9]"), "")
+                        if (digits.length == 16) {
+                            colScores[c] = (colScores[c] ?: 0) + 1
+                        }
+                    }
+                }
+                nikColIdx = colScores.maxByOrNull { it.value }?.key ?: 0
+            }
 
-            for (i in 1..sheet.lastRowNum) {
+            // Tentukan apakah baris 0 adalah data NIK (tanpa header) atau judul kolom
+            val row0Cell = sheet.getRow(0)?.getCell(nikColIdx)
+            val row0Digits = if (row0Cell != null) getCellStringValue(row0Cell).replace(Regex("[^0-9]"), "") else ""
+            val startRow = if (row0Digits.length == 16) 0 else 1
+
+            for (i in startRow..sheet.lastRowNum) {
                 val row = sheet.getRow(i) ?: continue
                 val cell = row.getCell(nikColIdx) ?: continue
                 
@@ -48,7 +68,7 @@ object ExcelReader {
                 }
             }
             workbook.close()
-            Log.d(TAG, "Successfully loaded ${nikList.size} NIKs from Excel")
+            Log.d(TAG, "Successfully loaded ${nikList.size} NIKs from Excel (Column index: $nikColIdx, Start row: $startRow)")
         } catch (t: Throwable) {
             Log.e(TAG, "Error reading Excel file: ${t.message}", t)
         } finally {

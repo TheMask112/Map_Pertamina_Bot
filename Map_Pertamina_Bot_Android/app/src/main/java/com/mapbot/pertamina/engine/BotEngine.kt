@@ -270,16 +270,6 @@ class BotEngine(
 
             if (clickedProses) {
                 log("Menekan tombol PROSES PENJUALAN...")
-
-                // Potong kuota lokal & sinkronisasi
-                val localConsumed = LicenseManager.consumeQuota(appContext, 1)
-                if (localConsumed) {
-                    log("Kuota lokal berhasil dipotong.")
-                }
-                
-                try {
-                    LicenseManager.consumeQuotaOnline(appContext, 1)
-                } catch (_: Exception) {}
                 
                 // Tunggu maksimal 10 detik agar Captcha muncul
                 var captchaMuncul = false
@@ -384,6 +374,15 @@ class BotEngine(
                     nikData.status = Constants.STATUS_SUKSES
                     nikData.keterangan = "Sukses"
                     nikData.timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+
+                    // Potong kuota HANYA setelah transaksi terverifikasi 100% sukses
+                    val localConsumed = LicenseManager.consumeQuota(appContext, 1)
+                    if (localConsumed) {
+                        log("Kuota lokal berhasil dipotong.")
+                    }
+                    try {
+                        LicenseManager.consumeQuotaOnline(appContext, 1)
+                    } catch (_: Exception) {}
                 } else {
                     val fullText = pageInteractor.getBodyText()
                     val lines = fullText.split("\n").map { it.trim() }.filter { it.isNotEmpty() }

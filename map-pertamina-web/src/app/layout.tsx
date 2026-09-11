@@ -1,15 +1,19 @@
 // layout.tsx
 // Root Layout for Bot MAP Pertamina License Web Application
 
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1.0,
+};
 
 export const metadata: Metadata = {
   title: 'Portal Lisensi Resmi Bot MAP Pertamina',
   description: 'Beli lisensi Bot MAP Pertamina secara instan dan otomatis melalui QRIS. Aktivasi cepat 24/7 tanpa antre via Telegram bot.',
   keywords: ['bot pertamina', 'map pertamina', 'lisensi pertamina', 'qris otomatis', 'aktivasi bot'],
   authors: [{ name: 'Antigravity AI Client Developer' }],
-  viewport: 'width=device-width, initial-scale=1.0',
   robots: 'index, follow',
 };
 

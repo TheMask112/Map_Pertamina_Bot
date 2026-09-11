@@ -189,7 +189,7 @@ export async function POST(request: Request) {
       if (additionalDays && Number(additionalDays) > 0) {
         await sql`
           UPDATE orders 
-          SET expires_at = expires_at + (${Number(additionalDays)} || ' days')::INTERVAL
+          SET expires_at = expires_at + (${Number(additionalDays)} * INTERVAL '1 day')
           WHERE id = ${orderId};
         `;
       }

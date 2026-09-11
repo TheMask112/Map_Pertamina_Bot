@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-if (!TELEGRAM_BOT_TOKEN) {
-  throw new Error('TELEGRAM_BOT_TOKEN environment variable is not defined!');
-}
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8675950415:AAGNM0X-nmOn-FQCZGAFIHZ2Sd9JIq6oVyk';
 
 async function sendTelegramMessage(chatId: number | string, text: string, replyMarkup?: any) {
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
@@ -22,8 +19,16 @@ async function sendTelegramMessage(chatId: number | string, text: string, replyM
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const errText = await res.text();
-    console.error('[Telegram API Notify Error]', errText);
+    // Fallback: Kirim ulang sebagai plain-text jika parsing Markdown gagal
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: text.replace(/[*_`]/g, ''),
+        reply_markup: replyMarkup,
+      }),
+    }).catch(() => null);
   }
 }
 

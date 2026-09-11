@@ -666,21 +666,15 @@ class MainScreen(ctk.CTkFrame):
             from map_bot_visual import RESULT_FILE
             if os.path.exists(RESULT_FILE):
                 try:
-                    df_res = pd.read_excel(RESULT_FILE)
-                    if len(df_res.columns) > 0:
-                        first_col_res = str(df_res.columns[0]).strip()
-                        if first_col_res.isdigit() and len(first_col_res) >= 15:
-                            df_res.rename(columns={df_res.columns[0]: "NIK"}, inplace=True)
-                        elif "NIK" not in df_res.columns:
-                            df_res.rename(columns={df_res.columns[0]: "NIK"}, inplace=True)
-                    
-                    for _, r in df_res.iterrows():
-                        n = normalize_nik(r.get("NIK", ""))
-                        if n:
-                            status_map[n] = (
-                                str(r.get("Status", "BELUM")).strip(),
-                                str(r.get("Keterangan", "")).replace("nan", "").strip()
-                            )
+                    df_res = load_excel_data(RESULT_FILE)
+                    if len(df_res) > 0 and "NIK" in df_res.columns:
+                        for _, r in df_res.iterrows():
+                            n = normalize_nik(r.get("NIK", ""))
+                            if n:
+                                status_map[n] = (
+                                    str(r.get("Status", "BELUM")).strip(),
+                                    str(r.get("Keterangan", "")).replace("nan", "").strip()
+                                )
                 except Exception as e:
                     print(f"[UI] Gagal memuat hasil_proses.xlsx: {e}")
 
@@ -1066,37 +1060,49 @@ class MainScreen(ctk.CTkFrame):
             print("[BROWSER] Memeriksa engine browser Chromium...")
             self.after(0, lambda: self.lbl_status.configure(text="⚙ Menyiapkan browser Chromium...", text_color=C_ACCENT))
             
-            from playwright._impl._driver import compute_driver_executable, get_driver_env
-            driver_executable, driver_cli = compute_driver_executable()
-            env = get_driver_env()
-            
-            startupinfo = None
-            if os.name == 'nt':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            # Cek apakah Chromium lokal sudah tersedia di browser_bin untuk startup instan
+            browser_bin_path = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "")
+            has_local_chromium = False
+            if os.path.exists(browser_bin_path):
+                for item in os.listdir(browser_bin_path):
+                    if item.lower().startswith("chromium-") and os.path.isdir(os.path.join(browser_bin_path, item)):
+                        has_local_chromium = True
+                        break
+
+            if not has_local_chromium:
+                from playwright._impl._driver import compute_driver_executable, get_driver_env
+                driver_executable, driver_cli = compute_driver_executable()
+                env = get_driver_env()
                 
-            print("[BROWSER] Memulai proses instalasi browser Chromium...")
-            process = subprocess.Popen(
-                [str(driver_executable), str(driver_cli), "install", "chromium"],
-                env=env,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                startupinfo=startupinfo,
-                creationflags=0x08000000 if os.name == 'nt' else 0,
-                text=True,
-                encoding="utf-8",
-                errors="ignore"
-            )
-            
-            # Stream stdout live ke console / log textbox
-            if process.stdout:
-                for line in process.stdout:
-                    print(line, end="")
-            process.wait()
-            
-            if process.returncode != 0:
-                raise subprocess.CalledProcessError(process.returncode, process.args)
+                startupinfo = None
+                if os.name == 'nt':
+                    startupinfo = subprocess.STARTUPINFO()
+                    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    
+                print("[BROWSER] Memulai proses instalasi browser Chromium...")
+                process = subprocess.Popen(
+                    [str(driver_executable), str(driver_cli), "install", "chromium"],
+                    env=env,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    startupinfo=startupinfo,
+                    creationflags=0x08000000 if os.name == 'nt' else 0,
+                    text=True,
+                    encoding="utf-8",
+                    errors="ignore"
+                )
+                
+                # Stream stdout live ke console / log textbox
+                if process.stdout:
+                    for line in process.stdout:
+                        print(line, end="")
+                process.wait()
+                
+                if process.returncode != 0:
+                    raise subprocess.CalledProcessError(process.returncode, process.args)
+            else:
+                print("[BROWSER] Chromium lokal terdeteksi di browser_bin. Melewati download ulang.")
 
             print("[BROWSER] Chromium siap digunakan!")
             run_bot(

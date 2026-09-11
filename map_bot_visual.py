@@ -593,8 +593,10 @@ def parse_nik_info(nik: str, row_dict: dict = None) -> dict:
     
     # 3. Tahun lahir (Digit 11-12)
     raw_year = int(clean_nik[10:12])
-    current_year_2d = datetime.now().year % 100
-    if raw_year > current_year_2d:
+    current_full_year = datetime.now().year
+    # Pelanggan LPG 3kg wajib berusia dewasa (>= 17 tahun).
+    # Jika 2000 + raw_year menghasilkan usia < 17 tahun, berarti lahir di 1900-an (misal lahir 1925 bukan 2025).
+    if (2000 + raw_year) > (current_full_year - 17):
         year = 1900 + raw_year
     else:
         year = 2000 + raw_year
@@ -999,6 +1001,28 @@ def _ensure_logged_in(page, stop_event, pause_event, on_progress, force_relogin=
     return True
 
 
+def clean_nik_digits(val) -> str:
+    """Mengubah cell Excel (string/float/int/scientific notation) menjadi digit murni."""
+    if val is None or pd.isna(val):
+        return ""
+    if isinstance(val, (int, float)):
+        try:
+            val_str = "{:.0f}".format(val)
+        except Exception:
+            val_str = str(val)
+    else:
+        val_str = str(val).strip()
+    
+    if val_str.endswith(".0"):
+        val_str = val_str[:-2]
+    if "e" in val_str.lower():
+        try:
+            val_str = "{:.0f}".format(float(val_str))
+        except Exception:
+            pass
+    return "".join(c for c in val_str if c.isdigit())
+
+
 def load_excel_data(data_file: str) -> pd.DataFrame:
     """
     Membaca file Excel secara cerdas & tahan banting.
@@ -1008,8 +1032,12 @@ def load_excel_data(data_file: str) -> pd.DataFrame:
     if not os.path.exists(data_file):
         raise FileNotFoundError(f"File '{data_file}' tidak ditemukan!")
 
-    # 1. Coba baca dengan header=None terlebih dahulu
-    df_raw = pd.read_excel(data_file, header=None)
+    # 1. Coba baca dengan dtype=str dan header=None terlebih dahulu
+    try:
+        df_raw = pd.read_excel(data_file, header=None, dtype=str)
+    except Exception:
+        df_raw = pd.read_excel(data_file, header=None)
+
     if len(df_raw) == 0:
         return df_raw
 
@@ -1017,28 +1045,32 @@ def load_excel_data(data_file: str) -> pd.DataFrame:
     best_col = None
     best_score = 0
     for col in df_raw.columns:
-        count_16 = sum(1 for val in df_raw[col] if len("".join(c for c in str(val) if c.isdigit())) == 16)
+        count_16 = sum(1 for val in df_raw[col] if len(clean_nik_digits(val)) == 16)
         if count_16 > best_score:
             best_score = count_16
             best_col = col
 
     # 3. Jika ditemukan kolom dengan 16-digit NIK
     if best_col is not None and best_score > 0:
-        first_val = str(df_raw[best_col].iloc[0])
-        first_digits = "".join(c for c in first_val if c.isdigit())
-        if len(first_digits) != 16:
+        first_val = clean_nik_digits(df_raw[best_col].iloc[0])
+        if len(first_val) != 16:
             # Baris 0 adalah header teks (misal 'NIK', 'No KTP', dll)
             df = df_raw.iloc[1:].copy().reset_index(drop=True)
         else:
             df = df_raw.copy()
         df.rename(columns={best_col: "NIK"}, inplace=True)
+        df["NIK"] = df["NIK"].apply(clean_nik_digits)
         return df
 
     # 4. Fallback jika format standar
-    df_std = pd.read_excel(data_file)
+    try:
+        df_std = pd.read_excel(data_file, dtype=str)
+    except Exception:
+        df_std = pd.read_excel(data_file)
     nik_col = find_nik_column(df_std)
     if nik_col is not None and nik_col in df_std.columns:
         df_std.rename(columns={nik_col: "NIK"}, inplace=True)
+        df_std["NIK"] = df_std["NIK"].apply(clean_nik_digits)
         return df_std
 
     return df_raw
