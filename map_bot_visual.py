@@ -649,97 +649,208 @@ def parse_nik_info(nik: str, row_dict: dict = None) -> dict:
     }
 
 
+MONTH_NAMES_ID = [
+    "", "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+]
+
 def _handle_birth_details(page, nik_info: dict, stop_event=None):
     """
     Mendeteksi dan mengisi input Tempat Lahir dan Tanggal Lahir jika muncul di halaman Subsidi Tepat LPG.
+    Mendukung input teks standar, Mantine custom select dropdown, dan modal konfirmasi multi-step:
+    (Form TTL -> SELANJUTNYA -> YA, PERBARUI DATA PELANGGAN -> LANJUTKAN KE TRANSAKSI).
     """
     try:
         if not nik_info or not nik_info.get("valid"):
             return
 
-        # 1. Cek Input Tempat Lahir
-        tempat_selectors = [
-            "input[placeholder*='Tempat Lahir' i]",
-            "input[placeholder*='Tempat' i]",
-            "input[name*='tempatLahir' i]",
-            "input[name*='birthPlace' i]",
-            "input[id*='tempatLahir' i]",
-            "input[id*='birth_place' i]",
-            "input[aria-label*='Tempat Lahir' i]",
-            "input[placeholder*='Kota Lahir' i]"
+        month_idx = int(nik_info.get("month", 1))
+        month_name = MONTH_NAMES_ID[month_idx] if 1 <= month_idx <= 12 else "Januari"
+        day_str = str(nik_info.get("day", 1))
+        day_str_padded = f"{int(day_str):02d}"
+        year_str = str(nik_info.get("year", 1990))
+        tempat_lahir = nik_info.get("tempat_lahir", "JAKARTA")
+
+        # Cek apakah form TTL atau modal update muncul (timeout cepat agar tidak memperlambat)
+        ttl_indicators = [
+            "text='Tempat Lahir'",
+            "text='Tanggal Lahir'",
+            "text='Lengkapi Data Pelanggan'",
+            "text='Pastikan semua data sudah benar'",
+            "text='Data Pelanggan berhasil diperbarui'",
+            "input[name*='placeOfBirth']",
+            "[data-testid='btnSubmitUpdate']",
+            "button:has-text('LANJUTKAN KE TRANSAKSI')"
         ]
-        for sel in tempat_selectors:
+
+        is_ttl_detected = False
+        for ind in ttl_indicators:
             try:
-                if page.is_visible(sel, timeout=500):
-                    val = page.input_value(sel)
-                    if not val or len(val.strip()) == 0:
-                        print(f"[BOT] Input Tempat Lahir terdeteksi ({sel}). Mengisi '{nik_info['tempat_lahir']}'...")
-                        page.fill(sel, "")
-                        page.type(sel, nik_info["tempat_lahir"], delay=random.randint(40, 80))
-                        time.sleep(0.3)
+                if page.is_visible(ind, timeout=400):
+                    is_ttl_detected = True
+                    break
+            except Exception:
+                pass
+
+        if not is_ttl_detected:
+            return
+
+        print(f"[BOT] Popup/Form Tempat & Tanggal Lahir terdeteksi untuk NIK {nik_info.get('ymd', '')}. Menjalankan auto-update...")
+
+        # Loop penanganan hingga 5 langkah transisi modal
+        for step in range(5):
+            if stop_event and stop_event.is_set():
+                break
+
+            # 1. Jika sudah muncul modal sukses "Data Pelanggan berhasil diperbarui" -> Klik Lanjutkan ke Transaksi
+            for btn_succ in ["button:has-text('LANJUTKAN KE TRANSAKSI')", "text='LANJUTKAN KE TRANSAKSI'", "button:has-text('Lanjutkan Transaksi')"]:
+                try:
+                    if page.is_visible(btn_succ, timeout=600):
+                        print(f"[BOT] Klik tombol sukses: {btn_succ}")
+                        page.click(btn_succ)
+                        time.sleep(1.0)
+                        return
+                except Exception:
+                    pass
+
+            # 2. Jika muncul modal konfirmasi "Pastikan semua data sudah benar" -> Klik YA, PERBARUI DATA PELANGGAN
+            for btn_conf in [
+                "button:has-text('YA, PERBARUI DATA PELANGGAN')",
+                "text='YA, PERBARUI DATA PELANGGAN'",
+                "button:has-text('PERBARUI DATA PELANGGAN')",
+                "text='PERBARUI DATA PELANGGAN'",
+                "button:has-text('YA, PERBARUI')",
+                "text='Ya, Perbarui'"
+            ]:
+                try:
+                    if page.is_visible(btn_conf, timeout=600):
+                        print(f"[BOT] Klik tombol konfirmasi perbarui: {btn_conf}")
+                        page.click(btn_conf)
+                        time.sleep(1.5)
                         break
-            except Exception:
-                pass
+                except Exception:
+                    pass
 
-        # 2. Cek Input Tanggal Lahir (Format Date Picker / Textbox DD/MM/YYYY atau YYYY-MM-DD)
-        tgl_selectors = [
-            "input[placeholder*='Tanggal Lahir' i]",
-            "input[placeholder*='Tgl Lahir' i]",
-            "input[placeholder*='DD/MM/YYYY' i]",
-            "input[placeholder*='DD-MM-YYYY' i]",
-            "input[placeholder*='YYYY-MM-DD' i]",
-            "input[type='date']",
-            "input[name*='tanggalLahir' i]",
-            "input[name*='birthDate' i]",
-            "input[id*='tanggalLahir' i]",
-            "input[id*='birth_date' i]",
-            "input[aria-label*='Tanggal Lahir' i]"
-        ]
-        for sel in tgl_selectors:
-            try:
-                if page.is_visible(sel, timeout=500):
-                    val = page.input_value(sel)
-                    if not val or len(val.strip()) == 0:
-                        input_type = page.get_attribute(sel, "type") or "text"
-                        date_str = nik_info["ymd"] if input_type == "date" else nik_info["dmy"]
-                        print(f"[BOT] Input Tanggal Lahir terdeteksi ({sel}). Mengisi '{date_str}'...")
-                        page.fill(sel, "")
-                        page.type(sel, date_str, delay=random.randint(40, 80))
-                        time.sleep(0.3)
+            # 3. Form Input Tempat Lahir
+            tempat_selectors = [
+                "input[name*='placeOfBirth' i]",
+                "input[placeholder*='Masukkan tempat lahir' i]",
+                "input[placeholder*='Tempat Lahir' i]",
+                "input[placeholder*='Tempat' i]",
+                "input[name*='tempatLahir' i]",
+                "input[name*='birthPlace' i]",
+                "input[id*='tempatLahir' i]",
+                "input[id*='birth_place' i]",
+                "input[aria-label*='Tempat Lahir' i]"
+            ]
+            for sel in tempat_selectors:
+                try:
+                    if page.is_visible(sel, timeout=400):
+                        val = page.input_value(sel)
+                        if not val or len(val.strip()) == 0:
+                            print(f"[BOT] Mengisi Tempat Lahir: '{tempat_lahir}' ({sel})...")
+                            page.fill(sel, "")
+                            page.type(sel, tempat_lahir, delay=random.randint(30, 60))
+                            time.sleep(0.3)
+                            break
+                except Exception:
+                    pass
+
+            # 4. Input Tanggal Lahir (Mantine Custom Select Dropdowns)
+            # Hari (daySelect / dayOB)
+            for d_sel in ["[data-testid='daySelect']", "input[name='dayOB']", ".mantine-Select-root:has([data-testid='daySelect'])"]:
+                try:
+                    if page.is_visible(d_sel, timeout=300):
+                        page.click(d_sel)
+                        time.sleep(0.2)
+                        # Cari opsi hari
+                        for opt_txt in [day_str, day_str_padded]:
+                            opt_sel = f".mantine-Select-item:has-text('{opt_txt}')"
+                            if page.is_visible(opt_sel, timeout=400):
+                                page.click(opt_sel)
+                                time.sleep(0.2)
+                                break
                         break
+                except Exception:
+                    pass
+
+            # Bulan (monthSelect / monthOB)
+            for m_sel in ["[data-testid='monthSelect']", "input[name='monthOB']", ".mantine-Select-root:has([data-testid='monthSelect'])"]:
+                try:
+                    if page.is_visible(m_sel, timeout=300):
+                        page.click(m_sel)
+                        time.sleep(0.2)
+                        opt_sel = f".mantine-Select-item:has-text('{month_name}')"
+                        if page.is_visible(opt_sel, timeout=400):
+                            page.click(opt_sel)
+                            time.sleep(0.2)
+                            break
+                        else:
+                            # Coba angka bulan
+                            opt_sel2 = f".mantine-Select-item:has-text('{month_idx}')"
+                            if page.is_visible(opt_sel2, timeout=300):
+                                page.click(opt_sel2)
+                                time.sleep(0.2)
+                                break
+                        break
+                except Exception:
+                    pass
+
+            # Tahun (yearSelect / yearOB)
+            for y_sel in ["[data-testid='yearSelect']", "input[name='yearOB']", ".mantine-Select-root:has([data-testid='yearSelect'])"]:
+                try:
+                    if page.is_visible(y_sel, timeout=300):
+                        page.click(y_sel)
+                        time.sleep(0.2)
+                        opt_sel = f".mantine-Select-item:has-text('{year_str}')"
+                        if page.is_visible(opt_sel, timeout=400):
+                            page.click(opt_sel)
+                            time.sleep(0.2)
+                            break
+                        else:
+                            # Ketik tahun dan tekan enter
+                            page.type(y_sel, year_str, delay=40)
+                            page.keyboard.press("Enter")
+                            time.sleep(0.2)
+                            break
+                        break
+                except Exception:
+                    pass
+
+            # Fallback untuk native <select> jika ada
+            try:
+                for sel in ["select[name*='day' i]", "select[name*='hari' i]"]:
+                    if page.is_visible(sel, timeout=200):
+                        page.select_option(sel, day_str)
+                for sel in ["select[name*='month' i]", "select[name*='bulan' i]"]:
+                    if page.is_visible(sel, timeout=200):
+                        page.select_option(sel, str(month_idx))
+                for sel in ["select[name*='year' i]", "select[name*='tahun' i]"]:
+                    if page.is_visible(sel, timeout=200):
+                        page.select_option(sel, year_str)
             except Exception:
                 pass
 
-        # 3. Cek Dropdown Terpisah (Hari, Bulan, Tahun)
-        day_selectors = ["select[name*='day' i]", "select[name*='hari' i]", "select[id*='day' i]", "select[id*='hari' i]"]
-        for sel in day_selectors:
-            try:
-                if page.is_visible(sel, timeout=300):
-                    page.select_option(sel, str(nik_info["day"]))
-                    break
-            except Exception:
-                pass
+            # 5. Klik Tombol SELANJUTNYA
+            for btn_sub in [
+                "button[data-testid='btnSubmitUpdate']",
+                "button:has-text('SELANJUTNYA')",
+                "text='SELANJUTNYA'",
+                "button:has-text('Selanjutnya')"
+            ]:
+                try:
+                    if page.is_visible(btn_sub, timeout=500):
+                        print(f"[BOT] Menekan tombol submit update: {btn_sub}")
+                        page.click(btn_sub)
+                        time.sleep(1.2)
+                        break
+                except Exception:
+                    pass
 
-        month_selectors = ["select[name*='month' i]", "select[name*='bulan' i]", "select[id*='month' i]", "select[id*='bulan' i]"]
-        for sel in month_selectors:
-            try:
-                if page.is_visible(sel, timeout=300):
-                    page.select_option(sel, str(nik_info["month"]))
-                    break
-            except Exception:
-                pass
-
-        year_selectors = ["select[name*='year' i]", "select[name*='tahun' i]", "select[id*='year' i]", "select[id*='tahun' i]"]
-        for sel in year_selectors:
-            try:
-                if page.is_visible(sel, timeout=300):
-                    page.select_option(sel, str(nik_info["year"]))
-                    break
-            except Exception:
-                pass
+            time.sleep(0.5)
 
     except Exception as e:
-        print(f"[WARN] Error saat mengisi data Tempat/Tanggal Lahir: {e}")
+        print(f"[WARN] Error saat auto-handle Tempat/Tanggal Lahir: {e}")
 
 
 def _handle_choice_popup(page):
